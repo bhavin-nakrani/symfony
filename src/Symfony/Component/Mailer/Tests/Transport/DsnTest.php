@@ -45,7 +45,7 @@ class DsnTest extends TestCase
         Dsn::fromString($dsn);
     }
 
-    public function fromStringProvider(): iterable
+    public static function fromStringProvider(): iterable
     {
         yield 'simple smtp without user and pass' => [
             'smtp://example.com',
@@ -88,21 +88,21 @@ class DsnTest extends TestCase
         ];
     }
 
-    public function invalidDsnProvider(): iterable
+    public static function invalidDsnProvider(): iterable
     {
         yield [
             'some://',
-            'The "some://" mailer DSN is invalid.',
+            'The mailer DSN is invalid.',
         ];
 
         yield [
             '//sendmail',
-            'The "//sendmail" mailer DSN must contain a scheme.',
+            'The mailer DSN must contain a scheme.',
         ];
 
         yield [
             'file:///some/path',
-            'The "file:///some/path" mailer DSN must contain a host (use "default" by default).',
+            'The mailer DSN must contain a host (use "default" by default).',
         ];
     }
 }

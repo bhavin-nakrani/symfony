@@ -33,22 +33,15 @@ class UploadValidatorExtension extends AbstractTypeExtension
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function configureOptions(OptionsResolver $resolver)
     {
         $translator = $this->translator;
         $translationDomain = $this->translationDomain;
-        $resolver->setNormalizer('upload_max_size_message', function (Options $options, $message) use ($translator, $translationDomain) {
-            return function () use ($translator, $translationDomain, $message) {
-                return $translator->trans($message(), [], $translationDomain);
-            };
-        });
+        $resolver->setNormalizer('upload_max_size_message', static fn (Options $options, $message) => static fn () => $translator->trans($message(), [], $translationDomain));
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public static function getExtendedTypes(): iterable
     {
         return [FormType::class];

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Validator\Tests\Constraints;
 
 use PHPUnit\Framework\TestCase;
@@ -81,7 +90,7 @@ class CidrTest extends TestCase
         ]);
     }
 
-    public function getInvalidMinMaxValues(): array
+    public static function getInvalidMinMaxValues(): array
     {
         return [
             [Ip::ALL, -1, 23],
@@ -99,7 +108,7 @@ class CidrTest extends TestCase
         ];
     }
 
-    public function getValidMinMaxValues(): array
+    public static function getValidMinMaxValues(): array
     {
         return [
             [Ip::ALL, 0, 23],

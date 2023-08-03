@@ -47,7 +47,7 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         $this->marshaller = $marshaller ?? new DefaultMarshaller();
     }
 
-    public static function createConnection(array|string $dsn, array $options = []): Bucket|Collection
+    public static function createConnection(#[\SensitiveParameter] array|string $dsn, array $options = []): Bucket|Collection
     {
         if (\is_string($dsn)) {
             $dsn = [$dsn];
@@ -57,7 +57,7 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
             throw new CacheException('Couchbase >= 3.0.0 < 4.0.0 is required.');
         }
 
-        set_error_handler(function ($type, $msg, $file, $line): bool { throw new \ErrorException($msg, 0, $type, $file, $line); });
+        set_error_handler(static fn ($type, $msg, $file, $line) => throw new \ErrorException($msg, 0, $type, $file, $line));
 
         $dsnPattern = '/^(?<protocol>couchbase(?:s)?)\:\/\/(?:(?<username>[^\:]+)\:(?<password>[^\@]{6,})@)?'
             .'(?<host>[^\:]+(?:\:\d+)?)(?:\/(?<bucketName>[^\/\?]+))(?:(?:\/(?<scopeName>[^\/]+))'
@@ -71,7 +71,7 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
 
             foreach ($dsn as $server) {
                 if (!str_starts_with($server, 'couchbase:')) {
-                    throw new InvalidArgumentException(sprintf('Invalid Couchbase DSN: "%s" does not start with "couchbase:".', $server));
+                    throw new InvalidArgumentException('Invalid Couchbase DSN: it does not start with "couchbase:".');
                 }
 
                 preg_match($dsnPattern, $server, $matches);
@@ -131,16 +131,13 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         return $results;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doFetch(array $ids): array
     {
         $results = [];
         foreach ($ids as $id) {
             try {
                 $resultCouchbase = $this->connection->get($id);
-            } catch (DocumentNotFoundException $exception) {
+            } catch (DocumentNotFoundException) {
                 continue;
             }
 
@@ -152,25 +149,16 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         return $results;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doHave($id): bool
     {
         return $this->connection->exists($id)->exists();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doClear($namespace): bool
     {
         return false;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doDelete(array $ids): bool
     {
         $idsErrors = [];
@@ -181,16 +169,13 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
                 if (null === $result->mutationToken()) {
                     $idsErrors[] = $id;
                 }
-            } catch (DocumentNotFoundException $exception) {
+            } catch (DocumentNotFoundException) {
             }
         }
 
         return 0 === \count($idsErrors);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doSave(array $values, $lifetime): array|bool
     {
         if (!$values = $this->marshaller->marshall($values, $failed)) {
@@ -204,7 +189,7 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         foreach ($values as $key => $value) {
             try {
                 $this->connection->upsert($key, $value, $upsertOptions);
-            } catch (\Exception $exception) {
+            } catch (\Exception) {
                 $ko[$key] = '';
             }
         }

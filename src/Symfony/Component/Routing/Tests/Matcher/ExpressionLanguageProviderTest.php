@@ -19,29 +19,18 @@ use Symfony\Component\Routing\RequestContext;
 
 class ExpressionLanguageProviderTest extends TestCase
 {
-    private $context;
-    private $expressionLanguage;
+    private RequestContext $context;
+    private ExpressionLanguage $expressionLanguage;
 
     protected function setUp(): void
     {
         $functionProvider = new ServiceLocator([
-            'env' => function () {
-                // function with one arg
-                return function (string $arg) {
-                    return [
-                        'APP_ENV' => 'test',
-                        'PHP_VERSION' => '7.2',
-                    ][$arg] ?? null;
-                };
-            },
-            'sum' => function () {
-                // function with multiple args
-                return function ($a, $b) { return $a + $b; };
-            },
-            'foo' => function () {
-                // function with no arg
-                return function () { return 'bar'; };
-            },
+            'env' => fn () => fn (string $arg) => [
+                'APP_ENV' => 'test',
+                'PHP_VERSION' => '7.2',
+            ][$arg] ?? null,
+            'sum' => fn () => fn ($a, $b) => $a + $b,
+            'foo' => fn () => fn () => 'bar',
         ]);
 
         $this->context = new RequestContext();
@@ -59,7 +48,7 @@ class ExpressionLanguageProviderTest extends TestCase
         $this->assertSame($expected, $this->expressionLanguage->compile($expression));
     }
 
-    public function compileProvider(): iterable
+    public static function compileProvider(): iterable
     {
         return [
             ['env("APP_ENV")', '($context->getParameter(\'_functions\')->get(\'env\')("APP_ENV"))'],
@@ -76,7 +65,7 @@ class ExpressionLanguageProviderTest extends TestCase
         $this->assertSame($expected, $this->expressionLanguage->evaluate($expression, ['context' => $this->context]));
     }
 
-    public function evaluateProvider(): iterable
+    public static function evaluateProvider(): iterable
     {
         return [
             ['env("APP_ENV")', 'test'],

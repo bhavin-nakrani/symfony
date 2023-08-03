@@ -11,10 +11,18 @@
 
 namespace Symfony\Component\HttpKernel\Tests\Fixtures\Controller;
 
+use Symfony\Component\HttpKernel\Tests\Fixtures\Attribute\Bar;
+use Symfony\Component\HttpKernel\Tests\Fixtures\Attribute\Baz;
 use Symfony\Component\HttpKernel\Tests\Fixtures\Attribute\Foo;
 
+#[Bar('class'), Undefined('class')]
 class AttributeController
 {
+    #[Bar('method'), Baz, Undefined('method')]
+    public function __invoke()
+    {
+    }
+
     public function action(#[Foo('bar')] string $baz)
     {
     }

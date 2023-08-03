@@ -25,15 +25,11 @@ use Symfony\Component\Workflow\Workflow;
 
 class WorkflowExtensionTest extends TestCase
 {
-    private $extension;
-    private $t1;
+    private WorkflowExtension $extension;
+    private Transition $t1;
 
     protected function setUp(): void
     {
-        if (!class_exists(Workflow::class)) {
-            $this->markTestSkipped('The Workflow component is needed to run tests for this extension.');
-        }
-
         $places = ['ordered', 'waiting_for_payment', 'processed'];
         $transitions = [
             $this->t1 = new Transition('t1', 'ordered', 'waiting_for_payment'),
@@ -110,9 +106,6 @@ class WorkflowExtensionTest extends TestCase
 
     public function testGetMetadata()
     {
-        if (!class_exists(InMemoryMetadataStore::class)) {
-            $this->markTestSkipped('This test requires symfony/workflow:4.1.');
-        }
         $subject = new Subject();
 
         $this->assertSame('workflow title', $this->extension->getMetadata($subject, 'title'));
@@ -124,9 +117,6 @@ class WorkflowExtensionTest extends TestCase
 
     public function testbuildTransitionBlockerList()
     {
-        if (!class_exists(TransitionBlockerList::class)) {
-            $this->markTestSkipped('This test requires symfony/workflow:4.1.');
-        }
         $subject = new Subject();
 
         $list = $this->extension->buildTransitionBlockerList($subject, 't1');
@@ -137,19 +127,19 @@ class WorkflowExtensionTest extends TestCase
 
 final class Subject
 {
-    private $marking;
+    private array $marking;
 
-    public function __construct($marking = null)
+    public function __construct(array $marking = [])
     {
         $this->marking = $marking;
     }
 
-    public function getMarking()
+    public function getMarking(): array
     {
         return $this->marking;
     }
 
-    public function setMarking($marking)
+    public function setMarking($marking): void
     {
         $this->marking = $marking;
     }

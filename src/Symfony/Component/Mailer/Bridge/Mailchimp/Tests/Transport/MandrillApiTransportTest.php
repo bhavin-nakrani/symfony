@@ -33,7 +33,7 @@ class MandrillApiTransportTest extends TestCase
         $this->assertSame($expected, (string) $transport);
     }
 
-    public function getTransportData()
+    public static function getTransportData()
     {
         return [
             [
@@ -59,7 +59,6 @@ class MandrillApiTransportTest extends TestCase
 
         $transport = new MandrillApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(MandrillApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayHasKey('message', $payload);
@@ -104,11 +103,9 @@ class MandrillApiTransportTest extends TestCase
 
     public function testSendThrowsForErrorResponse()
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse(json_encode(['status' => 'error', 'message' => 'i\'m a teapot', 'code' => 418]), [
-                'http_code' => 418,
-            ]);
-        });
+        $client = new MockHttpClient(fn (string $method, string $url, array $options): ResponseInterface => new MockResponse(json_encode(['status' => 'error', 'message' => 'i\'m a teapot', 'code' => 418]), [
+            'http_code' => 418,
+        ]));
 
         $transport = new MandrillApiTransport('KEY', $client);
 
@@ -133,7 +130,6 @@ class MandrillApiTransportTest extends TestCase
 
         $transport = new MandrillApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(MandrillApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayHasKey('message', $payload);
@@ -148,16 +144,16 @@ class MandrillApiTransportTest extends TestCase
     {
         $email = new Email();
         $email->getHeaders()->add(new TagHeader('password-reset,user'));
+        $email->getHeaders()->add(new TagHeader('another'));
         $envelope = new Envelope(new Address('alice@system.com'), [new Address('bob@system.com')]);
 
         $transport = new MandrillApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(MandrillApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayHasKey('message', $payload);
         $this->assertArrayNotHasKey('headers', $payload['message']);
         $this->assertArrayHasKey('tags', $payload['message']);
-        $this->assertSame(['password-reset', 'user'], $payload['message']['tags']);
+        $this->assertSame(['password-reset', 'user', 'another'], $payload['message']['tags']);
     }
 }

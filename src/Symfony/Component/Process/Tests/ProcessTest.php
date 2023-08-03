@@ -28,9 +28,9 @@ use Symfony\Component\Process\Process;
  */
 class ProcessTest extends TestCase
 {
-    private static $phpBin;
-    private static $process;
-    private static $sigchild;
+    private static string $phpBin;
+    private static ?Process $process = null;
+    private static bool $sigchild;
 
     public static function setUpBeforeClass(): void
     {
@@ -66,11 +66,11 @@ class ProcessTest extends TestCase
         $cmd->run();
     }
 
+    /**
+     * @group transient-on-windows
+     */
     public function testThatProcessDoesNotThrowWarningDuringRun()
     {
-        if ('\\' === \DIRECTORY_SEPARATOR) {
-            $this->markTestSkipped('This test is transient on Windows');
-        }
         @trigger_error('Test Error', \E_USER_NOTICE);
         $process = $this->getProcessForCode('sleep(3)');
         $process->run();
@@ -130,12 +130,11 @@ class ProcessTest extends TestCase
         $this->assertLessThan(15, microtime(true) - $start);
     }
 
+    /**
+     * @group transient-on-windows
+     */
     public function testWaitUntilSpecificOutput()
     {
-        if ('\\' === \DIRECTORY_SEPARATOR) {
-            $this->markTestIncomplete('This test is too transient on Windows, help wanted to improve it');
-        }
-
         $p = $this->getProcess([self::$phpBin, __DIR__.'/KillableProcessWithOutput.php']);
         $p->start();
 
@@ -155,7 +154,7 @@ class ProcessTest extends TestCase
     {
         $p = $this->getProcess('echo foo');
         $p->start();
-        $this->assertFalse($p->waitUntil(function () { return false; }));
+        $this->assertFalse($p->waitUntil(fn () => false));
     }
 
     public function testAllOutputIsActuallyReadOnTermination()
@@ -176,7 +175,6 @@ class ProcessTest extends TestCase
 
         // Don't call Process::run nor Process::wait to avoid any read of pipes
         $h = new \ReflectionProperty($p, 'process');
-        $h->setAccessible(true);
         $h = $h->getValue($p);
         $s = @proc_get_status($h);
 
@@ -301,7 +299,7 @@ class ProcessTest extends TestCase
         $process->setInput($value);
     }
 
-    public function provideInvalidInputValues()
+    public static function provideInvalidInputValues()
     {
         return [
             [[]],
@@ -319,7 +317,7 @@ class ProcessTest extends TestCase
         $this->assertSame($expected, $process->getInput());
     }
 
-    public function provideInputValues()
+    public static function provideInputValues()
     {
         return [
             [null, null],
@@ -328,7 +326,7 @@ class ProcessTest extends TestCase
         ];
     }
 
-    public function chainedCommandsOutputProvider()
+    public static function chainedCommandsOutputProvider()
     {
         if ('\\' === \DIRECTORY_SEPARATOR) {
             return [
@@ -422,7 +420,7 @@ class ProcessTest extends TestCase
         fclose($h);
     }
 
-    public function provideIncrementalOutput()
+    public static function provideIncrementalOutput()
     {
         return [
             ['getOutput', 'getIncrementalOutput', 'php://stdout'],
@@ -568,7 +566,6 @@ class ProcessTest extends TestCase
         $process = $this->getProcess('');
         $r = new \ReflectionObject($process);
         $p = $r->getProperty('exitcode');
-        $p->setAccessible(true);
 
         $p->setValue($process, 2);
         $this->assertEquals('Misuse of shell builtins', $process->getExitCodeText());
@@ -957,7 +954,7 @@ class ProcessTest extends TestCase
         $process->{$method}();
     }
 
-    public function provideMethodsThatNeedARunningProcess()
+    public static function provideMethodsThatNeedARunningProcess()
     {
         return [
             ['getOutput'],
@@ -988,7 +985,7 @@ class ProcessTest extends TestCase
         throw $e;
     }
 
-    public function provideMethodsThatNeedATerminatedProcess()
+    public static function provideMethodsThatNeedATerminatedProcess()
     {
         return [
             ['hasBeenSignaled'],
@@ -1093,7 +1090,7 @@ class ProcessTest extends TestCase
         $p->{$fetchMethod}();
     }
 
-    public function provideOutputFetchingMethods()
+    public static function provideOutputFetchingMethods()
     {
         return [
             ['getOutput'],
@@ -1130,17 +1127,17 @@ class ProcessTest extends TestCase
         $this->assertTrue(true, 'A call to signal() is not expected to cause wait() to throw a RuntimeException');
     }
 
-    public function responsesCodeProvider()
+    public static function responsesCodeProvider()
     {
         return [
-            //expected output / getter / code to execute
+            // expected output / getter / code to execute
             // [1,'getExitCode','exit(1);'],
             // [true,'isSuccessful','exit();'],
             ['output', 'getOutput', 'echo \'output\';'],
         ];
     }
 
-    public function pipesCodeProvider()
+    public static function pipesCodeProvider()
     {
         $variations = [
             'fwrite(STDOUT, $in = file_get_contents(\'php://stdin\')); fwrite(STDERR, $in);',
@@ -1183,7 +1180,7 @@ class ProcessTest extends TestCase
         $process->stop();
     }
 
-    public function provideVariousIncrementals()
+    public static function provideVariousIncrementals()
     {
         return [
             ['php://stdout', 'getIncrementalOutput'],
@@ -1449,7 +1446,7 @@ class ProcessTest extends TestCase
         $this->assertSame($expected, str_replace('Standard input code', '-', $p->getOutput()));
     }
 
-    public function provideEscapeArgument()
+    public static function provideEscapeArgument()
     {
         yield ['a"b%c%'];
         yield ['a"b^c^'];
@@ -1505,8 +1502,11 @@ class ProcessTest extends TestCase
 
     public function testEnvArgument()
     {
-        $env = ['FOO' => 'Foo', 'BAR' => 'Bar'];
         $cmd = '\\' === \DIRECTORY_SEPARATOR ? 'echo !FOO! !BAR! !BAZ!' : 'echo $FOO $BAR $BAZ';
+        $p = Process::fromShellCommandline($cmd);
+        $this->assertSame([], $p->getEnv());
+
+        $env = ['FOO' => 'Foo', 'BAR' => 'Bar'];
         $p = Process::fromShellCommandline($cmd, null, $env);
         $p->run(null, ['BAR' => 'baR', 'BAZ' => 'baZ']);
 
@@ -1521,6 +1521,10 @@ class ProcessTest extends TestCase
         $process->setTimeout(2);
         $process->wait();
         $this->assertFalse($process->isRunning());
+
+        if ('\\' !== \DIRECTORY_SEPARATOR) {
+            $this->assertSame(0, $process->getExitCode());
+        }
     }
 
     public function testEnvCaseInsensitiveOnWindows()
@@ -1536,10 +1540,19 @@ class ProcessTest extends TestCase
     }
 
     /**
-     * @param string|array $commandline
-     * @param mixed        $input
+     * @group transient-on-windows
      */
-    private function getProcess($commandline, string $cwd = null, array $env = null, $input = null, ?int $timeout = 60): Process
+    public function testNotTerminableInputPipe()
+    {
+        $process = $this->getProcess('echo foo');
+        $process->setInput(\STDIN);
+        $process->start();
+        $process->setTimeout(2);
+        $process->wait();
+        $this->assertFalse($process->isRunning());
+    }
+
+    private function getProcess(string|array $commandline, string $cwd = null, array $env = null, mixed $input = null, ?int $timeout = 60): Process
     {
         if (\is_string($commandline)) {
             $process = Process::fromShellCommandline($commandline, $cwd, $env, $input, $timeout);

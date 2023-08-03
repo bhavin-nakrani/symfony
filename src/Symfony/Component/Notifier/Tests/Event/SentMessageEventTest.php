@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Notifier\Tests\Event;
 
 use PHPUnit\Framework\TestCase;
@@ -26,7 +35,7 @@ final class SentMessageEventTest extends TestCase
         $this->assertSame($message, $event->getMessage());
     }
 
-    public function messagesProvider(): iterable
+    public static function messagesProvider(): iterable
     {
         yield [$message = new SentMessage(new ChatMessage('subject'), 'null_transport'), new SentMessageEvent($message)];
         yield [$message = new SentMessage(new SmsMessage('+3312345678', 'subject'), 'null_transport'), new SentMessageEvent($message)];

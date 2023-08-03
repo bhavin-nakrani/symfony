@@ -28,7 +28,7 @@ use Symfony\Component\DependencyInjection\Tests\Fixtures\FooWithAbstractArgument
 
 class XmlDumperTest extends TestCase
 {
-    protected static $fixturesPath;
+    protected static string $fixturesPath;
 
     public static function setUpBeforeClass(): void
     {
@@ -49,13 +49,6 @@ class XmlDumperTest extends TestCase
         $this->assertXmlStringEqualsXmlFile(self::$fixturesPath.'/xml/services8.xml', $dumper->dump(), '->dump() dumps parameters');
     }
 
-    public function testAddParameters()
-    {
-        $container = include self::$fixturesPath.'//containers/container8.php';
-        $dumper = new XmlDumper($container);
-        $this->assertXmlStringEqualsXmlFile(self::$fixturesPath.'/xml/services8.xml', $dumper->dump(), '->dump() dumps parameters');
-    }
-
     public function testAddService()
     {
         $container = include self::$fixturesPath.'/containers/container9.php';
@@ -70,7 +63,7 @@ class XmlDumperTest extends TestCase
             $this->fail('->dump() throws a RuntimeException if the container to be dumped has reference to objects or resources');
         } catch (\Exception $e) {
             $this->assertInstanceOf(\RuntimeException::class, $e, '->dump() throws a RuntimeException if the container to be dumped has reference to objects or resources');
-            $this->assertEquals('Unable to dump a service container if a parameter is an object or a resource.', $e->getMessage(), '->dump() throws a RuntimeException if the container to be dumped has reference to objects or resources');
+            $this->assertEquals('Unable to dump a service container if a parameter is an object or a resource, got "stdClass".', $e->getMessage(), '->dump() throws a RuntimeException if the container to be dumped has reference to objects or resources');
         }
     }
 
@@ -122,7 +115,7 @@ class XmlDumperTest extends TestCase
         $this->assertEquals($expectedXmlDump, $dumper->dump());
     }
 
-    public function provideDecoratedServicesData()
+    public static function provideDecoratedServicesData()
     {
         $fixturesPath = realpath(__DIR__.'/../Fixtures/');
 
@@ -168,7 +161,7 @@ class XmlDumperTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function provideCompiledContainerData()
+    public static function provideCompiledContainerData()
     {
         return [
             ['container8'],
@@ -210,15 +203,39 @@ class XmlDumperTest extends TestCase
     public function testTaggedArguments()
     {
         $taggedIterator = new TaggedIteratorArgument('foo_tag', 'barfoo', 'foobar', false, 'getPriority');
+        $taggedIterator2 = new TaggedIteratorArgument('foo_tag', null, null, false, null, ['baz']);
+        $taggedIterator3 = new TaggedIteratorArgument('foo_tag', null, null, false, null, ['baz', 'qux'], false);
+
         $container = new ContainerBuilder();
+
         $container->register('foo', 'Foo')->addTag('foo_tag');
+        $container->register('baz', 'Baz')->addTag('foo_tag');
+        $container->register('qux', 'Qux')->addTag('foo_tag');
+
         $container->register('foo_tagged_iterator', 'Bar')
             ->setPublic(true)
             ->addArgument($taggedIterator)
         ;
+        $container->register('foo2_tagged_iterator', 'Bar')
+            ->setPublic(true)
+            ->addArgument($taggedIterator2)
+        ;
+        $container->register('foo3_tagged_iterator', 'Bar')
+            ->setPublic(true)
+            ->addArgument($taggedIterator3)
+        ;
+
         $container->register('foo_tagged_locator', 'Bar')
             ->setPublic(true)
             ->addArgument(new ServiceLocatorArgument($taggedIterator))
+        ;
+        $container->register('foo2_tagged_locator', 'Bar')
+            ->setPublic(true)
+            ->addArgument(new ServiceLocatorArgument($taggedIterator2))
+        ;
+        $container->register('foo3_tagged_locator', 'Bar')
+            ->setPublic(true)
+            ->addArgument(new ServiceLocatorArgument($taggedIterator3))
         ;
 
         $dumper = new XmlDumper($container);
@@ -244,9 +261,6 @@ class XmlDumperTest extends TestCase
         $this->assertEquals(file_get_contents(self::$fixturesPath.'/xml/services_abstract.xml'), $dumper->dump());
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testDumpHandlesEnumeration()
     {
         $container = new ContainerBuilder();
@@ -254,6 +268,9 @@ class XmlDumperTest extends TestCase
             ->register(FooClassWithEnumAttribute::class, FooClassWithEnumAttribute::class)
             ->setPublic(true)
             ->addArgument(FooUnitEnum::BAR);
+
+        $container->setParameter('unit_enum', FooUnitEnum::BAR);
+        $container->setParameter('enum_array', [FooUnitEnum::BAR, FooUnitEnum::FOO]);
 
         $container->compile();
         $dumper = new XmlDumper($container);
@@ -270,5 +287,13 @@ class XmlDumperTest extends TestCase
 
         $dumper = new XmlDumper($container);
         $this->assertStringEqualsFile(self::$fixturesPath.'/xml/services_with_abstract_argument.xml', $dumper->dump());
+    }
+
+    public function testDumpNonScalarTags()
+    {
+        $container = include self::$fixturesPath.'/containers/container_non_scalar_tags.php';
+        $dumper = new XmlDumper($container);
+
+        $this->assertEquals(file_get_contents(self::$fixturesPath.'/xml/services_with_array_tags.xml'), $dumper->dump());
     }
 }

@@ -25,7 +25,7 @@ use Symfony\Component\RateLimiter\Util\TimeUtil;
  */
 class FixedWindowLimiterTest extends TestCase
 {
-    private $storage;
+    private InMemoryStorage $storage;
 
     protected function setUp(): void
     {
@@ -37,6 +37,7 @@ class FixedWindowLimiterTest extends TestCase
 
     public function testConsume()
     {
+        $now = time();
         $limiter = $this->createLimiter();
 
         // fill 9 tokens in 45 seconds
@@ -51,6 +52,9 @@ class FixedWindowLimiterTest extends TestCase
         $rateLimit = $limiter->consume();
         $this->assertFalse($rateLimit->isAccepted());
         $this->assertSame(10, $rateLimit->getLimit());
+        // Window ends after 1 minute
+        $retryAfter = \DateTimeImmutable::createFromFormat('U', $now + 60);
+        $this->assertEquals($retryAfter, $rateLimit->getRetryAfter());
     }
 
     /**
@@ -108,7 +112,21 @@ class FixedWindowLimiterTest extends TestCase
         $this->assertSame(100, $window->getAvailableTokens($serverOneClock));
     }
 
-    public function provideConsumeOutsideInterval(): \Generator
+    public function testPeekConsume()
+    {
+        $limiter = $this->createLimiter();
+
+        $limiter->consume(9);
+
+        // peek by consuming 0 tokens twice (making sure peeking doesn't claim a token)
+        for ($i = 0; $i < 2; ++$i) {
+            $rateLimit = $limiter->consume(0);
+            $this->assertSame(10, $rateLimit->getLimit());
+            $this->assertTrue($rateLimit->isAccepted());
+        }
+    }
+
+    public static function provideConsumeOutsideInterval(): \Generator
     {
         yield ['PT15S'];
 

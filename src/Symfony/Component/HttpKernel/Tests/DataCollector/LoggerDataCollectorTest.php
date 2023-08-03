@@ -26,7 +26,7 @@ class LoggerDataCollectorTest extends TestCase
     {
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
         $logger->expects($this->once())->method('countErrors')->willReturn(123);
         $logger->expects($this->exactly(2))->method('getLogs')->willReturn([]);
@@ -66,7 +66,7 @@ class LoggerDataCollectorTest extends TestCase
 
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
 
         $logger->expects($this->once())->method('countErrors')->willReturn(0);
@@ -80,7 +80,7 @@ class LoggerDataCollectorTest extends TestCase
         $this->assertCount(1, $processedLogs);
 
         $this->assertEquals($processedLogs[0]['type'], 'deprecation');
-        $this->assertEquals($processedLogs[0]['errorCounter'], 1);
+        $this->assertEquals($processedLogs[0]['errorCount'], 1);
         $this->assertEquals($processedLogs[0]['timestamp'], (new \DateTimeImmutable())->setTimestamp(filemtime($path))->format(\DateTimeInterface::RFC3339_EXTENDED));
         $this->assertEquals($processedLogs[0]['priority'], 100);
         $this->assertEquals($processedLogs[0]['priorityName'], 'DEBUG');
@@ -100,7 +100,7 @@ class LoggerDataCollectorTest extends TestCase
 
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
         $logger->expects($this->once())->method('countErrors')->with(null);
         $logger->expects($this->exactly(2))->method('getLogs')->with(null)->willReturn([]);
@@ -121,7 +121,7 @@ class LoggerDataCollectorTest extends TestCase
 
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
         $logger->expects($this->once())->method('countErrors')->with($subRequest);
         $logger->expects($this->exactly(2))->method('getLogs')->with($subRequest)->willReturn([]);
@@ -139,7 +139,7 @@ class LoggerDataCollectorTest extends TestCase
     {
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
         $logger->expects($this->once())->method('countErrors')->willReturn($nb);
         $logger->expects($this->exactly(2))->method('getLogs')->willReturn($logs);
@@ -171,7 +171,7 @@ class LoggerDataCollectorTest extends TestCase
     {
         $logger = $this
             ->getMockBuilder(DebugLoggerInterface::class)
-            ->setMethods(['countErrors', 'getLogs', 'clear'])
+            ->onlyMethods(['countErrors', 'getLogs', 'clear'])
             ->getMock();
         $logger->expects($this->once())->method('clear');
 
@@ -179,7 +179,7 @@ class LoggerDataCollectorTest extends TestCase
         $c->reset();
     }
 
-    public function getCollectTestData()
+    public static function getCollectTestData()
     {
         yield 'simple log' => [
             1,

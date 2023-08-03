@@ -12,19 +12,17 @@
 namespace Symfony\Component\HttpKernel\Tests\HttpCache;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\HttpCache\HttpCache;
 use Symfony\Component\HttpKernel\HttpCache\Store;
 
 class StoreTest extends TestCase
 {
-    protected $request;
-    protected $response;
-
-    /**
-     * @var Store
-     */
-    protected $store;
+    protected Request $request;
+    protected Response $response;
+    protected Store $store;
 
     protected function setUp(): void
     {
@@ -38,10 +36,6 @@ class StoreTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->store = null;
-        $this->request = null;
-        $this->response = null;
-
         HttpCacheTestCase::clearDirectory(sys_get_temp_dir().'/http_cache');
     }
 
@@ -94,7 +88,7 @@ class StoreTest extends TestCase
         $entries = $this->getStoreMetadata($cacheKey);
         [, $res] = $entries[0];
 
-        $this->assertEquals('en9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', $res['x-content-digest'][0]);
+        $this->assertEquals('en6c78e0e3bd51d358d01e758642b85fb8', $res['x-content-digest'][0]);
     }
 
     public function testDoesNotTrustXContentDigestFromUpstream()
@@ -105,8 +99,8 @@ class StoreTest extends TestCase
         $entries = $this->getStoreMetadata($cacheKey);
         [, $res] = $entries[0];
 
-        $this->assertEquals('en9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', $res['x-content-digest'][0]);
-        $this->assertEquals('en9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', $response->headers->get('X-Content-Digest'));
+        $this->assertEquals('en6c78e0e3bd51d358d01e758642b85fb8', $res['x-content-digest'][0]);
+        $this->assertEquals('en6c78e0e3bd51d358d01e758642b85fb8', $response->headers->get('X-Content-Digest'));
     }
 
     public function testWritesResponseEvenIfXContentDigestIsPresent()
@@ -198,7 +192,7 @@ class StoreTest extends TestCase
     {
         $this->storeSimpleEntry();
         $response = $this->store->lookup($this->request);
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test')), $response->getContent());
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test')), $response->headers->get('X-Body-File'));
     }
 
     public function testInvalidatesMetaAndEntityStoreEntriesWithInvalidate()
@@ -251,9 +245,9 @@ class StoreTest extends TestCase
         $res3 = new Response('test 3', 200, ['Vary' => 'Foo Bar']);
         $this->store->write($req3, $res3);
 
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 3')), $this->store->lookup($req3)->getContent());
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 2')), $this->store->lookup($req2)->getContent());
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 1')), $this->store->lookup($req1)->getContent());
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 3')), $this->store->lookup($req3)->headers->get('X-Body-File'));
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 2')), $this->store->lookup($req2)->headers->get('X-Body-File'));
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 1')), $this->store->lookup($req1)->headers->get('X-Body-File'));
 
         $this->assertCount(3, $this->getStoreMetadata($key));
     }
@@ -263,17 +257,17 @@ class StoreTest extends TestCase
         $req1 = Request::create('/test', 'get', [], [], [], ['HTTP_FOO' => 'Foo', 'HTTP_BAR' => 'Bar']);
         $res1 = new Response('test 1', 200, ['Vary' => 'Foo Bar']);
         $this->store->write($req1, $res1);
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 1')), $this->store->lookup($req1)->getContent());
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 1')), $this->store->lookup($req1)->headers->get('X-Body-File'));
 
         $req2 = Request::create('/test', 'get', [], [], [], ['HTTP_FOO' => 'Bling', 'HTTP_BAR' => 'Bam']);
         $res2 = new Response('test 2', 200, ['Vary' => 'Foo Bar']);
         $this->store->write($req2, $res2);
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 2')), $this->store->lookup($req2)->getContent());
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 2')), $this->store->lookup($req2)->headers->get('X-Body-File'));
 
         $req3 = Request::create('/test', 'get', [], [], [], ['HTTP_FOO' => 'Foo', 'HTTP_BAR' => 'Bar']);
         $res3 = new Response('test 3', 200, ['Vary' => 'Foo Bar']);
         $key = $this->store->write($req3, $res3);
-        $this->assertEquals($this->getStorePath('en'.hash('sha256', 'test 3')), $this->store->lookup($req3)->getContent());
+        $this->assertEquals($this->getStorePath('en'.hash('xxh128', 'test 3')), $this->store->lookup($req3)->headers->get('X-Body-File'));
 
         $this->assertCount(2, $this->getStoreMetadata($key));
     }
@@ -317,11 +311,47 @@ class StoreTest extends TestCase
         $this->assertEmpty($this->getStoreMetadata($requestHttps));
     }
 
+    public function testDoesNotStorePrivateHeaders()
+    {
+        $request = Request::create('https://example.com/foo');
+        $response = new Response('foo');
+        $response->headers->setCookie(Cookie::fromString('foo=bar'));
+
+        $this->store->write($request, $response);
+        $this->assertArrayNotHasKey('set-cookie', $this->getStoreMetadata($request)[0][1]);
+        $this->assertNotEmpty($response->headers->getCookies());
+    }
+
+    public function testDiscardsInvalidBodyEval()
+    {
+        $request = Request::create('https://example.com/foo');
+        $response = new Response('foo', 200, ['X-Body-Eval' => 'SSI']);
+
+        $this->store->write($request, $response);
+        $this->assertNull($this->store->lookup($request));
+
+        $request = Request::create('https://example.com/foo');
+        $content = str_repeat('a', 24).'b'.str_repeat('a', 24).'b';
+        $response = new Response($content, 200, ['X-Body-Eval' => 'SSI']);
+
+        $this->store->write($request, $response);
+        $this->assertNull($this->store->lookup($request));
+    }
+
+    public function testLoadsBodyEval()
+    {
+        $request = Request::create('https://example.com/foo');
+        $content = str_repeat('a', 24).'b'.str_repeat('a', 24);
+        $response = new Response($content, 200, ['X-Body-Eval' => 'SSI']);
+
+        $this->store->write($request, $response);
+        $response = $this->store->lookup($request);
+        $this->assertSame($content, $response->getContent());
+    }
+
     protected function storeSimpleEntry($path = null, $headers = [])
     {
-        if (null === $path) {
-            $path = '/test';
-        }
+        $path ??= '/test';
 
         $this->request = Request::create($path, 'get', [], [], [], $headers);
         $this->response = new Response('test', 200, ['Cache-Control' => 'max-age=420']);
@@ -333,11 +363,9 @@ class StoreTest extends TestCase
     {
         $r = new \ReflectionObject($this->store);
         $m = $r->getMethod('getMetadata');
-        $m->setAccessible(true);
 
         if ($key instanceof Request) {
             $m1 = $r->getMethod('getCacheKey');
-            $m1->setAccessible(true);
             $key = $m1->invoke($this->store, $key);
         }
 
@@ -348,7 +376,6 @@ class StoreTest extends TestCase
     {
         $r = new \ReflectionObject($this->store);
         $m = $r->getMethod('getPath');
-        $m->setAccessible(true);
 
         return $m->invoke($this->store, $key);
     }

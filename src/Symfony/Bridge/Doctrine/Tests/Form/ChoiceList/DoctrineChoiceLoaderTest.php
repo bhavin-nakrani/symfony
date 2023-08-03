@@ -19,9 +19,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Form\ChoiceList\DoctrineChoiceLoader;
 use Symfony\Bridge\Doctrine\Form\ChoiceList\EntityLoaderInterface;
 use Symfony\Bridge\Doctrine\Form\ChoiceList\IdReader;
-use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\Form\ChoiceList\ArrayChoiceList;
-use Symfony\Component\Form\ChoiceList\Factory\ChoiceListFactoryInterface;
 use Symfony\Component\Form\Exception\LogicException;
 
 /**
@@ -29,56 +27,17 @@ use Symfony\Component\Form\Exception\LogicException;
  */
 class DoctrineChoiceLoaderTest extends TestCase
 {
-    use ExpectDeprecationTrait;
-
-    /**
-     * @var MockObject&ChoiceListFactoryInterface
-     */
-    private $factory;
-
-    /**
-     * @var MockObject&ObjectManager
-     */
-    private $om;
-
-    /**
-     * @var MockObject&ObjectRepository
-     */
-    private $repository;
-
-    /**
-     * @var string
-     */
-    private $class;
-
-    /**
-     * @var MockObject&IdReader
-     */
-    private $idReader;
-
-    /**
-     * @var MockObject&EntityLoaderInterface
-     */
-    private $objectLoader;
-
-    /**
-     * @var \stdClass
-     */
-    private $obj1;
-
-    /**
-     * @var \stdClass
-     */
-    private $obj2;
-
-    /**
-     * @var \stdClass
-     */
-    private $obj3;
+    private MockObject&ObjectManager $om;
+    private MockObject&ObjectRepository $repository;
+    private string $class;
+    private MockObject&IdReader $idReader;
+    private MockObject&EntityLoaderInterface $objectLoader;
+    private \stdClass $obj1;
+    private \stdClass $obj2;
+    private \stdClass $obj3;
 
     protected function setUp(): void
     {
-        $this->factory = $this->createMock(ChoiceListFactoryInterface::class);
         $this->om = $this->createMock(ObjectManager::class);
         $this->repository = $this->createMock(ObjectRepository::class);
         $this->class = 'stdClass';
@@ -153,8 +112,7 @@ class DoctrineChoiceLoaderTest extends TestCase
         $this->assertEquals($choiceList, $loaded = $loader->loadChoiceList());
 
         // no further loads on subsequent calls
-
-        $this->assertSame($loaded, $loader->loadChoiceList());
+        $this->assertEquals($loaded, $loader->loadChoiceList());
     }
 
     public function testLoadValuesForChoices()
@@ -223,7 +181,7 @@ class DoctrineChoiceLoaderTest extends TestCase
         );
 
         $choices = [$this->obj1, $this->obj2, $this->obj3];
-        $value = function (\stdClass $object) { return $object->name; };
+        $value = fn (\stdClass $object) => $object->name;
 
         $this->repository->expects($this->never())
             ->method('findAll')
@@ -319,8 +277,8 @@ class DoctrineChoiceLoaderTest extends TestCase
 
         $this->assertSame(
             [4 => $this->obj3, 7 => $this->obj2],
-            $loader->loadChoicesForValues([4 => '3', 7 => '2']
-        ));
+            $loader->loadChoicesForValues([4 => '3', 7 => '2'])
+        );
     }
 
     public function testLoadChoicesForValuesLoadsOnlyChoicesIfValueUseIdReader()
@@ -355,8 +313,8 @@ class DoctrineChoiceLoaderTest extends TestCase
 
         $this->assertSame(
             [4 => $this->obj3, 7 => $this->obj2],
-            $loader->loadChoicesForValues([4 => '3', 7 => '2'], [$this->idReader, 'getIdValue']
-        ));
+            $loader->loadChoicesForValues([4 => '3', 7 => '2'], [$this->idReader, 'getIdValue'])
+        );
     }
 
     public function testLoadChoicesForValuesLoadsAllIfSingleIntIdAndValueGiven()
@@ -368,7 +326,7 @@ class DoctrineChoiceLoaderTest extends TestCase
         );
 
         $choices = [$this->obj1, $this->obj2, $this->obj3];
-        $value = function (\stdClass $object) { return $object->name; };
+        $value = fn (\stdClass $object) => $object->name;
 
         $this->repository->expects($this->once())
             ->method('findAll')
@@ -417,7 +375,7 @@ class DoctrineChoiceLoaderTest extends TestCase
     public function testPassingIdReaderWithoutSingleIdEntity()
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('The second argument `$idReader` of "Symfony\\Bridge\\Doctrine\\Form\\ChoiceList\\DoctrineChoiceLoader::__construct" must be null when the query cannot be optimized because of composite id fields.');
+        $this->expectExceptionMessage('The second argument "$idReader" of "Symfony\\Bridge\\Doctrine\\Form\\ChoiceList\\DoctrineChoiceLoader::__construct" must be null when the query cannot be optimized because of composite id fields.');
 
         $idReader = $this->createMock(IdReader::class);
         $idReader->expects($this->once())

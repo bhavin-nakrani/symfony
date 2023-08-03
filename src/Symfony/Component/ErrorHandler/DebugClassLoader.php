@@ -21,6 +21,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Prophecy\Prophecy\ProphecySubjectInterface;
 use ProxyManager\Proxy\ProxyInterface;
 use Symfony\Component\ErrorHandler\Internal\TentativeTypes;
+use Symfony\Component\VarExporter\LazyObjectInterface;
 
 /**
  * Autoloader checking if the class is really defined in the file found.
@@ -56,7 +57,7 @@ class DebugClassLoader
         'null' => 'null',
         'resource' => 'resource',
         'boolean' => 'bool',
-        'true' => 'bool',
+        'true' => 'true',
         'false' => 'false',
         'integer' => 'int',
         'array' => 'array',
@@ -73,6 +74,8 @@ class DebugClassLoader
         'static' => 'static',
         '$this' => 'static',
         'list' => 'array',
+        'class-string' => 'string',
+        'never' => 'never',
     ];
 
     private const BUILTIN_RETURN_TYPES = [
@@ -90,6 +93,9 @@ class DebugClassLoader
         'parent' => true,
         'mixed' => true,
         'static' => true,
+        'null' => true,
+        'true' => true,
+        'never' => true,
     ];
 
     private const MAGIC_METHODS = [
@@ -112,6 +118,8 @@ class DebugClassLoader
     private static array $checkedClasses = [];
     private static array $final = [];
     private static array $finalMethods = [];
+    private static array $finalProperties = [];
+    private static array $finalConstants = [];
     private static array $deprecated = [];
     private static array $internal = [];
     private static array $internalMethods = [];
@@ -126,7 +134,7 @@ class DebugClassLoader
     {
         $this->classLoader = $classLoader;
         $this->isFinder = \is_array($classLoader) && method_exists($classLoader[0], 'findFile');
-        parse_str(getenv('SYMFONY_PATCH_TYPE_DECLARATIONS') ?: '', $this->patchTypes);
+        parse_str($_ENV['SYMFONY_PATCH_TYPE_DECLARATIONS'] ?? $_SERVER['SYMFONY_PATCH_TYPE_DECLARATIONS'] ?? getenv('SYMFONY_PATCH_TYPE_DECLARATIONS') ?: '', $this->patchTypes);
         $this->patchTypes += [
             'force' => null,
             'php' => \PHP_MAJOR_VERSION.'.'.\PHP_MINOR_VERSION,
@@ -247,6 +255,7 @@ class DebugClassLoader
                     && !is_subclass_of($symbols[$i], ProphecySubjectInterface::class)
                     && !is_subclass_of($symbols[$i], Proxy::class)
                     && !is_subclass_of($symbols[$i], ProxyInterface::class)
+                    && !is_subclass_of($symbols[$i], LazyObjectInterface::class)
                     && !is_subclass_of($symbols[$i], LegacyProxy::class)
                     && !is_subclass_of($symbols[$i], MockInterface::class)
                     && !is_subclass_of($symbols[$i], IMock::class)
@@ -371,9 +380,12 @@ class DebugClassLoader
 
         $parent = get_parent_class($class) ?: null;
         self::$returnTypes[$class] = [];
+        $classIsTemplate = false;
 
         // Detect annotations on the class
         if ($doc = $this->parsePhpDoc($refl)) {
+            $classIsTemplate = isset($doc['template']) || isset($doc['template-covariant']);
+
             foreach (['final', 'deprecated', 'internal'] as $annotation) {
                 if (null !== $description = $doc[$annotation][0] ?? null) {
                     self::${$annotation}[$class] = '' !== $description ? ' '.$description.(preg_match('/[.!]$/', $description) ? '' : '.') : '.';
@@ -465,8 +477,10 @@ class DebugClassLoader
         self::$finalMethods[$class] = [];
         self::$internalMethods[$class] = [];
         self::$annotatedParameters[$class] = [];
+        self::$finalProperties[$class] = [];
+        self::$finalConstants[$class] = [];
         foreach ($parentAndOwnInterfaces as $use) {
-            foreach (['finalMethods', 'internalMethods', 'annotatedParameters', 'returnTypes'] as $property) {
+            foreach (['finalMethods', 'internalMethods', 'annotatedParameters', 'returnTypes', 'finalProperties', 'finalConstants'] as $property) {
                 if (isset(self::${$property}[$use])) {
                     self::${$property}[$class] = self::${$property}[$class] ? self::${$property}[$use] + self::${$property}[$class] : self::${$property}[$use];
                 }
@@ -516,6 +530,10 @@ class DebugClassLoader
 
             // To read method annotations
             $doc = $this->parsePhpDoc($method);
+
+            if (($classIsTemplate || isset($doc['template']) || isset($doc['template-covariant'])) && $method->hasReturnType()) {
+                unset($doc['return']);
+            }
 
             if (isset(self::$annotatedParameters[$class][$method->name])) {
                 $definedParameters = [];
@@ -613,6 +631,31 @@ class DebugClassLoader
             foreach ($doc['param'] as $parameterName => $parameterType) {
                 if (!isset($definedParameters[$parameterName])) {
                     self::$annotatedParameters[$class][$method->name][$parameterName] = sprintf('The "%%s::%s()" method will require a new "%s$%s" argument in the next major version of its %s "%s", not defining it is deprecated.', $method->name, $parameterType ? $parameterType.' ' : '', $parameterName, interface_exists($className) ? 'interface' : 'parent class', $className);
+                }
+            }
+        }
+
+        $finals = isset(self::$final[$class]) || $refl->isFinal() ? [] : [
+            'finalConstants' => $refl->getReflectionConstants(\ReflectionClassConstant::IS_PUBLIC | \ReflectionClassConstant::IS_PROTECTED),
+            'finalProperties' => $refl->getProperties(\ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED),
+        ];
+        foreach ($finals as $type => $reflectors) {
+            foreach ($reflectors as $r) {
+                if ($r->class !== $class) {
+                    continue;
+                }
+
+                $doc = $this->parsePhpDoc($r);
+
+                foreach ($parentAndOwnInterfaces as $use) {
+                    if (isset(self::${$type}[$use][$r->name]) && !isset($doc['deprecated']) && ('finalConstants' === $type || substr($use, 0, strrpos($use, '\\')) !== substr($use, 0, strrpos($class, '\\')))) {
+                        $msg = 'finalConstants' === $type ? '%s" constant' : '$%s" property';
+                        $deprecations[] = sprintf('The "%s::'.$msg.' is considered final. You should not override it in "%s".', self::${$type}[$use][$r->name], $r->name, $class);
+                    }
+                }
+
+                if (isset($doc['final']) || ('finalProperties' === $type && str_starts_with($class, 'Symfony\\') && !$r->hasType())) {
+                    self::${$type}[$class][$r->name] = $class;
                 }
             }
         }
@@ -715,7 +758,7 @@ class DebugClassLoader
                 if ('.' !== $f[0]) {
                     $dirFiles[$f] = $f;
                     if ($f === $file) {
-                        $kFile = $k = $file;
+                        $kFile = $file;
                     } elseif ($f !== $k = strtolower($f)) {
                         $dirFiles[$k] = $f;
                     }
@@ -754,6 +797,12 @@ class DebugClassLoader
     private function setReturnType(string $types, string $class, string $method, string $filename, ?string $parent, \ReflectionType $returnType = null): void
     {
         if ('__construct' === $method) {
+            return;
+        }
+
+        if ('null' === $types) {
+            self::$returnTypes[$class][$method] = ['null', 'null', $class, $filename];
+
             return;
         }
 
@@ -816,6 +865,11 @@ class DebugClassLoader
                 return;
             }
 
+            if (!preg_match('/^(?:\\\\?[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)+$/', $n)) {
+                // exclude any invalid PHP class name (e.g. `Cookie::SAMESITE_*`)
+                continue;
+            }
+
             if (!isset($phpTypes[''])) {
                 $phpTypes[] = $n;
             }
@@ -876,7 +930,7 @@ class DebugClassLoader
     /**
      * Utility method to add #[ReturnTypeWillChange] where php triggers deprecations.
      */
-    private function patchReturnTypeWillChange(\ReflectionMethod $method)
+    private function patchReturnTypeWillChange(\ReflectionMethod $method): void
     {
         if (\count($method->getAttributes(\ReturnTypeWillChange::class))) {
             return;
@@ -904,7 +958,7 @@ class DebugClassLoader
     /**
      * Utility method to add @return annotations to the Symfony code-base where it triggers self-deprecations.
      */
-    private function patchMethod(\ReflectionMethod $method, string $returnType, string $declaringFile, string $normalizedType)
+    private function patchMethod(\ReflectionMethod $method, string $returnType, string $declaringFile, string $normalizedType): void
     {
         static $patchedMethods = [];
         static $useStatements = [];
@@ -1043,7 +1097,7 @@ EOTXT;
         return [$namespace, $useOffset, $useMap];
     }
 
-    private function fixReturnStatements(\ReflectionMethod $method, string $returnType)
+    private function fixReturnStatements(\ReflectionMethod $method, string $returnType): void
     {
         if ('docblock' !== $this->patchTypes['force']) {
             if ('7.1' === $this->patchTypes['php'] && 'object' === ltrim($returnType, '?')) {
@@ -1075,7 +1129,20 @@ EOTXT;
         }
 
         $end = $method->isGenerator() ? $i : $method->getEndLine();
+        $inClosure = false;
+        $braces = 0;
         for (; $i < $end; ++$i) {
+            if (!$inClosure) {
+                $inClosure = str_contains($code[$i], 'function (');
+            }
+
+            if ($inClosure) {
+                $braces += substr_count($code[$i], '{') - substr_count($code[$i], '}');
+                $inClosure = $braces > 0;
+
+                continue;
+            }
+
             if ('void' === $returnType) {
                 $fixedCode[$i] = str_replace('    return null;', '    return;', $code[$i]);
             } elseif ('mixed' === $returnType || '?' === $returnType[0]) {

@@ -17,6 +17,9 @@ use Symfony\Component\Validator\Constraints\ExpressionLanguageSyntaxValidator;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
 use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
 
+/**
+ * @group legacy
+ */
 class ExpressionLanguageSyntaxTest extends TestCase
 {
     public function testValidatedByStandardValidator()
@@ -34,7 +37,7 @@ class ExpressionLanguageSyntaxTest extends TestCase
         self::assertSame('my_service', $constraint->validatedBy());
     }
 
-    public function provideServiceValidatedConstraints(): iterable
+    public static function provideServiceValidatedConstraints(): iterable
     {
         yield 'Doctrine style' => [new ExpressionLanguageSyntax(['service' => 'my_service'])];
 

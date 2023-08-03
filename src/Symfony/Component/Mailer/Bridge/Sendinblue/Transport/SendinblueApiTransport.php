@@ -29,6 +29,8 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * @author Yann LUCAS
+ *
+ * @deprecated since Symfony 6.4, use BrevoApiTransport instead
  */
 final class SendinblueApiTransport extends AbstractApiTransport
 {
@@ -58,7 +60,7 @@ final class SendinblueApiTransport extends AbstractApiTransport
         try {
             $statusCode = $response->getStatusCode();
             $result = $response->toArray(false);
-        } catch (DecodingExceptionInterface $e) {
+        } catch (DecodingExceptionInterface) {
             throw new HttpTransportException('Unable to send an email: '.$response->getContent(false).sprintf(' (code %d).', $statusCode), $response);
         } catch (TransportExceptionInterface $e) {
             throw new HttpTransportException('Could not reach the remote Sendinblue server.', $response, 0, $e);
@@ -136,7 +138,7 @@ final class SendinblueApiTransport extends AbstractApiTransport
     private function prepareHeadersAndTags(Headers $headers): array
     {
         $headersAndTags = [];
-        $headersToBypass = ['from', 'to', 'cc', 'bcc', 'subject', 'reply-to', 'content-type', 'accept', 'api-key'];
+        $headersToBypass = ['from', 'sender', 'to', 'cc', 'bcc', 'subject', 'reply-to', 'content-type', 'accept', 'api-key'];
         foreach ($headers->all() as $name => $header) {
             if (\in_array($name, $headersToBypass, true)) {
                 continue;
@@ -161,7 +163,7 @@ final class SendinblueApiTransport extends AbstractApiTransport
 
                 continue;
             }
-            $headersAndTags['headers'][$name] = $header->getBodyAsString();
+            $headersAndTags['headers'][$header->getName()] = $header->getBodyAsString();
         }
 
         return $headersAndTags;

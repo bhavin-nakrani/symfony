@@ -1,8 +1,18 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Serializer\Tests\Normalizer;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Normalizer\UidNormalizer;
 use Symfony\Component\Uid\AbstractUid;
@@ -16,10 +26,9 @@ use Symfony\Component\Uid\UuidV6;
 
 class UidNormalizerTest extends TestCase
 {
-    /**
-     * @var UidNormalizer
-     */
-    private $normalizer;
+    use ExpectDeprecationTrait;
+
+    private UidNormalizer $normalizer;
 
     protected function setUp(): void
     {
@@ -37,7 +46,7 @@ class UidNormalizerTest extends TestCase
         $this->assertFalse($this->normalizer->supportsNormalization(new \stdClass()));
     }
 
-    public function normalizeProvider()
+    public static function normalizeProvider()
     {
         $uidFormats = [null, 'canonical', 'base58', 'base32', 'rfc4122'];
         $data = [
@@ -108,7 +117,7 @@ class UidNormalizerTest extends TestCase
         ] : []));
     }
 
-    public function dataProvider()
+    public static function dataProvider()
     {
         return [
             ['9b7541de-6f87-11ea-ab3c-9da9a81562fc', UuidV1::class],
@@ -134,8 +143,13 @@ class UidNormalizerTest extends TestCase
         $this->assertFalse($this->normalizer->supportsDenormalization('foo', \stdClass::class));
     }
 
+    /**
+     * @group legacy
+     */
     public function testSupportOurAbstractUid()
     {
+        $this->expectDeprecation('Since symfony/serializer 6.1: Supporting denormalization for the "Symfony\Component\Uid\AbstractUid" type in "Symfony\Component\Serializer\Normalizer\UidNormalizer" is deprecated, use one of "Symfony\Component\Uid\AbstractUid" child class instead.');
+
         $this->assertTrue($this->normalizer->supportsDenormalization('1ea6ecef-eb9a-66fe-b62b-957b45f17e43', AbstractUid::class));
     }
 
@@ -152,13 +166,23 @@ class UidNormalizerTest extends TestCase
         $this->assertEquals($class::fromString($uuidString), $this->normalizer->denormalize($uuidString, $class));
     }
 
+    /**
+     * @group legacy
+     */
     public function testDenormalizeOurAbstractUid()
     {
+        $this->expectDeprecation('Since symfony/serializer 6.1: Denormalizing to an abstract class in "Symfony\Component\Serializer\Normalizer\UidNormalizer" is deprecated.');
+
         $this->assertEquals(Uuid::fromString($uuidString = '1ea6ecef-eb9a-66fe-b62b-957b45f17e43'), $this->normalizer->denormalize($uuidString, AbstractUid::class));
     }
 
+    /**
+     * @group legacy
+     */
     public function testDenormalizeCustomAbstractUid()
     {
+        $this->expectDeprecation('Since symfony/serializer 6.1: Denormalizing to an abstract class in "Symfony\Component\Serializer\Normalizer\UidNormalizer" is deprecated.');
+
         $this->assertEquals(Uuid::fromString($uuidString = '1ea6ecef-eb9a-66fe-b62b-957b45f17e43'), $this->normalizer->denormalize($uuidString, TestAbstractCustomUid::class));
     }
 

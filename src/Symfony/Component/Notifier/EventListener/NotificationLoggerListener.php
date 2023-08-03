@@ -29,7 +29,7 @@ class NotificationLoggerListener implements EventSubscriberInterface, ResetInter
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function reset()
     {

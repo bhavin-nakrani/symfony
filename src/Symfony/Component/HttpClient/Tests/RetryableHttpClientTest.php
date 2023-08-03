@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\HttpClient\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -53,21 +62,22 @@ class RetryableHttpClientTest extends TestCase
     {
         $client = new RetryableHttpClient(
             new MockHttpClient([
-                new MockResponse('', ['http_code' => 500]),
-                new MockResponse('', ['http_code' => 200]),
+                new MockResponse('abc', ['http_code' => 500]),
+                new MockResponse('def', ['http_code' => 200]),
             ]),
             new class(GenericRetryStrategy::DEFAULT_RETRY_STATUS_CODES, 0) extends GenericRetryStrategy {
                 public function shouldRetry(AsyncContext $context, ?string $responseContent, ?TransportExceptionInterface $exception): ?bool
                 {
-                    return null === $responseContent ? null : 200 !== $context->getStatusCode();
+                    return 500 === $context->getStatusCode() && null === $responseContent ? null : 200 !== $context->getStatusCode();
                 }
             },
-            1
+            2
         );
 
         $response = $client->request('GET', 'http://example.com/foo-bar');
 
         self::assertSame(200, $response->getStatusCode());
+        self::assertSame('def', $response->getContent());
     }
 
     public function testRetryWithBodyKeepContent()
@@ -177,5 +187,202 @@ class RetryableHttpClientTest extends TestCase
             $this->assertTrue($chunk->isTimeout());
             $response->cancel();
         }
+    }
+
+    public function testRetryWithDelay()
+    {
+        $retryAfter = '0.46';
+
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', [
+                    'http_code' => 503,
+                    'response_headers' => [
+                        'retry-after' => $retryAfter,
+                    ],
+                ]),
+                new MockResponse('', [
+                    'http_code' => 200,
+                ]),
+            ]),
+            new GenericRetryStrategy(),
+            1,
+            $logger = new class() extends TestLogger {
+                public array $context = [];
+
+                public function log($level, $message, array $context = []): void
+                {
+                    $this->context = $context;
+                    parent::log($level, $message, $context);
+                }
+            }
+        );
+
+        $client->request('GET', 'http://example.com/foo-bar')->getContent();
+
+        $delay = $logger->context['delay'] ?? null;
+
+        $this->assertArrayHasKey('delay', $logger->context);
+        $this->assertNotNull($delay);
+        $this->assertSame((int) ($retryAfter * 1000), $delay);
+    }
+
+    public function testRetryOnErrorAssertContent()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+               new MockResponse('', ['http_code' => 500]),
+               new MockResponse('Test out content', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500], 0),
+            1
+        );
+
+        $response = $client->request('GET', 'http://example.com/foo-bar');
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('Test out content', $response->getContent());
+        self::assertSame('Test out content', $response->getContent(), 'Content should be buffered');
+    }
+
+    public function testRetryWithMultipleBaseUris()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('Hit on second uri', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500], 0),
+            1
+        );
+
+        $response = $client->request('GET', 'foo-bar', [
+            'base_uri' => [
+                'http://example.com/a/',
+                'http://example.com/b/',
+            ],
+        ]);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('http://example.com/b/foo-bar', $response->getInfo('url'));
+    }
+
+    public function testMultipleBaseUrisAsOptions()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('Hit on second uri', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500], 0),
+            1
+        );
+
+        $client = $client->withOptions([
+            'base_uri' => [
+                'http://example.com/a/',
+                'http://example.com/b/',
+            ],
+        ]);
+
+        $response = $client->request('GET', 'foo-bar');
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('http://example.com/b/foo-bar', $response->getInfo('url'));
+    }
+
+    public function testRetryWithMultipleBaseUrisShufflesNestedArray()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('Hit on second uri', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500], 0),
+            1
+        );
+
+        $response = $client->request('GET', 'foo-bar', [
+            'base_uri' => [
+                'http://example.com/a/',
+                [
+                    'http://example.com/b/',
+                    'http://example.com/c/',
+                ],
+                'http://example.com/d/',
+            ],
+        ]);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertMatchesRegularExpression('#^http://example.com/(b|c)/foo-bar$#', $response->getInfo('url'));
+    }
+
+    public function testRetryWithMultipleBaseUrisPreservesNonNestedOrder()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('Hit on second uri', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500], 0),
+            3
+        );
+
+        $response = $client->request('GET', 'foo-bar', [
+            'base_uri' => [
+                'http://example.com/a/',
+                [
+                    'http://example.com/b/',
+                    'http://example.com/c/',
+                ],
+                'http://example.com/d/',
+            ],
+        ]);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('http://example.com/d/foo-bar', $response->getInfo('url'));
+    }
+
+    public function testMaxRetriesOption()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('', ['http_code' => 502]),
+                new MockResponse('', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500, 502], 0),
+            3
+        );
+
+        $response = $client->request('GET', 'http://example.com/foo-bar', [
+            'max_retries' => 1,
+        ]);
+
+        self::assertSame(502, $response->getStatusCode());
+    }
+
+    public function testMaxRetriesWithOptions()
+    {
+        $client = new RetryableHttpClient(
+            new MockHttpClient([
+                new MockResponse('', ['http_code' => 500]),
+                new MockResponse('', ['http_code' => 502]),
+                new MockResponse('', ['http_code' => 504]),
+                new MockResponse('', ['http_code' => 200]),
+            ]),
+            new GenericRetryStrategy([500, 502, 504], 0),
+            3
+        );
+
+        $client = $client->withOptions([
+            'max_retries' => 2,
+        ]);
+
+        $response = $client->request('GET', 'http://example.com/foo-bar');
+
+        self::assertSame(504, $response->getStatusCode());
     }
 }

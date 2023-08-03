@@ -11,6 +11,7 @@ $container->loadFromExtension('framework', [
         ],
     ],
     'http_method_override' => false,
+    'trust_x_sendfile_type_header' => true,
     'esi' => [
         'enabled' => true,
     ],
@@ -55,11 +56,7 @@ $container->loadFromExtension('framework', [
     'validation' => [
         'enabled' => true,
     ],
-    'annotations' => [
-        'cache' => 'file',
-        'debug' => true,
-        'file_cache_dir' => '%kernel.cache_dir%/annotations',
-    ],
+    'annotations' => false,
     'serializer' => [
         'enabled' => true,
         'enable_annotations' => true,
@@ -78,5 +75,8 @@ $container->loadFromExtension('framework', [
             ],
             'pdf' => 'application/pdf',
         ],
+    ],
+    'html_sanitizer' => [
+        'enabled' => true,
     ],
 ]);

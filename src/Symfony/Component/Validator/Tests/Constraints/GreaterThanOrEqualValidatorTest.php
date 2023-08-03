@@ -20,12 +20,12 @@ use Symfony\Component\Validator\Constraints\GreaterThanOrEqualValidator;
  */
 class GreaterThanOrEqualValidatorTest extends AbstractComparisonValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): GreaterThanOrEqualValidator
     {
         return new GreaterThanOrEqualValidator();
     }
 
-    protected function createConstraint(array $options = null): Constraint
+    protected static function createConstraint(array $options = null): Constraint
     {
         return new GreaterThanOrEqual($options);
     }
@@ -35,10 +35,7 @@ class GreaterThanOrEqualValidatorTest extends AbstractComparisonValidatorTestCas
         return GreaterThanOrEqual::TOO_LOW_ERROR;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisons(): array
+    public static function provideValidComparisons(): array
     {
         return [
             [3, 2],
@@ -55,10 +52,7 @@ class GreaterThanOrEqualValidatorTest extends AbstractComparisonValidatorTestCas
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisonsToPropertyPath(): array
+    public static function provideValidComparisonsToPropertyPath(): array
     {
         return [
             [5],
@@ -66,10 +60,7 @@ class GreaterThanOrEqualValidatorTest extends AbstractComparisonValidatorTestCas
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideInvalidComparisons(): array
+    public static function provideInvalidComparisons(): array
     {
         return [
             [1, '1', 2, '2', 'int'],
@@ -80,7 +71,7 @@ class GreaterThanOrEqualValidatorTest extends AbstractComparisonValidatorTestCas
         ];
     }
 
-    public function provideComparisonsToNullValueAtPropertyPath()
+    public static function provideComparisonsToNullValueAtPropertyPath()
     {
         return [
             [5, '5', true],

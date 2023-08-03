@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\String\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -101,7 +110,7 @@ abstract class AbstractAsciiTestCase extends TestCase
         $this->assertEquals($expected, $actual);
     }
 
-    public function wordwrapProvider()
+    public static function wordwrapProvider()
     {
         return [
             [
@@ -984,9 +993,7 @@ abstract class AbstractAsciiTestCase extends TestCase
             ['April,15,2003', 'April 15, 2003', '/(\w+) (\d+), (\d+)/i', '${1},$2,$3'],
             ['5/27/1999', '1999-5-27', '/(19|20)(\d{2})-(\d{1,2})-(\d{1,2})/', '\3/\4/\1\2'],
             ['Copyright 2000', 'Copyright 1999', '([0-9]+)', '2000'],
-            ['hello world! this is a test', 'HELLO WORLD! THIS is a test', '/\b([A-Z]+)\b/', function ($word) {
-                return strtolower($word[1]);
-            }],
+            ['hello world! this is a test', 'HELLO WORLD! THIS is a test', '/\b([A-Z]+)\b/', fn ($word) => strtolower($word[1])],
             ['COPYRIGHT 1999', 'Copyright 1999', '/[a-z]/', function ($matches) {
                 foreach ($matches as $match) {
                     return strtoupper($match);
@@ -1032,11 +1039,14 @@ abstract class AbstractAsciiTestCase extends TestCase
     {
         return [
             ['', ''],
+            ['xY', 'x_y'],
+            ['xuYo', 'xu_yo'],
             ['symfonyIsGreat', 'symfony_is_great'],
             ['symfony5IsGreat', 'symfony_5_is_great'],
             ['symfonyIsGreat', 'Symfony is great'],
             ['symfonyIsAGreatFramework', 'Symfony is a great framework'],
             ['symfonyIsGREAT', '*Symfony* is GREAT!!'],
+            ['SYMFONY', 'SYMFONY'],
         ];
     }
 
@@ -1054,6 +1064,9 @@ abstract class AbstractAsciiTestCase extends TestCase
     {
         return [
             ['', ''],
+            ['x_y', 'x_y'],
+            ['x_y', 'X_Y'],
+            ['xu_yo', 'xu_yo'],
             ['symfony_is_great', 'symfonyIsGreat'],
             ['symfony5_is_great', 'symfony5IsGreat'],
             ['symfony5is_great', 'symfony5isGreat'],
@@ -1061,6 +1074,7 @@ abstract class AbstractAsciiTestCase extends TestCase
             ['symfony_is_a_great_framework', 'symfonyIsAGreatFramework'],
             ['symfony_is_great', 'symfonyIsGREAT'],
             ['symfony_is_really_great', 'symfonyIsREALLYGreat'],
+            ['symfony', 'SYMFONY'],
         ];
     }
 

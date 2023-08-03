@@ -50,16 +50,13 @@ class RouterDebugCommand extends Command
         $this->fileLinkFormatter = $fileLinkFormatter;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function configure()
+    protected function configure(): void
     {
         $this
             ->setDefinition([
                 new InputArgument('name', InputArgument::OPTIONAL, 'A route name'),
                 new InputOption('show-controllers', null, InputOption::VALUE_NONE, 'Show assigned controllers in overview'),
-                new InputOption('format', null, InputOption::VALUE_REQUIRED, 'The output format (txt, xml, json, or md)', 'txt'),
+                new InputOption('format', null, InputOption::VALUE_REQUIRED, sprintf('The output format ("%s")', implode('", "', $this->getAvailableFormatOptions())), 'txt'),
                 new InputOption('raw', null, InputOption::VALUE_NONE, 'To output raw route(s)'),
             ])
             ->setHelp(<<<'EOF'
@@ -73,8 +70,6 @@ EOF
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @throws InvalidArgumentException When route does not exist
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -85,13 +80,25 @@ EOF
         $routes = $this->router->getRouteCollection();
         $container = null;
         if ($this->fileLinkFormatter) {
-            $container = function () {
-                return $this->getContainerBuilder($this->getApplication()->getKernel());
-            };
+            $container = fn () => $this->getContainerBuilder($this->getApplication()->getKernel());
         }
 
         if ($name) {
-            if (!($route = $routes->get($name)) && $matchingRoutes = $this->findRouteNameContaining($name, $routes)) {
+            $route = $routes->get($name);
+            $matchingRoutes = $this->findRouteNameContaining($name, $routes);
+
+            if (!$input->isInteractive() && !$route && \count($matchingRoutes) > 1) {
+                $helper->describe($io, $this->findRouteContaining($name, $routes), [
+                    'format' => $input->getOption('format'),
+                    'raw_text' => $input->getOption('raw'),
+                    'show_controllers' => $input->getOption('show-controllers'),
+                    'output' => $io,
+                ]);
+
+                return 0;
+            }
+
+            if (!$route && $matchingRoutes) {
                 $default = 1 === \count($matchingRoutes) ? $matchingRoutes[0] : null;
                 $name = $io->choice('Select one of the matching routes', $matchingRoutes, $default);
                 $route = $routes->get($name);
@@ -142,8 +149,24 @@ EOF
         }
 
         if ($input->mustSuggestOptionValuesFor('format')) {
-            $helper = new DescriptorHelper();
-            $suggestions->suggestValues($helper->getFormats());
+            $suggestions->suggestValues($this->getAvailableFormatOptions());
         }
+    }
+
+    private function findRouteContaining(string $name, RouteCollection $routes): RouteCollection
+    {
+        $foundRoutes = new RouteCollection();
+        foreach ($routes as $routeName => $route) {
+            if (false !== stripos($routeName, $name)) {
+                $foundRoutes->add($routeName, $route);
+            }
+        }
+
+        return $foundRoutes;
+    }
+
+    private function getAvailableFormatOptions(): array
+    {
+        return (new DescriptorHelper())->getFormats();
     }
 }

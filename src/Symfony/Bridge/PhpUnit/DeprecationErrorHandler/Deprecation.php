@@ -11,12 +11,12 @@
 
 namespace Symfony\Bridge\PhpUnit\DeprecationErrorHandler;
 
+use Doctrine\Deprecations\Deprecation as DoctrineDeprecation;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\TestSuite;
 use PHPUnit\Metadata\Api\Groups;
 use PHPUnit\Util\Test;
 use Symfony\Bridge\PhpUnit\Legacy\SymfonyTestsListenerFor;
-use Symfony\Component\Debug\DebugClassLoader as LegacyDebugClassLoader;
 use Symfony\Component\ErrorHandler\DebugClassLoader;
 
 class_exists(Groups::class);
@@ -37,9 +37,11 @@ class Deprecation
 
     private $trace = [];
     private $message;
+    private $languageDeprecation;
     private $originClass;
     private $originMethod;
     private $triggeringFile;
+    private $triggeringClass;
 
     /** @var string[] Absolute paths to vendor directories */
     private static $vendors;
@@ -56,16 +58,31 @@ class Deprecation
     /**
      * @param string $message
      * @param string $file
+     * @param bool   $languageDeprecation
      */
-    public function __construct($message, array $trace, $file)
+    public function __construct($message, array $trace, $file, $languageDeprecation = false)
     {
-        if (isset($trace[2]['function']) && 'trigger_deprecation' === $trace[2]['function']) {
-            $file = $trace[2]['file'];
-            array_splice($trace, 1, 1);
+        if (DebugClassLoader::class === ($trace[2]['class'] ?? '')) {
+            $this->triggeringClass = $trace[2]['args'][0];
+        }
+
+        switch ($trace[2]['function'] ?? '') {
+            case 'trigger_deprecation':
+                $file = $trace[2]['file'];
+                array_splice($trace, 1, 1);
+                break;
+
+            case 'delegateTriggerToBackend':
+                if (DoctrineDeprecation::class === ($trace[2]['class'] ?? '')) {
+                    $file = $trace[3]['file'];
+                    array_splice($trace, 1, 2);
+                }
+                break;
         }
 
         $this->trace = $trace;
         $this->message = $message;
+        $this->languageDeprecation = $languageDeprecation;
 
         $i = \count($trace);
         while (1 < $i && $this->lineShouldBeSkipped($trace[--$i])) {
@@ -81,7 +98,7 @@ class Deprecation
             }
 
             if ('trigger_error' === $trace[$j]['function'] && !isset($trace[$j]['class'])) {
-                if (\in_array($trace[1 + $j]['class'], [DebugClassLoader::class, LegacyDebugClassLoader::class], true)) {
+                if (DebugClassLoader::class === $trace[1 + $j]['class']) {
                     $class = $trace[1 + $j]['args'][0];
                     $this->triggeringFile = isset($trace[1 + $j]['args'][1]) ? realpath($trace[1 + $j]['args'][1]) : (new \ReflectionClass($class))->getFileName();
                     $this->getOriginalFilesStack();
@@ -153,6 +170,26 @@ class Deprecation
         $class = $line['class'];
 
         return 'ReflectionMethod' === $class || 0 === strpos($class, 'PHPUnit\\');
+    }
+
+    /**
+     * @return bool
+     */
+    public function originatesFromDebugClassLoader()
+    {
+        return isset($this->triggeringClass);
+    }
+
+    /**
+     * @return string
+     */
+    public function triggeringClass()
+    {
+        if (null === $this->triggeringClass) {
+            throw new \LogicException('Check with originatesFromDebugClassLoader() before calling this method.');
+        }
+
+        return $this->triggeringClass;
     }
 
     /**
@@ -239,7 +276,12 @@ class Deprecation
      */
     public function getType()
     {
-        if (self::PATH_TYPE_SELF === $pathType = $this->getPathType($this->triggeringFile)) {
+        $pathType = $this->getPathType($this->triggeringFile);
+        if ($this->languageDeprecation && self::PATH_TYPE_VENDOR === $pathType) {
+            // the triggering file must be used for language deprecations
+            return self::TYPE_INDIRECT;
+        }
+        if (self::PATH_TYPE_SELF === $pathType) {
             return self::TYPE_SELF;
         }
         if (self::PATH_TYPE_UNDETERMINED === $pathType) {
@@ -323,9 +365,6 @@ class Deprecation
             if (class_exists(DebugClassLoader::class, false)) {
                 self::$vendors[] = \dirname((new \ReflectionClass(DebugClassLoader::class))->getFileName());
             }
-            if (class_exists(LegacyDebugClassLoader::class, false)) {
-                self::$vendors[] = \dirname((new \ReflectionClass(LegacyDebugClassLoader::class))->getFileName());
-            }
             foreach (get_declared_classes() as $class) {
                 if ('C' === $class[0] && 0 === strpos($class, 'ComposerAutoloaderInit')) {
                     $r = new \ReflectionClass($class);
@@ -352,7 +391,7 @@ class Deprecation
         return self::$vendors;
     }
 
-    private static function addSourcePathsFromPrefixes(array $prefixesByNamespace, array $paths)
+    private static function addSourcePathsFromPrefixes(array $prefixesByNamespace, array $paths): array
     {
         foreach ($prefixesByNamespace as $prefixes) {
             foreach ($prefixes as $prefix) {

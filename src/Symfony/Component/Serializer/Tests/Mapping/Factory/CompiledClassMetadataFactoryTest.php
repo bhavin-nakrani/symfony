@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Serializer\Tests\Mapping\Factory;
 
 use PHPUnit\Framework\TestCase;
@@ -7,7 +16,7 @@ use Symfony\Component\Serializer\Mapping\AttributeMetadata;
 use Symfony\Component\Serializer\Mapping\ClassMetadata;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactoryInterface;
 use Symfony\Component\Serializer\Mapping\Factory\CompiledClassMetadataFactory;
-use Symfony\Component\Serializer\Tests\Fixtures\Annotations\SerializedNameDummy;
+use Symfony\Component\Serializer\Tests\Fixtures\Attributes\SerializedNameDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\Dummy;
 
 /**
@@ -119,7 +128,7 @@ final class CompiledClassMetadataFactoryTest extends TestCase
         $this->assertTrue($compiledClassMetadataFactory->hasMetadataFor(SerializedNameDummy::class));
     }
 
-    public function valueProvider()
+    public static function valueProvider()
     {
         return [
             [Dummy::class],

@@ -50,7 +50,7 @@ class ObjectLoaderTest extends TestCase
         $loader->load($resourceString);
     }
 
-    public function getBadResourceStrings()
+    public static function getBadResourceStrings()
     {
         return [
             ['Foo:Bar:baz'],
@@ -82,7 +82,7 @@ class ObjectLoaderTest extends TestCase
     {
         $this->expectException(\LogicException::class);
         $service = $this->getMockBuilder(\stdClass::class)
-            ->setMethods(['loadRoutes'])
+            ->addMethods(['loadRoutes'])
             ->getMock();
         $service->expects($this->once())
             ->method('loadRoutes')
@@ -96,7 +96,7 @@ class ObjectLoaderTest extends TestCase
 
 class TestObjectLoader extends ObjectLoader
 {
-    public $loaderMap = [];
+    public array $loaderMap = [];
 
     public function supports(mixed $resource, string $type = null): bool
     {
@@ -111,8 +111,8 @@ class TestObjectLoader extends ObjectLoader
 
 class TestObjectLoaderRouteService
 {
-    private $collection;
-    private $env;
+    private RouteCollection $collection;
+    private ?string $env;
 
     public function __construct($collection, string $env = null)
     {

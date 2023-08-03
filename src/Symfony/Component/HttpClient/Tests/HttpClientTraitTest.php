@@ -13,6 +13,7 @@ namespace Symfony\Component\HttpClient\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\Exception\InvalidArgumentException;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpClient\HttpClientTrait;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -37,7 +38,7 @@ class HttpClientTraitTest extends TestCase
         $this->assertSame($expected, implode('', $url));
     }
 
-    public function providePrepareRequestUrl(): iterable
+    public static function providePrepareRequestUrl(): iterable
     {
         yield ['http://example.com/', 'http://example.com/'];
         yield ['http://example.com/?a=1&b=b', '.'];
@@ -47,6 +48,119 @@ class HttpClientTraitTest extends TestCase
         yield ['http://example.com/', 'http://example.com/', ['a' => null]];
         yield ['http://example.com/?b=', 'http://example.com/', ['b' => '']];
         yield ['http://example.com/?b=', 'http://example.com/', ['a' => null, 'b' => '']];
+    }
+
+    public function testPrepareRequestWithBodyIsArray()
+    {
+        $defaults = [
+            'base_uri' => 'http://example.com?c=c',
+            'query' => ['a' => 1, 'b' => 'b'],
+            'body' => [],
+        ];
+        [, $defaults] = self::prepareRequest(null, null, $defaults);
+
+        [,$options] = self::prepareRequest(null, 'http://example.com', [
+            'body' => [1, 2],
+            'headers' => [
+                'Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8',
+            ],
+        ], $defaults);
+
+        $this->assertContains('Content-Type: application/x-www-form-urlencoded; charset=utf-8', $options['headers']);
+    }
+
+    public function testNormalizeBodyMultipart()
+    {
+        $file = fopen('php://memory', 'r+');
+        stream_context_set_option($file, ['http' => [
+            'filename' => 'test.txt',
+            'content_type' => 'text/plain',
+        ]]);
+        fwrite($file, 'foobarbaz');
+        rewind($file);
+
+        $headers = [
+            'content-type' => ['Content-Type: multipart/form-data; boundary=ABCDEF'],
+        ];
+        $body = [
+            'foo[]' => 'bar',
+            'bar' => [
+                $file,
+            ],
+        ];
+
+        $body = self::normalizeBody($body, $headers);
+
+        $result = '';
+        while ('' !== $data = $body(self::$CHUNK_SIZE)) {
+            $result .= $data;
+        }
+
+        $expected = <<<'EOF'
+            --ABCDEF
+            Content-Disposition: form-data; name="foo[]"
+
+            bar
+            --ABCDEF
+            Content-Disposition: form-data; name="bar[0]"; filename="test.txt"
+            Content-Type: text/plain
+
+            foobarbaz
+            --ABCDEF--
+
+            EOF;
+        $expected = str_replace("\n", "\r\n", $expected);
+
+        $this->assertSame($expected, $result);
+    }
+
+    /**
+     * @group network
+     *
+     * @requires extension openssl
+     *
+     * @dataProvider provideNormalizeBodyMultipartForwardStream
+     */
+    public function testNormalizeBodyMultipartForwardStream($stream)
+    {
+        $body = [
+            'logo' => $stream,
+        ];
+
+        $headers = [];
+        $body = self::normalizeBody($body, $headers);
+
+        $result = '';
+        while ('' !== $data = $body(self::$CHUNK_SIZE)) {
+            $result .= $data;
+        }
+
+        $this->assertSame(1, preg_match('/^Content-Type: multipart\/form-data; boundary=(?<boundary>.+)$/', $headers['content-type'][0], $matches));
+        $this->assertSame('Content-Length: 3086', $headers['content-length'][0]);
+        $this->assertSame(3086, \strlen($result));
+
+        $expected = <<<EOF
+            --{$matches['boundary']}
+            Content-Disposition: form-data; name="logo"; filename="1f44d.png"
+            Content-Type: image/png
+
+            %A
+            --{$matches['boundary']}--
+
+            EOF;
+        $expected = str_replace("\n", "\r\n", $expected);
+
+        $this->assertStringMatchesFormat($expected, $result);
+    }
+
+    public static function provideNormalizeBodyMultipartForwardStream()
+    {
+        if (!\extension_loaded('openssl')) {
+            throw self::markTestSkipped('Extension openssl required.');
+        }
+
+        yield 'native' => [fopen('https://github.githubassets.com/images/icons/emoji/unicode/1f44d.png', 'r')];
+        yield 'symfony' => [HttpClient::create()->request('GET', 'https://github.githubassets.com/images/icons/emoji/unicode/1f44d.png')->toStream()];
     }
 
     /**
@@ -60,7 +174,7 @@ class HttpClientTraitTest extends TestCase
     /**
      * From https://github.com/guzzle/psr7/blob/master/tests/UriResoverTest.php.
      */
-    public function provideResolveUrl(): array
+    public static function provideResolveUrl(): array
     {
         return [
             [self::RFC3986_BASE, 'http:h',        'http:h'],
@@ -70,6 +184,8 @@ class HttpClientTraitTest extends TestCase
             [self::RFC3986_BASE, '/g',            'http://a/g'],
             [self::RFC3986_BASE, '//g',           'http://g/'],
             [self::RFC3986_BASE, '?y',            'http://a/b/c/d;p?y'],
+            [self::RFC3986_BASE, '?y={"f":1}',    'http://a/b/c/d;p?y={%22f%22:1}'],
+            [self::RFC3986_BASE, 'g{oof}y',       'http://a/b/c/g{oof}y'],
             [self::RFC3986_BASE, 'g?y',           'http://a/b/c/g?y'],
             [self::RFC3986_BASE, '#s',            'http://a/b/c/d;p?q#s'],
             [self::RFC3986_BASE, 'g#s',           'http://a/b/c/g#s'],
@@ -148,21 +264,23 @@ class HttpClientTraitTest extends TestCase
         $this->assertSame($expected, self::parseUrl($url, $query));
     }
 
-    public function provideParseUrl(): iterable
+    public static function provideParseUrl(): iterable
     {
         yield [['http:', '//example.com', null, null, null], 'http://Example.coM:80'];
         yield [['https:', '//xn--dj-kia8a.example.com:8000', '/', null, null], 'https://DÉjà.Example.com:8000/'];
         yield [[null, null, '/f%20o.o', '?a=b', '#c'], '/f o%2Eo?a=b#c'];
+        yield [[null, null, '/custom%7C2010-01-01%2000:00:00%7C2023-06-15%2005:50:35', '?a=b', '#c'], '/custom|2010-01-01 00:00:00|2023-06-15 05:50:35?a=b#c'];
         yield [[null, '//a:b@foo', '/bar', null, null], '//a:b@foo/bar'];
+        yield [[null, '//a:b@foo', '/b{}', null, null], '//a:b@foo/b{}'];
         yield [['http:', null, null, null, null], 'http:'];
         yield [['http:', null, 'bar', null, null], 'http:bar'];
         yield [[null, null, 'bar', '?a=1&c=c', null], 'bar?a=a&b=b', ['b' => null, 'c' => 'c', 'a' => 1]];
-        yield [[null, null, 'bar', '?a=b+c&b=b', null], 'bar?a=b+c', ['b' => 'b']];
+        yield [[null, null, 'bar', '?a=b+c&b=b-._~!$%26/%27()[]*%2B%2C;%3D:@%25%5C%5E%60%7B%7C%7D', null], 'bar?a=b+c', ['b' => 'b-._~!$&/\'()[]*+,;=:@%\\^`{|}']];
         yield [[null, null, 'bar', '?a=b%2B%20c', null], 'bar?a=b+c', ['a' => 'b+ c']];
-        yield [[null, null, 'bar', '?a%5Bb%5D=c', null], 'bar', ['a' => ['b' => 'c']]];
-        yield [[null, null, 'bar', '?a%5Bb%5Bc%5D=d', null], 'bar?a[b[c]=d', []];
-        yield [[null, null, 'bar', '?a%5Bb%5D%5Bc%5D=dd', null], 'bar?a[b][c]=d&e[f]=g', ['a' => ['b' => ['c' => 'dd']], 'e[f]' => null]];
-        yield [[null, null, 'bar', '?a=b&a%5Bb%20c%5D=d&e%3Df=%E2%9C%93', null], 'bar?a=b', ['a' => ['b c' => 'd'], 'e=f' => '✓']];
+        yield [[null, null, 'bar', '?a[b]=c', null], 'bar', ['a' => ['b' => 'c']]];
+        yield [[null, null, 'bar', '?a[b[c]=d', null], 'bar?a[b[c]=d', []];
+        yield [[null, null, 'bar', '?a[b][c]=dd', null], 'bar?a[b][c]=d&e[f]=g', ['a' => ['b' => ['c' => 'dd']], 'e[f]' => null]];
+        yield [[null, null, 'bar', '?a=b&a[b%20c]=d&e%3Df=%E2%9C%93', null], 'bar?a=b', ['a' => ['b c' => 'd'], 'e=f' => '✓']];
         // IDNA 2008 compliance
         yield [['https:', '//xn--fuball-cta.test', null, null, null], 'https://fußball.test'];
     }
@@ -175,7 +293,7 @@ class HttpClientTraitTest extends TestCase
         $this->assertSame($expected, self::removeDotSegments($url));
     }
 
-    public function provideRemoveDotSegments()
+    public static function provideRemoveDotSegments()
     {
         yield ['', ''];
         yield ['', '.'];
@@ -224,7 +342,7 @@ class HttpClientTraitTest extends TestCase
         self::prepareRequest('POST', 'http://example.com', ['json' => ['foo' => 'bar'], 'body' => '<html/>'], HttpClientInterface::OPTIONS_DEFAULTS);
     }
 
-    public function providePrepareAuthBasic()
+    public static function providePrepareAuthBasic()
     {
         yield ['foo:bar', 'Zm9vOmJhcg=='];
         yield [['foo', 'bar'], 'Zm9vOmJhcg=='];
@@ -241,7 +359,7 @@ class HttpClientTraitTest extends TestCase
         $this->assertSame('Authorization: Basic '.$result, $options['normalized_headers']['authorization'][0]);
     }
 
-    public function provideFingerprints()
+    public static function provideFingerprints()
     {
         foreach (['md5', 'sha1', 'sha256'] as $algo) {
             $hash = hash($algo, $algo);

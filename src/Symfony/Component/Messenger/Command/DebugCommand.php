@@ -39,7 +39,7 @@ class DebugCommand extends Command
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     protected function configure()
     {
@@ -60,9 +60,6 @@ EOF
         ;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
@@ -133,7 +130,7 @@ EOF
 
                 return trim(preg_replace('#\s*\n\s*\*\s*#', ' ', $docComment));
             }
-        } catch (\ReflectionException $e) {
+        } catch (\ReflectionException) {
         }
 
         return '';

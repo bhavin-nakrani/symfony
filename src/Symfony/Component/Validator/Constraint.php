@@ -47,6 +47,11 @@ abstract class Constraint
     /**
      * Maps error codes to the names of their constants.
      */
+    protected const ERROR_NAMES = [];
+
+    /**
+     * @deprecated since Symfony 6.1, use protected const ERROR_NAMES instead
+     */
     protected static $errorNames = [];
 
     /**
@@ -70,9 +75,15 @@ abstract class Constraint
      */
     public static function getErrorName(string $errorCode): string
     {
+        if (isset(static::ERROR_NAMES[$errorCode])) {
+            return static::ERROR_NAMES[$errorCode];
+        }
+
         if (!isset(static::$errorNames[$errorCode])) {
             throw new InvalidArgumentException(sprintf('The error code "%s" does not exist for constraint of type "%s".', $errorCode, static::class));
         }
+
+        trigger_deprecation('symfony/validator', '6.1', 'The "%s::$errorNames" property is deprecated, use protected const ERROR_NAMES instead.', static::class);
 
         return static::$errorNames[$errorCode];
     }
@@ -181,6 +192,8 @@ abstract class Constraint
      * this method will be called at most once per constraint instance and
      * option name.
      *
+     * @return void
+     *
      * @throws InvalidOptionsException If an invalid option name is given
      */
     public function __set(string $option, mixed $value)
@@ -221,9 +234,15 @@ abstract class Constraint
 
     /**
      * Adds the given group if this constraint is in the Default group.
+     *
+     * @return void
      */
     public function addImplicitGroupName(string $group)
     {
+        if (null === $this->groups && \array_key_exists('groups', (array) $this)) {
+            throw new \LogicException(sprintf('"%s::$groups" is set to null. Did you forget to call "%s::__construct()"?', static::class, self::class));
+        }
+
         if (\in_array(self::DEFAULT_GROUP, $this->groups) && !\in_array($group, $this->groups)) {
             $this->groups[] = $group;
         }

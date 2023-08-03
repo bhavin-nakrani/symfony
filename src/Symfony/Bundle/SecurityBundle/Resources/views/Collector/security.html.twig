@@ -2,10 +2,39 @@
 
 {% block page_title 'Security' %}
 
+{% block head %}
+    {{ parent() }}
+
+    <style>
+        #collector-content .decision-log .voter_result td {
+            border-top-width: 1px;
+            border-bottom-width: 0;
+            padding-bottom: 0;
+        }
+
+        #collector-content .decision-log .voter_details td {
+            border-top-width: 0;
+            border-bottom-width: 1px;
+            padding-bottom: 0;
+        }
+
+        #collector-content .decision-log .voter_details table {
+            border: 0;
+            margin: 0;
+            box-shadow: unset;
+        }
+
+        #collector-content .decision-log .voter_details table td {
+            border: 0;
+            padding: 0 0 8px 0;
+        }
+    </style>
+{% endblock %}
+
 {% block toolbar %}
     {% if collector.firewall %}
         {% set icon %}
-            {{ include('@Security/Collector/icon.svg') }}
+            {{ source('@Security/Collector/icon.svg') }}
             <span class="sf-toolbar-value">{{ collector.user|default('n/a') }}</span>
         {% endset %}
 
@@ -45,6 +74,26 @@
                                 {% endif %}
                             </span>
                         </div>
+
+                        {% if collector.supportsRoleHierarchy %}
+                            <div class="sf-toolbar-info-piece">
+                                <b>Inherited Roles</b>
+                                <span>
+                                    {% if collector.inheritedRoles is empty %}
+                                        none
+                                    {% else %}
+                                        {% set remainingRoles = collector.inheritedRoles|slice(1) %}
+                                        {{ collector.inheritedRoles|first }}
+                                        {% if remainingRoles is not empty %}
+                                            +
+                                            <abbr title="{{ remainingRoles|join(', ') }}">
+                                                {{ remainingRoles|length }} more
+                                            </abbr>
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        {% endif %}
 
                         <div class="sf-toolbar-info-piece">
                             <b>Token class</b>
@@ -89,7 +138,7 @@
 
 {% block menu %}
     <span class="label {{ not collector.firewall or not collector.token ? 'disabled' }}">
-        <span class="icon">{{ include('@Security/Collector/icon.svg') }}</span>
+        <span class="icon">{{ source('@Security/Collector/icon.svg') }}</span>
         <strong>Security</strong>
     </span>
 {% endblock %}
@@ -110,7 +159,7 @@
                             </div>
 
                             <div class="metric">
-                                <span class="value">{{ include('@WebProfiler/Icon/' ~ (collector.authenticated ? 'yes' : 'no') ~ '.svg') }}</span>
+                                <span class="value">{{ source('@WebProfiler/Icon/' ~ (collector.authenticated ? 'yes' : 'no') ~ '.svg') }}</span>
                                 <span class="label">Authenticated</span>
                             </div>
                         </div>
@@ -157,7 +206,7 @@
                 </div>
             </div>
 
-            <div class="tab {{ collector.firewall.security_enabled is empty ? 'disabled' }}">
+            <div class="tab {{ (not collector.firewall or collector.firewall.security_enabled is empty) ? 'disabled' }}">
                 <h3 class="tab-title">Firewall</h3>
                 <div class="tab-content">
                     {% if collector.firewall %}
@@ -167,11 +216,11 @@
                                 <span class="label">Name</span>
                             </div>
                             <div class="metric">
-                                <span class="value">{{ include('@WebProfiler/Icon/' ~ (collector.firewall.security_enabled ? 'yes' : 'no') ~ '.svg') }}</span>
+                                <span class="value">{{ source('@WebProfiler/Icon/' ~ (collector.firewall.security_enabled ? 'yes' : 'no') ~ '.svg') }}</span>
                                 <span class="label">Security enabled</span>
                             </div>
                             <div class="metric">
-                                <span class="value">{{ include('@WebProfiler/Icon/' ~ (collector.firewall.stateless ? 'yes' : 'no') ~ '.svg') }}</span>
+                                <span class="value">{{ source('@WebProfiler/Icon/' ~ (collector.firewall.stateless ? 'yes' : 'no') ~ '.svg') }}</span>
                                 <span class="label">Stateless</span>
                             </div>
                         </div>
@@ -290,7 +339,7 @@
 
                                 <tr>
                                     <td class="font-normal">{{ profiler_dump(authenticator.stub) }}</td>
-                                    <td class="no-wrap">{{ include('@WebProfiler/Icon/' ~ (authenticator.supports ? 'yes' : 'no') ~ '.svg') }}</td>
+                                    <td class="no-wrap">{{ source('@WebProfiler/Icon/' ~ (authenticator.supports ? 'yes' : 'no') ~ '.svg') }}</td>
                                     <td class="no-wrap">{{ '%0.2f'|format(authenticator.duration * 1000) }} ms</td>
                                     <td class="font-normal">{{ authenticator.passport ? profiler_dump(authenticator.passport) : '(none)' }}</td>
                                 </tr>

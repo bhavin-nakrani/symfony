@@ -17,7 +17,7 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 class IsTrueValidatorTest extends ConstraintValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): IsTrueValidator
     {
         return new IsTrueValidator();
     }
@@ -49,7 +49,7 @@ class IsTrueValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideInvalidConstraints(): iterable
+    public static function provideInvalidConstraints(): iterable
     {
         yield 'Doctrine style' => [new IsTrue([
             'message' => 'myMessage',

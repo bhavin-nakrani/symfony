@@ -11,10 +11,14 @@
 
 namespace Symfony\Component\Templating;
 
+trigger_deprecation('symfony/templating', '6.4', '"%s" is deprecated since version 6.4 and will be removed in 7.0. Use Twig instead.', DelegatingEngine::class);
+
 /**
  * DelegatingEngine selects an engine for a given template.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ *
+ * @deprecated since Symfony 6.4, use Twig instead
  */
 class DelegatingEngine implements EngineInterface, StreamingEngineInterface
 {
@@ -33,16 +37,13 @@ class DelegatingEngine implements EngineInterface, StreamingEngineInterface
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function render(string|TemplateReferenceInterface $name, array $parameters = []): string
     {
         return $this->getEngine($name)->render($name, $parameters);
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function stream(string|TemplateReferenceInterface $name, array $parameters = [])
     {
@@ -54,27 +55,24 @@ class DelegatingEngine implements EngineInterface, StreamingEngineInterface
         $engine->stream($name, $parameters);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function exists(string|TemplateReferenceInterface $name): bool
     {
         return $this->getEngine($name)->exists($name);
     }
 
+    /**
+     * @return void
+     */
     public function addEngine(EngineInterface $engine)
     {
         $this->engines[] = $engine;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function supports(string|TemplateReferenceInterface $name): bool
     {
         try {
             $this->getEngine($name);
-        } catch (\RuntimeException $e) {
+        } catch (\RuntimeException) {
             return false;
         }
 

@@ -44,9 +44,9 @@ use Symfony\Component\Validator\Mapping\Factory\MetadataFactoryInterface;
 use Symfony\Component\Validator\ObjectInitializerInterface;
 use Symfony\Component\Validator\Tests\Constraints\Fixtures\ChildA;
 use Symfony\Component\Validator\Tests\Constraints\Fixtures\ChildB;
-use Symfony\Component\Validator\Tests\Fixtures\Annotation\Entity;
-use Symfony\Component\Validator\Tests\Fixtures\Annotation\EntityParent;
-use Symfony\Component\Validator\Tests\Fixtures\Annotation\GroupSequenceProviderEntity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\Entity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\EntityParent;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\GroupSequenceProviderEntity;
 use Symfony\Component\Validator\Tests\Fixtures\CascadedChild;
 use Symfony\Component\Validator\Tests\Fixtures\CascadingEntity;
 use Symfony\Component\Validator\Tests\Fixtures\EntityWithGroupedConstraintOnMethods;
@@ -63,25 +63,10 @@ class RecursiveValidatorTest extends TestCase
     private const ENTITY_CLASS = Entity::class;
     private const REFERENCE_CLASS = Reference::class;
 
-    /**
-     * @var FakeMetadataFactory
-     */
-    private $metadataFactory;
-
-    /**
-     * @var ClassMetadata
-     */
-    private $metadata;
-
-    /**
-     * @var ClassMetadata
-     */
-    private $referenceMetadata;
-
-    /**
-     * @var ValidatorInterface
-     */
-    private $validator;
+    private FakeMetadataFactory $metadataFactory;
+    private ClassMetadata $metadata;
+    private ClassMetadata $referenceMetadata;
+    private ValidatorInterface $validator;
 
     protected function setUp(): void
     {
@@ -93,13 +78,6 @@ class RecursiveValidatorTest extends TestCase
         $this->metadataFactory->addMetadata(new ClassMetadata(LazyProperty::class));
 
         $this->validator = $this->createValidator($this->metadataFactory);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->metadataFactory = null;
-        $this->metadata = null;
-        $this->referenceMetadata = null;
     }
 
     protected function validate($value, $constraints = null, $groups = null)
@@ -1258,7 +1236,7 @@ class RecursiveValidatorTest extends TestCase
             $context->addViolation('Violation in Group 3');
         };
 
-        $metadata = new ClassMetadata(\get_class($entity));
+        $metadata = new ClassMetadata($entity::class);
         $metadata->addConstraint(new Callback([
             'callback' => function () {},
             'groups' => 'Group 1',
@@ -1284,7 +1262,7 @@ class RecursiveValidatorTest extends TestCase
         }
     }
 
-    public function getConstraintMethods()
+    public static function getConstraintMethods()
     {
         return [
             ['addPropertyConstraint'],
@@ -1292,7 +1270,7 @@ class RecursiveValidatorTest extends TestCase
         ];
     }
 
-    public function getTestReplaceDefaultGroup()
+    public static function getTestReplaceDefaultGroup()
     {
         return [
             [
@@ -2085,7 +2063,7 @@ class RecursiveValidatorTest extends TestCase
         $validator = $this
             ->getMockBuilder(RecursiveValidator::class)
             ->disableOriginalConstructor()
-            ->setMethods(['startContext'])
+            ->onlyMethods(['startContext'])
             ->getMock();
         $validator
             ->expects($this->once())
@@ -2119,7 +2097,7 @@ class RecursiveValidatorTest extends TestCase
         $validator = $this
             ->getMockBuilder(RecursiveValidator::class)
             ->disableOriginalConstructor()
-            ->setMethods(['startContext'])
+            ->onlyMethods(['startContext'])
             ->getMock();
         $validator
             ->expects($this->once())
@@ -2362,10 +2340,7 @@ final class TestConstraintHashesDoNotCollide extends Constraint
 
 final class TestConstraintHashesDoNotCollideValidator extends ConstraintValidator
 {
-    /**
-     * {@inheritdoc}
-     */
-    public function validate($value, Constraint $constraint)
+    public function validate($value, Constraint $constraint): void
     {
         if (!$value instanceof Entity) {
             throw new \LogicException();

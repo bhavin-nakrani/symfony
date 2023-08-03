@@ -26,33 +26,14 @@ use Symfony\Component\Routing\RouteCollection;
  * time, this method should define some PHP callable to be called for the route
  * (a controller in MVC speak).
  *
- * The @Route annotation can be set on the class (for global parameters),
+ * The #[Route] attribute can be set on the class (for global parameters),
  * and on each method.
  *
- * The @Route annotation main value is the route path. The annotation also
+ * The #[Route] attribute main value is the route path. The attribute also
  * recognizes several parameters: requirements, options, defaults, schemes,
  * methods, host, and name. The name parameter is mandatory.
  * Here is an example of how you should be able to use it:
- *     /**
- *      * @Route("/Blog")
- *      * /
- *     class Blog
- *     {
- *         /**
- *          * @Route("/", name="blog_index")
- *          * /
- *         public function index()
- *         {
- *         }
- *         /**
- *          * @Route("/{id}", name="blog_post", requirements = {"id" = "\d+"})
- *          * /
- *         public function show()
- *         {
- *         }
- *     }
  *
- * On PHP 8, the annotation class can be used as an attribute as well:
  *     #[Route('/Blog')]
  *     class Blog
  *     {
@@ -65,14 +46,22 @@ use Symfony\Component\Routing\RouteCollection;
  *         {
  *         }
  *     }
-
  *
  * @author Fabien Potencier <fabien@symfony.com>
  * @author Alexander M. Turek <me@derrabus.de>
  */
 abstract class AnnotationClassLoader implements LoaderInterface
 {
+    /**
+     * @var Reader|null
+     *
+     * @deprecated in Symfony 6.4, this property will be removed in Symfony 7.
+     */
     protected $reader;
+
+    /**
+     * @var string|null
+     */
     protected $env;
 
     /**
@@ -85,14 +74,33 @@ abstract class AnnotationClassLoader implements LoaderInterface
      */
     protected $defaultRouteIndex = 0;
 
-    public function __construct(Reader $reader = null, string $env = null)
+    private bool $hasDeprecatedAnnotations = false;
+
+    /**
+     * @param string|null $env
+     */
+    public function __construct($env = null)
     {
-        $this->reader = $reader;
-        $this->env = $env;
+        if ($env instanceof Reader || null === $env && \func_num_args() > 1 && null !== func_get_arg(1)) {
+            trigger_deprecation('symfony/routing', '6.4', 'Passing an instance of "%s" as first and the environment as second argument to "%s" is deprecated. Pass the environment as first argument instead.', Reader::class, __METHOD__);
+
+            $this->reader = $env;
+            $env = \func_num_args() > 1 ? func_get_arg(1) : null;
+        }
+
+        if (\is_string($env) || null === $env) {
+            $this->env = $env;
+        } elseif ($env instanceof \Stringable || \is_scalar($env)) {
+            $this->env = (string) $env;
+        } else {
+            throw new \TypeError(__METHOD__.sprintf(': Parameter $env was expected to be a string or null, "%s" given.', get_debug_type($env)));
+        }
     }
 
     /**
      * Sets the annotation class to read route properties from.
+     *
+     * @return void
      */
     public function setRouteAnnotationClass(string $class)
     {
@@ -115,27 +123,48 @@ abstract class AnnotationClassLoader implements LoaderInterface
             throw new \InvalidArgumentException(sprintf('Annotations from class "%s" cannot be read as it is abstract.', $class->getName()));
         }
 
-        $globals = $this->getGlobals($class);
+        $this->hasDeprecatedAnnotations = false;
 
-        $collection = new RouteCollection();
-        $collection->addResource(new FileResource($class->getFileName()));
-
-        if ($globals['env'] && $this->env !== $globals['env']) {
-            return $collection;
-        }
-
-        foreach ($class->getMethods() as $method) {
-            $this->defaultRouteIndex = 0;
-            foreach ($this->getAnnotations($method) as $annot) {
-                $this->addRoute($collection, $annot, $globals, $class, $method);
+        try {
+            $globals = $this->getGlobals($class);
+            $collection = new RouteCollection();
+            $collection->addResource(new FileResource($class->getFileName()));
+            if ($globals['env'] && $this->env !== $globals['env']) {
+                return $collection;
             }
-        }
+            $fqcnAlias = false;
+            foreach ($class->getMethods() as $method) {
+                $this->defaultRouteIndex = 0;
+                $routeNamesBefore = array_keys($collection->all());
+                foreach ($this->getAnnotations($method) as $annot) {
+                    $this->addRoute($collection, $annot, $globals, $class, $method);
+                    if ('__invoke' === $method->name) {
+                        $fqcnAlias = true;
+                    }
+                }
 
-        if (0 === $collection->count() && $class->hasMethod('__invoke')) {
-            $globals = $this->resetGlobals();
-            foreach ($this->getAnnotations($class) as $annot) {
-                $this->addRoute($collection, $annot, $globals, $class, $class->getMethod('__invoke'));
+                if (1 === $collection->count() - \count($routeNamesBefore)) {
+                    $newRouteName = current(array_diff(array_keys($collection->all()), $routeNamesBefore));
+                    $collection->addAlias(sprintf('%s::%s', $class->name, $method->name), $newRouteName);
+                }
             }
+            if (0 === $collection->count() && $class->hasMethod('__invoke')) {
+                $globals = $this->resetGlobals();
+                foreach ($this->getAnnotations($class) as $annot) {
+                    $this->addRoute($collection, $annot, $globals, $class, $class->getMethod('__invoke'));
+                    $fqcnAlias = true;
+                }
+            }
+            if ($fqcnAlias && 1 === $collection->count()) {
+                $collection->addAlias($class->name, $invokeRouteName = key($collection->all()));
+                $collection->addAlias(sprintf('%s::__invoke', $class->name), $invokeRouteName);
+            }
+
+            if ($this->hasDeprecatedAnnotations) {
+                trigger_deprecation('symfony/routing', '6.4', 'Class "%s" uses Doctrine Annotations to configure routes, which is deprecated. Use PHP attributes instead.', $class->getName());
+            }
+        } finally {
+            $this->hasDeprecatedAnnotations = false;
         }
 
         return $collection;
@@ -143,6 +172,8 @@ abstract class AnnotationClassLoader implements LoaderInterface
 
     /**
      * @param RouteAnnotation $annot or an object that exposes a similar interface
+     *
+     * @return void
      */
     protected function addRoute(RouteCollection $collection, object $annot, array $globals, \ReflectionClass $class, \ReflectionMethod $method)
     {
@@ -150,10 +181,7 @@ abstract class AnnotationClassLoader implements LoaderInterface
             return;
         }
 
-        $name = $annot->getName();
-        if (null === $name) {
-            $name = $this->getDefaultRouteName($class, $method);
-        }
+        $name = $annot->getName() ?? $this->getDefaultRouteName($class, $method);
         $name = $globals['name'].$name;
 
         $requirements = $annot->getRequirements();
@@ -167,14 +195,10 @@ abstract class AnnotationClassLoader implements LoaderInterface
         $defaults = array_replace($globals['defaults'], $annot->getDefaults());
         $requirements = array_replace($globals['requirements'], $requirements);
         $options = array_replace($globals['options'], $annot->getOptions());
-        $schemes = array_merge($globals['schemes'], $annot->getSchemes());
-        $methods = array_merge($globals['methods'], $annot->getMethods());
+        $schemes = array_unique(array_merge($globals['schemes'], $annot->getSchemes()));
+        $methods = array_unique(array_merge($globals['methods'], $annot->getMethods()));
 
-        $host = $annot->getHost();
-        if (null === $host) {
-            $host = $globals['host'];
-        }
-
+        $host = $annot->getHost() ?? $globals['host'];
         $condition = $annot->getCondition() ?? $globals['condition'];
         $priority = $annot->getPriority() ?? $globals['priority'];
 
@@ -212,7 +236,11 @@ abstract class AnnotationClassLoader implements LoaderInterface
             }
             foreach ($paths as $locale => $path) {
                 if (preg_match(sprintf('/\{%s(?:<.*?>)?\}/', preg_quote($param->name)), $path)) {
-                    $defaults[$param->name] = $param->getDefaultValue();
+                    if (\is_scalar($defaultValue = $param->getDefaultValue()) || null === $defaultValue) {
+                        $defaults[$param->name] = $defaultValue;
+                    } elseif ($defaultValue instanceof \BackedEnum) {
+                        $defaults[$param->name] = $defaultValue->value;
+                    }
                     break;
                 }
             }
@@ -232,24 +260,15 @@ abstract class AnnotationClassLoader implements LoaderInterface
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function supports(mixed $resource, string $type = null): bool
     {
-        return \is_string($resource) && preg_match('/^(?:\\\\?[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)+$/', $resource) && (!$type || 'annotation' === $type);
+        return \is_string($resource) && preg_match('/^(?:\\\\?[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)+$/', $resource) && (!$type || \in_array($type, ['annotation', 'attribute'], true));
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function setResolver(LoaderResolverInterface $resolver)
+    public function setResolver(LoaderResolverInterface $resolver): void
     {
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getResolver(): LoaderResolverInterface
     {
     }
@@ -271,6 +290,9 @@ abstract class AnnotationClassLoader implements LoaderInterface
         return $name;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     protected function getGlobals(\ReflectionClass $class)
     {
         $globals = $this->resetGlobals();
@@ -279,8 +301,8 @@ abstract class AnnotationClassLoader implements LoaderInterface
         if ($attribute = $class->getAttributes($this->routeAnnotationClass, \ReflectionAttribute::IS_INSTANCEOF)[0] ?? null) {
             $annot = $attribute->newInstance();
         }
-        if (!$annot && $this->reader) {
-            $annot = $this->reader->getClassAnnotation($class, $this->routeAnnotationClass);
+        if (!$annot && $annot = $this->reader?->getClassAnnotation($class, $this->routeAnnotationClass)) {
+            $this->hasDeprecatedAnnotations = true;
         }
 
         if ($annot) {
@@ -353,19 +375,23 @@ abstract class AnnotationClassLoader implements LoaderInterface
         ];
     }
 
+    /**
+     * @return Route
+     */
     protected function createRoute(string $path, array $defaults, array $requirements, array $options, ?string $host, array $schemes, array $methods, ?string $condition)
     {
         return new Route($path, $defaults, $requirements, $options, $host, $schemes, $methods, $condition);
     }
 
+    /**
+     * @return void
+     */
     abstract protected function configureRoute(Route $route, \ReflectionClass $class, \ReflectionMethod $method, object $annot);
 
     /**
-     * @param \ReflectionClass|\ReflectionMethod $reflection
-     *
      * @return iterable<int, RouteAnnotation>
      */
-    private function getAnnotations(object $reflection): iterable
+    private function getAnnotations(\ReflectionClass|\ReflectionMethod $reflection): iterable
     {
         foreach ($reflection->getAttributes($this->routeAnnotationClass, \ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
             yield $attribute->newInstance();
@@ -375,12 +401,14 @@ abstract class AnnotationClassLoader implements LoaderInterface
             return;
         }
 
-        $anntotations = $reflection instanceof \ReflectionClass
+        $annotations = $reflection instanceof \ReflectionClass
             ? $this->reader->getClassAnnotations($reflection)
             : $this->reader->getMethodAnnotations($reflection);
 
-        foreach ($anntotations as $annotation) {
+        foreach ($annotations as $annotation) {
             if ($annotation instanceof $this->routeAnnotationClass) {
+                $this->hasDeprecatedAnnotations = true;
+
                 yield $annotation;
             }
         }

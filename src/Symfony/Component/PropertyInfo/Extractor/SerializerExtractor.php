@@ -23,16 +23,11 @@ use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactoryInterface;
  */
 class SerializerExtractor implements PropertyListExtractorInterface
 {
-    private $classMetadataFactory;
-
-    public function __construct(ClassMetadataFactoryInterface $classMetadataFactory)
-    {
-        $this->classMetadataFactory = $classMetadataFactory;
+    public function __construct(
+        private readonly ClassMetadataFactoryInterface $classMetadataFactory,
+    ) {
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getProperties(string $class, array $context = []): ?array
     {
         if (!\array_key_exists('serializer_groups', $context) || (null !== $context['serializer_groups'] && !\is_array($context['serializer_groups']))) {

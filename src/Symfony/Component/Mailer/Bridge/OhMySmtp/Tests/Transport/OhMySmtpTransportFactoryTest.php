@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\Mailer\Bridge\OhMySmtp\Tests\Transport;
 
+use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\Mailer\Bridge\OhMySmtp\Transport\OhMySmtpApiTransport;
 use Symfony\Component\Mailer\Bridge\OhMySmtp\Transport\OhMySmtpSmtpTransport;
 use Symfony\Component\Mailer\Bridge\OhMySmtp\Transport\OhMySmtpTransportFactory;
@@ -18,14 +20,17 @@ use Symfony\Component\Mailer\Test\TransportFactoryTestCase;
 use Symfony\Component\Mailer\Transport\Dsn;
 use Symfony\Component\Mailer\Transport\TransportFactoryInterface;
 
+/**
+ * @group legacy
+ */
 final class OhMySmtpTransportFactoryTest extends TransportFactoryTestCase
 {
     public function getFactory(): TransportFactoryInterface
     {
-        return new OhMySmtpTransportFactory($this->getDispatcher(), $this->getClient(), $this->getLogger());
+        return new OhMySmtpTransportFactory(null, new MockHttpClient(), new NullLogger());
     }
 
-    public function supportsProvider(): iterable
+    public static function supportsProvider(): iterable
     {
         yield [
             new Dsn('ohmysmtp+api', 'default'),
@@ -53,38 +58,37 @@ final class OhMySmtpTransportFactoryTest extends TransportFactoryTestCase
         ];
     }
 
-    public function createProvider(): iterable
+    public static function createProvider(): iterable
     {
-        $dispatcher = $this->getDispatcher();
-        $logger = $this->getLogger();
+        $logger = new NullLogger();
 
         yield [
             new Dsn('ohmysmtp+api', 'default', self::USER),
-            new OhMySmtpApiTransport(self::USER, $this->getClient(), $dispatcher, $logger),
+            new OhMySmtpApiTransport(self::USER, new MockHttpClient(), null, $logger),
         ];
 
         yield [
             new Dsn('ohmysmtp+api', 'example.com', self::USER, '', 8080),
-            (new OhMySmtpApiTransport(self::USER, $this->getClient(), $dispatcher, $logger))->setHost('example.com')->setPort(8080),
+            (new OhMySmtpApiTransport(self::USER, new MockHttpClient(), null, $logger))->setHost('example.com')->setPort(8080),
         ];
 
         yield [
             new Dsn('ohmysmtp', 'default', self::USER),
-            new OhMySmtpSmtpTransport(self::USER, $dispatcher, $logger),
+            new OhMySmtpSmtpTransport(self::USER, null, $logger),
         ];
 
         yield [
             new Dsn('ohmysmtp+smtp', 'default', self::USER),
-            new OhMySmtpSmtpTransport(self::USER, $dispatcher, $logger),
+            new OhMySmtpSmtpTransport(self::USER, null, $logger),
         ];
 
         yield [
             new Dsn('ohmysmtp+smtps', 'default', self::USER),
-            new OhMySmtpSmtpTransport(self::USER, $dispatcher, $logger),
+            new OhMySmtpSmtpTransport(self::USER, null, $logger),
         ];
     }
 
-    public function unsupportedSchemeProvider(): iterable
+    public static function unsupportedSchemeProvider(): iterable
     {
         yield [
             new Dsn('ohmysmtp+foo', 'default', self::USER),
@@ -92,7 +96,7 @@ final class OhMySmtpTransportFactoryTest extends TransportFactoryTestCase
         ];
     }
 
-    public function incompleteDsnProvider(): iterable
+    public static function incompleteDsnProvider(): iterable
     {
         yield [new Dsn('ohmysmtp+api', 'default')];
     }

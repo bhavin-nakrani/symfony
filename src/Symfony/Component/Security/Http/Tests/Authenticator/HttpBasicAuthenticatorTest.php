@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Security\Http\Tests\Authenticator;
 
 use PHPUnit\Framework\TestCase;
@@ -15,20 +24,19 @@ use Symfony\Component\Security\Http\Tests\Authenticator\Fixtures\PasswordUpgrade
 
 class HttpBasicAuthenticatorTest extends TestCase
 {
-    private $userProvider;
-    private $hasherFactory;
-    private $hasher;
-    private $authenticator;
+    private InMemoryUserProvider $userProvider;
+    private HttpBasicAuthenticator $authenticator;
 
     protected function setUp(): void
     {
         $this->userProvider = new InMemoryUserProvider();
-        $this->hasherFactory = $this->createMock(PasswordHasherFactoryInterface::class);
-        $this->hasher = $this->createMock(PasswordHasherInterface::class);
-        $this->hasherFactory
+
+        $hasherFactory = $this->createMock(PasswordHasherFactoryInterface::class);
+        $hasher = $this->createMock(PasswordHasherInterface::class);
+        $hasherFactory
             ->expects($this->any())
             ->method('getPasswordHasher')
-            ->willReturn($this->hasher);
+            ->willReturn($hasher);
 
         $this->authenticator = new HttpBasicAuthenticator('test', $this->userProvider);
     }
@@ -58,7 +66,7 @@ class HttpBasicAuthenticatorTest extends TestCase
         $this->assertFalse($this->authenticator->supports($request));
     }
 
-    public function provideMissingHttpBasicServerParameters()
+    public static function provideMissingHttpBasicServerParameters()
     {
         return [
             [[]],

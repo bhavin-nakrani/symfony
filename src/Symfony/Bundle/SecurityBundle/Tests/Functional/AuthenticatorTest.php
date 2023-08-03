@@ -60,7 +60,7 @@ class AuthenticatorTest extends AbstractWebTestCase
         $this->assertJsonStringEqualsJsonString('{"email":"'.$email.'"}', $client->getResponse()->getContent());
     }
 
-    public function provideEmails()
+    public static function provideEmails()
     {
         yield ['jane@example.org', true];
         yield ['john@example.org', false];
@@ -84,7 +84,7 @@ class AuthenticatorTest extends AbstractWebTestCase
         $this->assertEquals('Welcome '.$username.'!', $client->getResponse()->getContent());
     }
 
-    public function provideEmailsWithFirewalls()
+    public static function provideEmailsWithFirewalls()
     {
         yield ['jane@example.org', 'main'];
         yield ['john@example.org', 'custom'];
@@ -101,5 +101,39 @@ class AuthenticatorTest extends AbstractWebTestCase
 
         $client->request('GET', '/firewall2/profile');
         $this->assertResponseRedirects('http://localhost/login');
+    }
+
+    public function testCustomSuccessHandler()
+    {
+        $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'custom_handlers.yml']);
+
+        $client->request('POST', '/firewall1/login', [
+            '_username' => 'jane@example.org',
+            '_password' => 'test',
+        ]);
+        $this->assertResponseRedirects('http://localhost/firewall1/test');
+
+        $client->request('POST', '/firewall1/dummy_login', [
+            '_username' => 'jane@example.org',
+            '_password' => 'test',
+        ]);
+        $this->assertResponseRedirects('http://localhost/firewall1/dummy');
+    }
+
+    public function testCustomFailureHandler()
+    {
+        $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'custom_handlers.yml']);
+
+        $client->request('POST', '/firewall1/login', [
+            '_username' => 'jane@example.org',
+            '_password' => '',
+        ]);
+        $this->assertResponseRedirects('http://localhost/firewall1/login');
+
+        $client->request('POST', '/firewall1/dummy_login', [
+            '_username' => 'jane@example.org',
+            '_password' => '',
+        ]);
+        $this->assertResponseRedirects('http://localhost/firewall1/dummy_login');
     }
 }

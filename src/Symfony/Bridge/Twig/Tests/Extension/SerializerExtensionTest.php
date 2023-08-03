@@ -11,7 +11,6 @@
 
 namespace Symfony\Bridge\Twig\Tests\Extension;
 
-use Doctrine\Common\Annotations\AnnotationReader;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Extension\SerializerExtension;
 use Symfony\Bridge\Twig\Extension\SerializerRuntime;
@@ -41,7 +40,7 @@ class SerializerExtensionTest extends TestCase
         self::assertSame($expectedResult, $twig->render('template', ['object' => new SerializerModelFixture()]));
     }
 
-    public function serializerDataProvider(): \Generator
+    public static function serializerDataProvider(): \Generator
     {
         yield ['{{ object|serialize }}', '{&quot;name&quot;:&quot;howdy&quot;,&quot;title&quot;:&quot;fixture&quot;}'];
         yield ['{{ object|serialize(\'yaml\') }}', '{ name: howdy, title: fixture }'];
@@ -50,7 +49,7 @@ class SerializerExtensionTest extends TestCase
 
     private function getTwig(string $template): Environment
     {
-        $meta = new ClassMetadataFactory(new AnnotationLoader(new AnnotationReader()));
+        $meta = new ClassMetadataFactory(new AnnotationLoader());
         $runtime = new SerializerRuntime(new Serializer([new ObjectNormalizer($meta)], [new JsonEncoder(), new YamlEncoder()]));
 
         $mockRuntimeLoader = $this->createMock(RuntimeLoaderInterface::class);

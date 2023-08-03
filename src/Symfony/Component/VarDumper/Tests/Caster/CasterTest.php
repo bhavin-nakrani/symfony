@@ -22,7 +22,7 @@ class CasterTest extends TestCase
 {
     use VarDumperTestTrait;
 
-    private $referenceArray = [
+    private static array $referenceArray = [
         'null' => null,
         'empty' => false,
         'public' => 'pub',
@@ -38,15 +38,15 @@ class CasterTest extends TestCase
     public function testFilter($filter, $expectedDiff, $listedProperties = null)
     {
         if (null === $listedProperties) {
-            $filteredArray = Caster::filter($this->referenceArray, $filter);
+            $filteredArray = Caster::filter(self::$referenceArray, $filter);
         } else {
-            $filteredArray = Caster::filter($this->referenceArray, $filter, $listedProperties);
+            $filteredArray = Caster::filter(self::$referenceArray, $filter, $listedProperties);
         }
 
-        $this->assertSame($expectedDiff, array_diff_assoc($this->referenceArray, $filteredArray));
+        $this->assertSame($expectedDiff, array_diff_assoc(self::$referenceArray, $filteredArray));
     }
 
-    public function provideFilter()
+    public static function provideFilter()
     {
         return [
             [
@@ -126,7 +126,7 @@ class CasterTest extends TestCase
             ],
             [
                 Caster::EXCLUDE_NOT_IMPORTANT | Caster::EXCLUDE_VERBOSE,
-                $this->referenceArray,
+                self::$referenceArray,
                 ['public', "\0*\0protected"],
             ],
             [
@@ -174,5 +174,15 @@ Countable@anonymous {
 EOTXT
             , $c
         );
+    }
+
+    public function testTypeErrorInDebugInfo()
+    {
+        $this->assertDumpMatchesFormat('class@anonymous {}', new class() {
+            public function __debugInfo(): array
+            {
+                return ['class' => \get_class(null)];
+            }
+        });
     }
 }

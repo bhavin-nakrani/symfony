@@ -14,13 +14,13 @@ namespace Symfony\Component\Form\Tests\Extension\Validator\Type;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Test\Traits\ValidatorExtensionTrait;
 
-class DateTypeValidatorExtensionTest extends BaseValidatorExtensionTest
+class DateTypeValidatorExtensionTest extends BaseValidatorExtensionTestCase
 {
     use ValidatorExtensionTrait;
 
     protected function createForm(array $options = [])
     {
-        return $this->factory->create(DateType::class, null, $options);
+        return $this->factory->create(DateType::class, null, $options + ['widget' => 'choice']);
     }
 
     public function testInvalidMessage()

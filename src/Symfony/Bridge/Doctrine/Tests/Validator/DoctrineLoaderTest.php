@@ -16,6 +16,7 @@ use Symfony\Bridge\Doctrine\Tests\DoctrineTestHelper;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\BaseUser;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderEmbed;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderEntity;
+use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderEnum;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderNestedEmbed;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderNoAutoMappingEntity;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\DoctrineLoaderParentEntity;
@@ -25,10 +26,9 @@ use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Mapping\AutoMappingStrategy;
 use Symfony\Component\Validator\Mapping\CascadingStrategy;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AutoMappingTrait;
 use Symfony\Component\Validator\Mapping\PropertyMetadata;
 use Symfony\Component\Validator\Mapping\TraversalStrategy;
-use Symfony\Component\Validator\Tests\Fixtures\Entity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\Entity;
 use Symfony\Component\Validator\Validation;
 
 /**
@@ -36,18 +36,10 @@ use Symfony\Component\Validator\Validation;
  */
 class DoctrineLoaderTest extends TestCase
 {
-    protected function setUp(): void
-    {
-        if (!trait_exists(AutoMappingTrait::class)) {
-            $this->markTestSkipped('Auto-mapping requires symfony/validation 4.4+');
-        }
-    }
-
     public function testLoadClassMetadata()
     {
         $validator = Validation::createValidatorBuilder()
             ->enableAnnotationMapping(true)
-            ->addDefaultDoctrineAnnotationReader()
             ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{^Symfony\\\\Bridge\\\\Doctrine\\\\Tests\\\\Fixtures\\\\DoctrineLoader}'))
             ->getValidator()
         ;
@@ -98,9 +90,6 @@ class DoctrineLoaderTest extends TestCase
 
         $parentClassMetadata = $validator->getMetadataFor(new DoctrineLoaderParentEntity());
 
-        $publicParentMaxLengthMetadata = $parentClassMetadata->getPropertyMetadata('publicParentMaxLength');
-        $this->assertCount(0, $publicParentMaxLengthMetadata);
-
         $privateParentMaxLengthMetadata = $parentClassMetadata->getPropertyMetadata('privateParentMaxLength');
         $this->assertCount(1, $privateParentMaxLengthMetadata);
         $privateParentMaxLengthConstraints = $privateParentMaxLengthMetadata[0]->getConstraints();
@@ -149,11 +138,28 @@ class DoctrineLoaderTest extends TestCase
         $this->assertSame(AutoMappingStrategy::DISABLED, $noAutoMappingMetadata[0]->getAutoMappingStrategy());
     }
 
+    public function testExtractEnum()
+    {
+        $validator = Validation::createValidatorBuilder()
+            ->addMethodMapping('loadValidatorMetadata')
+            ->enableAnnotationMapping(true)
+            ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{^Symfony\\\\Bridge\\\\Doctrine\\\\Tests\\\\Fixtures\\\\DoctrineLoader}'))
+            ->getValidator()
+        ;
+
+        $classMetadata = $validator->getMetadataFor(new DoctrineLoaderEnum());
+
+        $enumStringMetadata = $classMetadata->getPropertyMetadata('enumString');
+        $this->assertCount(0, $enumStringMetadata); // asserts the length constraint is not added to an enum
+
+        $enumStringMetadata = $classMetadata->getPropertyMetadata('enumInt');
+        $this->assertCount(0, $enumStringMetadata); // asserts the length constraint is not added to an enum
+    }
+
     public function testFieldMappingsConfiguration()
     {
         $validator = Validation::createValidatorBuilder()
             ->enableAnnotationMapping(true)
-            ->addDefaultDoctrineAnnotationReader()
             ->addXmlMappings([__DIR__.'/../Resources/validator/BaseUser.xml'])
             ->addLoader(
                 new DoctrineLoader(
@@ -181,7 +187,7 @@ class DoctrineLoaderTest extends TestCase
         $this->assertSame($expected, $doctrineLoader->loadClassMetadata($classMetadata));
     }
 
-    public function regexpProvider()
+    public static function regexpProvider(): array
     {
         return [
             [false, null],
@@ -195,7 +201,6 @@ class DoctrineLoaderTest extends TestCase
     {
         $validator = Validation::createValidatorBuilder()
             ->enableAnnotationMapping(true)
-            ->addDefaultDoctrineAnnotationReader()
             ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{.*}'))
             ->getValidator();
 

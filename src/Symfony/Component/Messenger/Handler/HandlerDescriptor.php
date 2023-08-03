@@ -25,9 +25,7 @@ final class HandlerDescriptor
 
     public function __construct(callable $handler, array $options = [])
     {
-        if (!$handler instanceof \Closure) {
-            $handler = \Closure::fromCallable($handler);
-        }
+        $handler = $handler(...);
 
         $this->handler = $handler;
         $this->options = $options;
@@ -37,7 +35,7 @@ final class HandlerDescriptor
         if (str_contains($r->name, '{closure}')) {
             $this->name = 'Closure';
         } elseif (!$handler = $r->getClosureThis()) {
-            $class = $r->getClosureScopeClass();
+            $class = \PHP_VERSION_ID >= 80111 ? $r->getClosureCalledClass() : $r->getClosureScopeClass();
 
             $this->name = ($class ? $class->name.'::' : '').$r->name;
         } else {
@@ -45,7 +43,7 @@ final class HandlerDescriptor
                 $this->batchHandler = $handler;
             }
 
-            $this->name = \get_class($handler).'::'.$r->name;
+            $this->name = $handler::class.'::'.$r->name;
         }
     }
 
@@ -71,8 +69,13 @@ final class HandlerDescriptor
         return $this->batchHandler;
     }
 
-    public function getOption(string $option)
+    public function getOption(string $option): mixed
     {
         return $this->options[$option] ?? null;
+    }
+
+    public function getOptions(): array
+    {
+        return $this->options;
     }
 }

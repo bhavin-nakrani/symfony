@@ -33,8 +33,9 @@ final class OvhCloudTransport extends AbstractTransport
     private string $consumerKey;
     private string $serviceName;
     private ?string $sender = null;
+    private bool $noStopClause = false;
 
-    public function __construct(string $applicationKey, string $applicationSecret, string $consumerKey, string $serviceName, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
+    public function __construct(string $applicationKey, #[\SensitiveParameter] string $applicationSecret, #[\SensitiveParameter] string $consumerKey, string $serviceName, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
     {
         $this->applicationKey = $applicationKey;
         $this->applicationSecret = $applicationSecret;
@@ -46,11 +47,17 @@ final class OvhCloudTransport extends AbstractTransport
 
     public function __toString(): string
     {
-        if (null !== $this->sender) {
-            return sprintf('ovhcloud://%s?consumer_key=%s&service_name=%s&sender=%s', $this->getEndpoint(), $this->consumerKey, $this->serviceName, $this->sender);
-        }
+        return sprintf('ovhcloud://%s?service_name=%s%s', $this->getEndpoint(), $this->serviceName, $this->sender ? '&sender='.$this->sender : '');
+    }
 
-        return sprintf('ovhcloud://%s?consumer_key=%s&service_name=%s', $this->getEndpoint(), $this->consumerKey, $this->serviceName);
+    /**
+     * @return $this
+     */
+    public function setNoStopClause(bool $noStopClause): static
+    {
+        $this->noStopClause = $noStopClause;
+
+        return $this;
     }
 
     /**
@@ -82,11 +89,13 @@ final class OvhCloudTransport extends AbstractTransport
             'coding' => '8bit',
             'message' => $message->getSubject(),
             'receivers' => [$message->getPhone()],
-            'noStopClause' => false,
+            'noStopClause' => $this->noStopClause,
             'priority' => 'medium',
         ];
 
-        if ($this->sender) {
+        if ('' !== $message->getFrom()) {
+            $content['sender'] = $message->getFrom();
+        } elseif ($this->sender) {
             $content['sender'] = $this->sender;
         } else {
             $content['senderForResponse'] = true;
@@ -120,6 +129,10 @@ final class OvhCloudTransport extends AbstractTransport
         }
 
         $success = $response->toArray(false);
+
+        if (!isset($success['ids'][0])) {
+            throw new TransportException(sprintf('Attempt to send the SMS to invalid receivers: "%s".', implode(',', $success['invalidReceivers'])), $response);
+        }
 
         $sentMessage = new SentMessage($message, (string) $this);
         $sentMessage->setMessageId($success['ids'][0]);

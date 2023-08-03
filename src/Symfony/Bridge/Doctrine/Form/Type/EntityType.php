@@ -21,6 +21,9 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class EntityType extends DoctrineType
 {
+    /**
+     * @return void
+     */
     public function configureOptions(OptionsResolver $resolver)
     {
         parent::configureOptions($resolver);
@@ -57,9 +60,6 @@ class EntityType extends DoctrineType
         return new ORMQueryBuilderLoader($queryBuilder);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getBlockPrefix(): string
     {
         return 'entity';
@@ -82,7 +82,7 @@ class EntityType extends DoctrineType
 
         return [
             $queryBuilder->getQuery()->getSQL(),
-            array_map([$this, 'parameterToArray'], $queryBuilder->getParameters()->toArray()),
+            array_map($this->parameterToArray(...), $queryBuilder->getParameters()->toArray()),
         ];
     }
 

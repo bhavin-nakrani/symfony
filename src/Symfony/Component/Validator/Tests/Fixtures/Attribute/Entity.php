@@ -46,7 +46,7 @@ class Entity extends EntityParent implements EntityInterfaceB
         Assert\NotNull,
         Assert\Range(min: 3),
     ]
-    public $firstName;
+    public string $firstName;
     #[Assert\Valid]
     public $childA;
     #[Assert\Valid]
@@ -57,6 +57,8 @@ class Entity extends EntityParent implements EntityInterfaceB
     private $internal;
     public $data = 'Overridden data';
     public $initialized = false;
+    #[Assert\Type('integer')]
+    protected ?int $other;
 
     public function __construct($internal = null)
     {

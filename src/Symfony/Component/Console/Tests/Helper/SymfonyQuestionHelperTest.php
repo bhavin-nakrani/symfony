@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Console\Tests\Helper;
 
 use Symfony\Component\Console\Exception\RuntimeException;
@@ -14,7 +23,7 @@ use Symfony\Component\Console\Question\Question;
 /**
  * @group tty
  */
-class SymfonyQuestionHelperTest extends AbstractQuestionHelperTest
+class SymfonyQuestionHelperTest extends AbstractQuestionHelperTestCase
 {
     public function testAskChoice()
     {
@@ -92,7 +101,7 @@ class SymfonyQuestionHelperTest extends AbstractQuestionHelperTest
     {
         $questionHelper = new SymfonyQuestionHelper();
         $question = new Question('What is your favorite superhero?');
-        $question->setValidator(function ($value) { return $value; });
+        $question->setValidator(fn ($value) => $value);
         $input = $this->createStreamableInputInterfaceMock($this->getInputStream("\n"));
         $this->assertNull($questionHelper->ask($input, $this->createOutputInterface(), $question));
     }
@@ -153,7 +162,7 @@ class SymfonyQuestionHelperTest extends AbstractQuestionHelperTest
   [łabądź] baz
  >
 EOT
-        , $output, true);
+            , $output, true);
     }
 
     public function testChoiceQuestionCustomPrompt()
@@ -172,7 +181,7 @@ EOT
   [0] foo
  >ccc>
 EOT
-        , $output, true);
+            , $output, true);
     }
 
     protected function getInputStream($input)

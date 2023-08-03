@@ -32,7 +32,7 @@ return [
         'America/Buenos_Aires' => 'Aago Ajɛntìnà (Buenos Aires)',
         'America/Campo_Grande' => 'Àkókò Amásɔ́nì (Campo Grande)',
         'America/Catamarca' => 'Aago Ajɛntìnà (Catamarca)',
-        'America/Chihuahua' => 'Àkókò Pásífíìkì Mɛ́shíkò (ìlú Shihuahua)',
+        'America/Chihuahua' => 'àkókò àárín gbùngbùn (ìlú Shihuahua)',
         'America/Coral_Harbour' => 'Àkókò ìhà ìlà oòrùn (ìlú àtikɔkàn)',
         'America/Cordoba' => 'Aago Ajɛntìnà (Cordoba)',
         'America/Creston' => 'Àkókò òkè (ìlú Kírɛstɔ́ɔ̀nù)',
@@ -85,6 +85,5 @@ return [
         'Indian/Mauritius' => 'Àkókò Máríshúshì (Mauritius)',
         'Indian/Reunion' => 'Àkókò Rɛ́yúníɔ́nì (Reunion)',
     ],
-    'Meta' => [
-    ],
+    'Meta' => [],
 ];

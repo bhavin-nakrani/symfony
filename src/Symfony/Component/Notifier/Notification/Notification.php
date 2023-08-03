@@ -44,23 +44,21 @@ class Notification
     private string $exceptionAsString = '';
     private string $importance = self::IMPORTANCE_HIGH;
 
+    /**
+     * @param list<string> $channels
+     */
     public function __construct(string $subject = '', array $channels = [])
     {
         $this->subject = $subject;
         $this->channels = $channels;
     }
 
+    /**
+     * @param list<string> $channels
+     */
     public static function fromThrowable(\Throwable $exception, array $channels = []): self
     {
-        $parts = explode('\\', \get_class($exception));
-
-        $notification = new self(sprintf('%s: %s', array_pop($parts), $exception->getMessage()), $channels);
-        if (class_exists(FlattenException::class)) {
-            $notification->exception = $exception instanceof FlattenException ? $exception : FlattenException::createFromThrowable($exception);
-        }
-        $notification->exceptionAsString = $notification->computeExceptionAsString($exception);
-
-        return $notification;
+        return (new self('', $channels))->exception($exception);
     }
 
     /**
@@ -136,6 +134,22 @@ class Notification
         return $this->emoji ?: $this->getDefaultEmoji();
     }
 
+    /**
+     * @return $this
+     */
+    public function exception(\Throwable $exception): static
+    {
+        $parts = explode('\\', $exception::class);
+
+        $this->subject = sprintf('%s: %s', array_pop($parts), $exception->getMessage());
+        if (class_exists(FlattenException::class)) {
+            $this->exception = $exception instanceof FlattenException ? $exception : FlattenException::createFromThrowable($exception);
+        }
+        $this->exceptionAsString = $this->computeExceptionAsString($exception);
+
+        return $this;
+    }
+
     public function getException(): ?FlattenException
     {
         return $this->exception;
@@ -147,6 +161,8 @@ class Notification
     }
 
     /**
+     * @param list<string> $channels
+     *
      * @return $this
      */
     public function channels(array $channels): static
@@ -156,6 +172,9 @@ class Notification
         return $this;
     }
 
+    /**
+     * @return list<string>
+     */
     public function getChannels(RecipientInterface $recipient): array
     {
         return $this->channels;
@@ -167,17 +186,12 @@ class Notification
             return '';
         }
 
-        switch ($this->importance) {
-            case self::IMPORTANCE_URGENT:
-                return '🌩️';
-            case self::IMPORTANCE_HIGH:
-                return '🌧️';
-            case self::IMPORTANCE_MEDIUM:
-                return '🌦️';
-            case self::IMPORTANCE_LOW:
-            default:
-                return '⛅';
-        }
+        return match ($this->importance) {
+            self::IMPORTANCE_URGENT => '🌩️',
+            self::IMPORTANCE_HIGH => '🌧️',
+            self::IMPORTANCE_MEDIUM => '🌦️',
+            default => '⛅',
+        };
     }
 
     private function computeExceptionAsString(\Throwable $exception): string
@@ -188,7 +202,7 @@ class Notification
             return $exception->getAsString();
         }
 
-        $message = \get_class($exception);
+        $message = $exception::class;
         if ('' !== $exception->getMessage()) {
             $message .= ': '.$exception->getMessage();
         }

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\HttpClient\Tests\Response;
 
 use PHPUnit\Framework\TestCase;
@@ -66,7 +75,7 @@ class MockResponseTest extends TestCase
         $this->assertSame($url, $responseMock->getRequestUrl());
     }
 
-    public function toArrayErrors()
+    public static function toArrayErrors()
     {
         yield [
             'content' => '',
@@ -107,6 +116,14 @@ class MockResponseTest extends TestCase
         MockResponse::fromRequest('GET', 'https://symfony.com', [], new MockResponse('', [
             'error' => 'ccc error',
         ]))->getStatusCode();
+    }
+
+    public function testCancelingAMockResponseNotIssuedByMockHttpClient()
+    {
+        $mockResponse = new MockResponse();
+        $mockResponse->cancel();
+
+        $this->assertTrue($mockResponse->getInfo('canceled'));
     }
 
     public function testMustBeIssuedByMockHttpClient()

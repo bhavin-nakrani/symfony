@@ -1,4 +1,5 @@
 <?php
+
 /*
  * This file is part of the Symfony package.
  *
@@ -24,9 +25,6 @@ class EntryManagerTest extends TestCase
         $this->expectException(LdapException::class);
         $this->expectExceptionMessage('Entry "$$$$$$" malformed, could not parse RDN.');
         $connection = $this->createMock(Connection::class);
-        $connection
-            ->expects($this->once())
-            ->method('isBound')->willReturn(true);
 
         $entry = new Entry('$$$$$$');
         $entryManager = new EntryManager($connection);
@@ -60,14 +58,13 @@ class EntryManagerTest extends TestCase
         $entryManager = new EntryManager($connection);
 
         $method = (new \ReflectionClass(EntryManager::class))->getMethod('parseRdnFromEntry');
-        $method->setAccessible(true);
 
         $cn = $method->invokeArgs($entryManager, [$entry, 'a']);
 
         $this->assertSame($expectedRdn, $cn);
     }
 
-    public function moveWithRFC4514DistinguishedNameProvider(): array
+    public static function moveWithRFC4514DistinguishedNameProvider(): array
     {
         return [
             ['CN=Simple,DC=example,DC=net', 'CN=Simple'],

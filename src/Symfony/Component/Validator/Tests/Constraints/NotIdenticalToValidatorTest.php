@@ -20,12 +20,12 @@ use Symfony\Component\Validator\Constraints\NotIdenticalToValidator;
  */
 class NotIdenticalToValidatorTest extends AbstractComparisonValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): NotIdenticalToValidator
     {
         return new NotIdenticalToValidator();
     }
 
-    protected function createConstraint(array $options = null): Constraint
+    protected static function createConstraint(array $options = null): Constraint
     {
         return new NotIdenticalTo($options);
     }
@@ -35,10 +35,7 @@ class NotIdenticalToValidatorTest extends AbstractComparisonValidatorTestCase
         return NotIdenticalTo::IS_IDENTICAL_ERROR;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisons(): array
+    public static function provideValidComparisons(): array
     {
         return [
             [1, 2],
@@ -54,33 +51,28 @@ class NotIdenticalToValidatorTest extends AbstractComparisonValidatorTestCase
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisonsToPropertyPath(): array
+    public static function provideValidComparisonsToPropertyPath(): array
     {
         return [
             [0],
         ];
     }
 
-    public function provideAllInvalidComparisons(): array
+    public static function provideAllInvalidComparisons(): array
     {
-        $this->setDefaultTimezone('UTC');
+        $timezone = date_default_timezone_get();
+        date_default_timezone_set('UTC');
 
         // Don't call addPhp5Dot5Comparisons() automatically, as it does
         // not take care of identical objects
-        $comparisons = $this->provideInvalidComparisons();
+        $comparisons = self::provideInvalidComparisons();
 
-        $this->restoreDefaultTimezone();
+        date_default_timezone_set($timezone);
 
         return $comparisons;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideInvalidComparisons(): array
+    public static function provideInvalidComparisons(): array
     {
         $date = new \DateTime('2000-01-01');
         $object = new ComparisonTest_Class(2);
@@ -95,7 +87,7 @@ class NotIdenticalToValidatorTest extends AbstractComparisonValidatorTestCase
         return $comparisons;
     }
 
-    public function provideComparisonsToNullValueAtPropertyPath()
+    public static function provideComparisonsToNullValueAtPropertyPath()
     {
         return [
             [5, '5', true],

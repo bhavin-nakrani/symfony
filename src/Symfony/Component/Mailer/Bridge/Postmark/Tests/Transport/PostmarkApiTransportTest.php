@@ -18,6 +18,7 @@ use Symfony\Component\Mailer\Bridge\Postmark\Transport\MessageStreamHeader;
 use Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\HttpTransportException;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\Header\MetadataHeader;
 use Symfony\Component\Mailer\Header\TagHeader;
 use Symfony\Component\Mime\Address;
@@ -34,7 +35,7 @@ class PostmarkApiTransportTest extends TestCase
         $this->assertSame($expected, (string) $transport);
     }
 
-    public function getTransportData()
+    public static function getTransportData()
     {
         return [
             [
@@ -60,7 +61,6 @@ class PostmarkApiTransportTest extends TestCase
 
         $transport = new PostmarkApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(PostmarkApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayHasKey('Headers', $payload);
@@ -102,14 +102,12 @@ class PostmarkApiTransportTest extends TestCase
 
     public function testSendThrowsForErrorResponse()
     {
-        $client = new MockHttpClient(static function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse(json_encode(['Message' => 'i\'m a teapot', 'ErrorCode' => 418]), [
-                'http_code' => 418,
-                'response_headers' => [
-                    'content-type' => 'application/json',
-                ],
-            ]);
-        });
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new MockResponse(json_encode(['Message' => 'i\'m a teapot', 'ErrorCode' => 418]), [
+            'http_code' => 418,
+            'response_headers' => [
+                'content-type' => 'application/json',
+            ],
+        ]));
         $transport = new PostmarkApiTransport('KEY', $client);
         $transport->setPort(8984);
 
@@ -135,7 +133,6 @@ class PostmarkApiTransportTest extends TestCase
 
         $transport = new PostmarkApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(PostmarkApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayNotHasKey('Headers', $payload);
@@ -146,5 +143,20 @@ class PostmarkApiTransportTest extends TestCase
         $this->assertSame('password-reset', $payload['Tag']);
         $this->assertSame(['Color' => 'blue', 'Client-ID' => '12345'], $payload['Metadata']);
         $this->assertSame('broadcasts', $payload['MessageStream']);
+    }
+
+    public function testMultipleTagsAreNotAllowed()
+    {
+        $email = new Email();
+        $email->getHeaders()->add(new TagHeader('tag1'));
+        $email->getHeaders()->add(new TagHeader('tag2'));
+        $envelope = new Envelope(new Address('alice@system.com'), [new Address('bob@system.com')]);
+
+        $transport = new PostmarkApiTransport('ACCESS_KEY');
+        $method = new \ReflectionMethod(PostmarkApiTransport::class, 'getPayload');
+
+        $this->expectException(TransportException::class);
+
+        $method->invoke($transport, $email, $envelope);
     }
 }

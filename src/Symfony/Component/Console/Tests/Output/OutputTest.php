@@ -104,7 +104,7 @@ class OutputTest extends TestCase
         $this->assertEquals($expectedOutput, $output->output);
     }
 
-    public function provideWriteArguments()
+    public static function provideWriteArguments()
     {
         return [
             ['<info>foo</info>', Output::OUTPUT_RAW, "<info>foo</info>\n"],
@@ -161,7 +161,7 @@ class OutputTest extends TestCase
         $this->assertEquals($expected, $output->output, $msg);
     }
 
-    public function verbosityProvider()
+    public static function verbosityProvider()
     {
         return [
             [Output::VERBOSITY_QUIET, '2', '->write() in QUIET mode only outputs when an explicit QUIET verbosity is passed'],
@@ -175,14 +175,14 @@ class OutputTest extends TestCase
 
 class TestOutput extends Output
 {
-    public $output = '';
+    public string $output = '';
 
     public function clear()
     {
         $this->output = '';
     }
 
-    protected function doWrite(string $message, bool $newline)
+    protected function doWrite(string $message, bool $newline): void
     {
         $this->output .= $message.($newline ? "\n" : '');
     }

@@ -11,7 +11,10 @@
 
 namespace Symfony\Component\HttpFoundation\Tests\Session\Storage\Proxy;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Session\Storage\Handler\StrictSessionHandler;
+use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
 use Symfony\Component\HttpFoundation\Session\Storage\Proxy\SessionHandlerProxy;
 
 /**
@@ -20,30 +23,19 @@ use Symfony\Component\HttpFoundation\Session\Storage\Proxy\SessionHandlerProxy;
  * @author Drak <drak@zikula.org>
  *
  * @runTestsInSeparateProcesses
+ *
  * @preserveGlobalState disabled
  */
 class SessionHandlerProxyTest extends TestCase
 {
-    /**
-     * @var \PHPUnit\Framework\MockObject\Matcher
-     */
-    private $mock;
+    private MockObject&\SessionHandlerInterface $mock;
 
-    /**
-     * @var SessionHandlerProxy
-     */
-    private $proxy;
+    private SessionHandlerProxy $proxy;
 
     protected function setUp(): void
     {
         $this->mock = $this->createMock(\SessionHandlerInterface::class);
         $this->proxy = new SessionHandlerProxy($this->mock);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->mock = null;
-        $this->proxy = null;
     }
 
     public function testOpenTrue()
@@ -158,6 +150,23 @@ class SessionHandlerProxyTest extends TestCase
         ;
 
         $this->proxy->updateTimestamp('id', 'data');
+    }
+
+    /**
+     * @dataProvider provideNativeSessionStorageHandler
+     */
+    public function testNativeSessionStorageSaveHandlerName($handler)
+    {
+        $this->assertSame('files', (new NativeSessionStorage([], $handler))->getSaveHandler()->getSaveHandlerName());
+    }
+
+    public static function provideNativeSessionStorageHandler()
+    {
+        return [
+            [new \SessionHandler()],
+            [new StrictSessionHandler(new \SessionHandler())],
+            [new SessionHandlerProxy(new StrictSessionHandler(new \SessionHandler()))],
+        ];
     }
 }
 

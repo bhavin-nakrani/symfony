@@ -47,7 +47,7 @@ class ParserTest extends TestCase
         $this->assertEquals($node, $parser->parse($lexer->tokenize($expression), $names));
     }
 
-    public function getParseData()
+    public static function getParseData()
     {
         $arguments = new Node\ArgumentsNode();
         $arguments->addElement(new Node\ConstantNode('arg1'));
@@ -136,13 +136,50 @@ class ParserTest extends TestCase
                 new Node\BinaryNode('matches', new Node\ConstantNode('foo'), new Node\ConstantNode('/foo/')),
                 '"foo" matches "/foo/"',
             ],
+            [
+                new Node\BinaryNode('starts with', new Node\ConstantNode('foo'), new Node\ConstantNode('f')),
+                '"foo" starts with "f"',
+            ],
+            [
+                new Node\BinaryNode('ends with', new Node\ConstantNode('foo'), new Node\ConstantNode('f')),
+                '"foo" ends with "f"',
+            ],
+            [
+                new Node\BinaryNode('contains', new Node\ConstantNode('foo'), new Node\ConstantNode('f')),
+                '"foo" contains "f"',
+            ],
+            [
+                new Node\GetAttrNode(new Node\NameNode('foo'), new Node\ConstantNode('bar', true, true), new Node\ArgumentsNode(), Node\GetAttrNode::PROPERTY_CALL),
+                'foo?.bar',
+                ['foo'],
+            ],
+            [
+                new Node\GetAttrNode(new Node\NameNode('foo'), new Node\ConstantNode('bar', true, true), new Node\ArgumentsNode(), Node\GetAttrNode::METHOD_CALL),
+                'foo?.bar()',
+                ['foo'],
+            ],
+            [
+                new Node\GetAttrNode(new Node\NameNode('foo'), new Node\ConstantNode('not', true, true), new Node\ArgumentsNode(), Node\GetAttrNode::METHOD_CALL),
+                'foo?.not()',
+                ['foo'],
+            ],
+            [
+                new Node\NullCoalesceNode(new Node\GetAttrNode(new Node\NameNode('foo'), new Node\ConstantNode('bar', true), new Node\ArgumentsNode(), Node\GetAttrNode::PROPERTY_CALL), new Node\ConstantNode('default')),
+                'foo.bar ?? "default"',
+                ['foo'],
+            ],
+            [
+                new Node\NullCoalesceNode(new Node\GetAttrNode(new Node\NameNode('foo'), new Node\ConstantNode('bar'), new Node\ArgumentsNode(), Node\GetAttrNode::ARRAY_CALL), new Node\ConstantNode('default')),
+                'foo["bar"] ?? "default"',
+                ['foo'],
+            ],
 
             // chained calls
             [
-                $this->createGetAttrNode(
-                    $this->createGetAttrNode(
-                        $this->createGetAttrNode(
-                            $this->createGetAttrNode(new Node\NameNode('foo'), 'bar', Node\GetAttrNode::METHOD_CALL),
+                self::createGetAttrNode(
+                    self::createGetAttrNode(
+                        self::createGetAttrNode(
+                            self::createGetAttrNode(new Node\NameNode('foo'), 'bar', Node\GetAttrNode::METHOD_CALL),
                             'foo', Node\GetAttrNode::METHOD_CALL),
                         'baz', Node\GetAttrNode::PROPERTY_CALL),
                     '3', Node\GetAttrNode::ARRAY_CALL),
@@ -189,10 +226,14 @@ class ParserTest extends TestCase
                 new Node\BinaryNode('..', new Node\ConstantNode(0), new Node\ConstantNode(3)),
                 '0..3',
             ],
+            [
+                new Node\BinaryNode('+', new Node\ConstantNode(0), new Node\ConstantNode(0.1)),
+                '0+.1',
+            ],
         ];
     }
 
-    private function createGetAttrNode($node, $item, $type)
+    private static function createGetAttrNode($node, $item, $type)
     {
         return new Node\GetAttrNode($node, new Node\ConstantNode($item, Node\GetAttrNode::ARRAY_CALL !== $type), new Node\ArgumentsNode(), $type);
     }
@@ -208,7 +249,7 @@ class ParserTest extends TestCase
         $parser->parse($lexer->tokenize($expr), $names);
     }
 
-    public function getInvalidPostfixData()
+    public static function getInvalidPostfixData()
     {
         return [
             [
@@ -258,11 +299,15 @@ class ParserTest extends TestCase
         $this->expectNotToPerformAssertions();
     }
 
-    public function getLintData(): array
+    public static function getLintData(): array
     {
         return [
             'valid expression' => [
                 'expression' => 'foo["some_key"].callFunction(a ? b)',
+                'names' => ['foo', 'a', 'b'],
+            ],
+            'valid expression with null safety' => [
+                'expression' => 'foo["some_key"]?.callFunction(a ? b)',
                 'names' => ['foo', 'a', 'b'],
             ],
             'allow expression without names' => [

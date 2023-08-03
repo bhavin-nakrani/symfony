@@ -31,6 +31,7 @@ class TranslationFilesTest extends TestCase
 
     /**
      * @dataProvider provideTranslationFiles
+     *
      * @group Legacy
      */
     public function testTranslationFileIsValidWithoutEntityLoader($filePath)
@@ -43,10 +44,10 @@ class TranslationFilesTest extends TestCase
         $this->assertCount(0, $errors, sprintf('"%s" is invalid:%s', $filePath, \PHP_EOL.implode(\PHP_EOL, array_column($errors, 'message'))));
     }
 
-    public function provideTranslationFiles()
+    public static function provideTranslationFiles()
     {
         return array_map(
-            function ($filePath) { return (array) $filePath; },
+            fn ($filePath) => (array) $filePath,
             glob(\dirname(__DIR__, 2).'/Resources/translations/*.xlf')
         );
     }

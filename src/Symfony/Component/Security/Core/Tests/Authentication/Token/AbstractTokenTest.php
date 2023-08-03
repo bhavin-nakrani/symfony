@@ -28,7 +28,7 @@ class AbstractTokenTest extends TestCase
         $this->assertEquals($username, $token->getUserIdentifier());
     }
 
-    public function provideUsers()
+    public static function provideUsers()
     {
         yield [new InMemoryUser('fabien', null), 'fabien'];
     }
@@ -96,7 +96,7 @@ class AbstractTokenTest extends TestCase
 
 class ConcreteToken extends AbstractToken
 {
-    private $credentials = 'credentials_value';
+    private string $credentials = 'credentials_value';
 
     public function __construct(array $roles = [], UserInterface $user = null)
     {

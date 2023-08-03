@@ -30,7 +30,7 @@ require_once __DIR__.'/flex-style/src/FlexStyleMicroKernel.php';
 
 class MicroKernelTraitTest extends TestCase
 {
-    private $kernel;
+    private ?Kernel $kernel = null;
 
     protected function tearDown(): void
     {
@@ -89,6 +89,16 @@ class MicroKernelTraitTest extends TestCase
         $response = $kernel->handle($request);
 
         $this->assertEquals('Have a great day!', $response->getContent());
+
+        $request = Request::create('/h');
+        $response = $kernel->handle($request);
+
+        $this->assertEquals('Have a great day!', $response->getContent());
+
+        $request = Request::create('/easter');
+        $response = $kernel->handle($request);
+
+        $this->assertSame('easter', $response->getContent());
     }
 
     public function testSecretLoadedFromExtension()
@@ -101,7 +111,7 @@ class MicroKernelTraitTest extends TestCase
 
     public function testAnonymousMicroKernel()
     {
-        $kernel = new class('anonymous_kernel') extends MinimalKernel {
+        $kernel = $this->kernel = new class('anonymous_kernel') extends MinimalKernel {
             public function helloAction(): Response
             {
                 return new Response('Hello World!');
@@ -110,6 +120,8 @@ class MicroKernelTraitTest extends TestCase
             protected function configureContainer(ContainerConfigurator $c): void
             {
                 $c->extension('framework', [
+                    'annotations' => false,
+                    'http_method_override' => false,
                     'router' => ['utf8' => true],
                 ]);
                 $c->services()->set('logger', NullLogger::class);
@@ -117,7 +129,7 @@ class MicroKernelTraitTest extends TestCase
 
             protected function configureRoutes(RoutingConfigurator $routes): void
             {
-                $routes->add('hello', '/')->controller([$this, 'helloAction']);
+                $routes->add('hello', '/')->controller($this->helloAction(...));
             }
         };
 
@@ -132,7 +144,7 @@ abstract class MinimalKernel extends Kernel
 {
     use MicroKernelTrait;
 
-    private $cacheDir;
+    private string $cacheDir;
 
     public function __construct(string $cacheDir)
     {

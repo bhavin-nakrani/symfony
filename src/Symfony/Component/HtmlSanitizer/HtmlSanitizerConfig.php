@@ -16,8 +16,6 @@ use Symfony\Component\HtmlSanitizer\Visitor\AttributeSanitizer\AttributeSanitize
 
 /**
  * @author Titouan Galopin <galopintitouan@gmail.com>
- *
- * @experimental
  */
 class HtmlSanitizerConfig
 {
@@ -92,6 +90,8 @@ class HtmlSanitizerConfig
      */
     private array $attributeSanitizers;
 
+    private int $maxInputLength = 20_000;
+
     public function __construct()
     {
         $this->attributeSanitizers = [
@@ -105,7 +105,7 @@ class HtmlSanitizerConfig
      * All scripts will be removed but the output may still contain other dangerous
      * behaviors like CSS injection (click-jacking), CSS expressions, ...
      */
-    public function allowAllStaticElements(): static
+    public function allowStaticElements(): static
     {
         $elements = array_merge(
             array_keys(W3CReference::HEAD_ELEMENTS),
@@ -403,6 +403,19 @@ class HtmlSanitizerConfig
         ));
 
         return $clone;
+    }
+
+    public function withMaxInputLength(int $maxInputLength): static
+    {
+        $clone = clone $this;
+        $clone->maxInputLength = $maxInputLength;
+
+        return $clone;
+    }
+
+    public function getMaxInputLength(): int
+    {
+        return $this->maxInputLength;
     }
 
     /**

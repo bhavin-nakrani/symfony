@@ -18,13 +18,16 @@ use Symfony\Component\Notifier\Recipient\SmsRecipientInterface;
 /**
  * @author Fabien Potencier <fabien@symfony.com>
  */
-final class SmsMessage implements MessageInterface
+class SmsMessage implements MessageInterface, FromNotificationInterface
 {
     private ?string $transport = null;
     private string $subject;
     private string $phone;
+    private string $from;
+    private ?MessageOptionsInterface $options;
+    private ?Notification $notification = null;
 
-    public function __construct(string $phone, string $subject)
+    public function __construct(string $phone, string $subject, string $from = '', MessageOptionsInterface $options = null)
     {
         if ('' === $phone) {
             throw new InvalidArgumentException(sprintf('"%s" needs a phone number, it cannot be empty.', __CLASS__));
@@ -32,11 +35,16 @@ final class SmsMessage implements MessageInterface
 
         $this->subject = $subject;
         $this->phone = $phone;
+        $this->from = $from;
+        $this->options = $options;
     }
 
     public static function fromNotification(Notification $notification, SmsRecipientInterface $recipient): self
     {
-        return new self($recipient->getPhone(), $notification->getSubject());
+        $message = new self($recipient->getPhone(), $notification->getSubject());
+        $message->notification = $notification;
+
+        return $message;
     }
 
     /**
@@ -93,8 +101,38 @@ final class SmsMessage implements MessageInterface
         return $this->transport;
     }
 
+    /**
+     * @return $this
+     */
+    public function from(string $from): static
+    {
+        $this->from = $from;
+
+        return $this;
+    }
+
+    public function getFrom(): string
+    {
+        return $this->from;
+    }
+
+    /**
+     * @return $this
+     */
+    public function options(MessageOptionsInterface $options): static
+    {
+        $this->options = $options;
+
+        return $this;
+    }
+
     public function getOptions(): ?MessageOptionsInterface
     {
-        return null;
+        return $this->options;
+    }
+
+    public function getNotification(): ?Notification
+    {
+        return $this->notification;
     }
 }

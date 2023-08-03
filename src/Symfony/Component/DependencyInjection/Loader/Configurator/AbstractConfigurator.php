@@ -27,13 +27,16 @@ abstract class AbstractConfigurator
     public const FACTORY = 'unknown';
 
     /**
-     * @var callable(mixed, bool $allowService)|null
+     * @var \Closure(mixed, bool):mixed|null
      */
     public static $valuePreProcessor;
 
     /** @internal */
     protected Definition|Alias|null $definition = null;
 
+    /**
+     * @return mixed
+     */
     public function __call(string $method, array $args)
     {
         if (method_exists($this, 'set'.$method)) {
@@ -48,6 +51,9 @@ abstract class AbstractConfigurator
         throw new \BadMethodCallException('Cannot serialize '.__CLASS__);
     }
 
+    /**
+     * @return void
+     */
     public function __wakeup()
     {
         throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
@@ -56,7 +62,7 @@ abstract class AbstractConfigurator
     /**
      * Checks that a value is valid, optionally replacing Definition and Reference configurators by their configure value.
      *
-     * @param bool $allowServices whether Definition and Reference are allowed; by default, only scalars and arrays are
+     * @param bool $allowServices whether Definition and Reference are allowed; by default, only scalars, arrays and enum are
      *
      * @return mixed the value, optionally cast to a Definition/Reference
      */
@@ -97,7 +103,8 @@ abstract class AbstractConfigurator
 
         switch (true) {
             case null === $value:
-            case is_scalar($value):
+            case \is_scalar($value):
+            case $value instanceof \UnitEnum:
                 return $value;
 
             case $value instanceof ArgumentInterface:

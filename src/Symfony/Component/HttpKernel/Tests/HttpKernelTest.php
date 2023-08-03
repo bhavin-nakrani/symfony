@@ -32,22 +32,76 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 class HttpKernelTest extends TestCase
 {
+    /**
+     * Catch exceptions: true
+     * Throwable type: RuntimeException
+     * Listener: false.
+     */
     public function testHandleWhenControllerThrowsAnExceptionAndCatchIsTrue()
     {
         $this->expectException(\RuntimeException::class);
-        $kernel = $this->getHttpKernel(new EventDispatcher(), function () { throw new \RuntimeException(); });
+        $kernel = $this->getHttpKernel(new EventDispatcher(), static fn () => throw new \RuntimeException());
 
         $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, true);
     }
 
+    public function testRequestStackIsNotBrokenWhenControllerThrowsAnExceptionAndCatchIsTrue()
+    {
+        $requestStack = new RequestStack();
+        $kernel = $this->getHttpKernel(new EventDispatcher(), static fn () => throw new \RuntimeException(), $requestStack);
+
+        try {
+            $kernel->handle(new Request(), HttpKernelInterface::MASTER_REQUEST, true);
+        } catch (\Throwable $exception) {
+        }
+
+        self::assertNull($requestStack->getCurrentRequest());
+    }
+
+    public function testRequestStackIsNotBrokenWhenControllerThrowsAnExceptionAndCatchIsFalse()
+    {
+        $requestStack = new RequestStack();
+        $kernel = $this->getHttpKernel(new EventDispatcher(), static fn () => throw new \RuntimeException(), $requestStack);
+
+        try {
+            $kernel->handle(new Request(), HttpKernelInterface::MASTER_REQUEST, false);
+        } catch (\Throwable $exception) {
+        }
+
+        self::assertNull($requestStack->getCurrentRequest());
+    }
+
+    public function testRequestStackIsNotBrokenWhenControllerThrowsAnThrowable()
+    {
+        $requestStack = new RequestStack();
+        $kernel = $this->getHttpKernel(new EventDispatcher(), static fn () => throw new \Error(), $requestStack);
+
+        try {
+            $kernel->handle(new Request(), HttpKernelInterface::MASTER_REQUEST, true);
+        } catch (\Throwable $exception) {
+        }
+
+        self::assertNull($requestStack->getCurrentRequest());
+    }
+
+    /**
+     * Catch exceptions: false
+     * Throwable type: RuntimeException
+     * Listener: false.
+     */
     public function testHandleWhenControllerThrowsAnExceptionAndCatchIsFalseAndNoListenerIsRegistered()
     {
         $this->expectException(\RuntimeException::class);
-        $kernel = $this->getHttpKernel(new EventDispatcher(), function () { throw new \RuntimeException(); });
+        $kernel = $this->getHttpKernel(new EventDispatcher(), static fn () => throw new \RuntimeException());
 
         $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, false);
     }
 
+    /**
+     * Catch exceptions: true
+     * Throwable type: RuntimeException
+     * Listener: true.
+     */
     public function testHandleWhenControllerThrowsAnExceptionAndCatchIsTrueWithAHandlingListener()
     {
         $dispatcher = new EventDispatcher();
@@ -55,13 +109,84 @@ class HttpKernelTest extends TestCase
             $event->setResponse(new Response($event->getThrowable()->getMessage()));
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () { throw new \RuntimeException('foo'); });
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new \RuntimeException('foo'));
         $response = $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, true);
 
         $this->assertEquals('500', $response->getStatusCode());
         $this->assertEquals('foo', $response->getContent());
     }
 
+    /**
+     * Catch exceptions: true
+     * Throwable type: TypeError
+     * Listener: true.
+     */
+    public function testHandleWhenControllerThrowsAThrowableAndCatchIsTrueWithAHandlingListener()
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(KernelEvents::EXCEPTION, function ($event) {
+            $event->setResponse(new Response($event->getThrowable()->getMessage()));
+        });
+
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new \TypeError('foo'), handleAllThrowables: true);
+        $response = $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, true);
+
+        $this->assertEquals('500', $response->getStatusCode());
+        $this->assertEquals('foo', $response->getContent());
+    }
+
+    /**
+     * Catch exceptions: false
+     * Throwable type: TypeError
+     * Listener: true.
+     */
+    public function testHandleWhenControllerThrowsAThrowableAndCatchIsFalseWithAHandlingListener()
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(KernelEvents::EXCEPTION, function ($event) {
+            $event->setResponse(new Response($event->getThrowable()->getMessage()));
+        });
+
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new \TypeError('foo'), handleAllThrowables: true);
+        $this->expectException(\TypeError::class);
+        $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, false);
+    }
+
+    /**
+     * Catch exceptions: true
+     * Throwable type: TypeError
+     * Listener: true.
+     */
+    public function testHandleWhenControllerThrowsAThrowableAndCatchIsTrueNotHandlingThrowables()
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(KernelEvents::EXCEPTION, function ($event) {
+            $event->setResponse(new Response($event->getThrowable()->getMessage()));
+        });
+
+        $controllerResolver = $this->createMock(ControllerResolverInterface::class);
+        $controllerResolver
+            ->expects($this->any())
+            ->method('getController')
+            ->willReturn(static fn () => throw new \TypeError('foo'));
+
+        $argumentResolver = $this->createMock(ArgumentResolverInterface::class);
+        $argumentResolver
+            ->expects($this->any())
+            ->method('getArguments')
+            ->willReturn([]);
+
+        $kernel = new HttpKernel($dispatcher, $controllerResolver, null, $argumentResolver);
+
+        $this->expectException(\TypeError::class);
+        $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, true);
+    }
+
+    /**
+     * Catch exceptions: true
+     * Throwable type: RuntimeException
+     * Listener: true.
+     */
     public function testHandleWhenControllerThrowsAnExceptionAndCatchIsTrueWithANonHandlingListener()
     {
         $exception = new \RuntimeException();
@@ -71,7 +196,7 @@ class HttpKernelTest extends TestCase
             // should set a response, but does not
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () use ($exception) { throw $exception; });
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw $exception);
 
         try {
             $kernel->handle(new Request(), HttpKernelInterface::MAIN_REQUEST, true);
@@ -88,7 +213,7 @@ class HttpKernelTest extends TestCase
             $event->setResponse(new RedirectResponse('/login', 301));
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () { throw new AccessDeniedHttpException(); });
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new AccessDeniedHttpException());
         $response = $kernel->handle(new Request());
 
         $this->assertEquals('301', $response->getStatusCode());
@@ -102,7 +227,7 @@ class HttpKernelTest extends TestCase
             $event->setResponse(new Response($event->getThrowable()->getMessage()));
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () { throw new MethodNotAllowedHttpException(['POST']); });
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new MethodNotAllowedHttpException(['POST']));
         $response = $kernel->handle(new Request());
 
         $this->assertEquals('405', $response->getStatusCode());
@@ -130,13 +255,13 @@ class HttpKernelTest extends TestCase
             $event->setResponse(new Response('', $expectedStatusCode));
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () { throw new \RuntimeException(); });
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => throw new \RuntimeException());
         $response = $kernel->handle(new Request());
 
         $this->assertEquals($expectedStatusCode, $response->getStatusCode());
     }
 
-    public function getSpecificStatusCodes()
+    public static function getSpecificStatusCodes()
     {
         return [
             [200],
@@ -170,7 +295,7 @@ class HttpKernelTest extends TestCase
     {
         $response = new Response('foo');
         $dispatcher = new EventDispatcher();
-        $kernel = $this->getHttpKernel($dispatcher, function () use ($response) { return $response; });
+        $kernel = $this->getHttpKernel($dispatcher, fn () => $response);
 
         $this->assertSame($response, $kernel->handle(new Request()));
     }
@@ -210,7 +335,7 @@ class HttpKernelTest extends TestCase
     public function testHandleWhenTheControllerDoesNotReturnAResponse()
     {
         $dispatcher = new EventDispatcher();
-        $kernel = $this->getHttpKernel($dispatcher, function () {});
+        $kernel = $this->getHttpKernel($dispatcher, static fn () => null);
 
         try {
             $kernel->handle(new Request());
@@ -232,7 +357,7 @@ class HttpKernelTest extends TestCase
             $event->setResponse(new Response($event->getControllerResult()));
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function () { return 'foo'; });
+        $kernel = $this->getHttpKernel($dispatcher, fn () => 'foo');
 
         $this->assertEquals('foo', $kernel->handle(new Request())->getContent());
     }
@@ -255,7 +380,7 @@ class HttpKernelTest extends TestCase
             $event->setArguments(['foo']);
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function ($content) { return new Response($content); });
+        $kernel = $this->getHttpKernel($dispatcher, fn ($content) => new Response($content));
 
         $this->assertResponseEquals(new Response('foo'), $kernel->handle(new Request()));
     }
@@ -279,7 +404,7 @@ class HttpKernelTest extends TestCase
             $event->setArguments(['bar']);
         });
 
-        $kernel = $this->getHttpKernel($dispatcher, function ($content) { return new Response($content); }, null, ['foo']);
+        $kernel = $this->getHttpKernel($dispatcher, fn ($content) => new Response($content), null, ['foo']);
 
         $this->assertResponseEquals(new Response('foo', 200, ['X-Id' => 'bar']), $kernel->handle(new Request()));
     }
@@ -302,11 +427,27 @@ class HttpKernelTest extends TestCase
         $this->assertEquals($response, $capturedResponse);
     }
 
+    public function testTerminateWithException()
+    {
+        $dispatcher = new EventDispatcher();
+        $requestStack = new RequestStack();
+        $kernel = $this->getHttpKernel($dispatcher, null, $requestStack);
+
+        $dispatcher->addListener(KernelEvents::EXCEPTION, function (ExceptionEvent $event) use (&$capturedRequest, $requestStack) {
+            $capturedRequest = $requestStack->getCurrentRequest();
+            $event->setResponse(new Response());
+        });
+
+        $kernel->terminateWithException(new \Exception('boo'), $request = Request::create('/'));
+        $this->assertSame($request, $capturedRequest);
+        $this->assertNull($requestStack->getCurrentRequest());
+    }
+
     public function testVerifyRequestStackPushPopDuringHandle()
     {
         $request = new Request();
 
-        $stack = $this->getMockBuilder(RequestStack::class)->setMethods(['push', 'pop'])->getMock();
+        $stack = $this->getMockBuilder(RequestStack::class)->onlyMethods(['push', 'pop'])->getMock();
         $stack->expects($this->once())->method('push')->with($this->equalTo($request));
         $stack->expects($this->once())->method('pop');
 
@@ -336,11 +477,9 @@ class HttpKernelTest extends TestCase
         Request::setTrustedProxies([], -1);
     }
 
-    private function getHttpKernel(EventDispatcherInterface $eventDispatcher, $controller = null, RequestStack $requestStack = null, array $arguments = [])
+    private function getHttpKernel(EventDispatcherInterface $eventDispatcher, $controller = null, RequestStack $requestStack = null, array $arguments = [], bool $handleAllThrowables = false)
     {
-        if (null === $controller) {
-            $controller = function () { return new Response('Hello'); };
-        }
+        $controller ??= fn () => new Response('Hello');
 
         $controllerResolver = $this->createMock(ControllerResolverInterface::class);
         $controllerResolver
@@ -354,7 +493,7 @@ class HttpKernelTest extends TestCase
             ->method('getArguments')
             ->willReturn($arguments);
 
-        return new HttpKernel($eventDispatcher, $controllerResolver, $requestStack, $argumentResolver);
+        return new HttpKernel($eventDispatcher, $controllerResolver, $requestStack, $argumentResolver, $handleAllThrowables);
     }
 
     private function assertResponseEquals(Response $expected, Response $actual)

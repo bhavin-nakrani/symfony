@@ -1,13 +1,15 @@
 <?php
 
-use Symfony\Bundle\FrameworkBundle\Tests\DependencyInjection\FrameworkExtensionTest;
+use Symfony\Bundle\FrameworkBundle\Tests\DependencyInjection\FrameworkExtensionTestCase;
 
 $container->loadFromExtension('framework', [
+    'annotations' => false,
+    'http_method_override' => false,
     'workflows' => [
         'article' => [
             'type' => 'workflow',
             'supports' => [
-                FrameworkExtensionTest::class,
+                FrameworkExtensionTestCase::class,
             ],
             'initial_marking' => ['draft'],
             'metadata' => [
@@ -43,7 +45,7 @@ $container->loadFromExtension('framework', [
         ],
         'pull_request' => [
             'supports' => [
-                FrameworkExtensionTest::class,
+                FrameworkExtensionTestCase::class,
             ],
             'initial_marking' => 'start',
             'metadata' => [
@@ -102,7 +104,7 @@ $container->loadFromExtension('framework', [
                 'service' => 'workflow_service',
             ],
             'supports' => [
-                FrameworkExtensionTest::class,
+                FrameworkExtensionTestCase::class,
             ],
             'places' => [
                 ['name' => 'first'],

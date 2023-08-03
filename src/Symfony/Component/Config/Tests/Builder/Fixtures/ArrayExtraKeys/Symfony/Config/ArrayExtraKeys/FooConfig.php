@@ -2,19 +2,18 @@
 
 namespace Symfony\Config\ArrayExtraKeys;
 
-
 use Symfony\Component\Config\Loader\ParamConfigurator;
 
-
 /**
- * This class is automatically generated to help creating config.
+ * This class is automatically generated to help in creating a config.
  */
 class FooConfig 
 {
     private $baz;
     private $qux;
+    private $_usedProperties = [];
     private $_extraKeys;
-    
+
     /**
      * @default null
      * @param ParamConfigurator|mixed $value
@@ -22,11 +21,12 @@ class FooConfig
      */
     public function baz($value): static
     {
+        $this->_usedProperties['baz'] = true;
         $this->baz = $value;
-    
+
         return $this;
     }
-    
+
     /**
      * @default null
      * @param ParamConfigurator|mixed $value
@@ -34,41 +34,43 @@ class FooConfig
      */
     public function qux($value): static
     {
+        $this->_usedProperties['qux'] = true;
         $this->qux = $value;
-    
+
         return $this;
     }
-    
+
     public function __construct(array $value = [])
     {
-    
-        if (isset($value['baz'])) {
+        if (array_key_exists('baz', $value)) {
+            $this->_usedProperties['baz'] = true;
             $this->baz = $value['baz'];
             unset($value['baz']);
         }
-    
-        if (isset($value['qux'])) {
+
+        if (array_key_exists('qux', $value)) {
+            $this->_usedProperties['qux'] = true;
             $this->qux = $value['qux'];
             unset($value['qux']);
         }
-    
+
         $this->_extraKeys = $value;
-    
+
     }
-    
+
     public function toArray(): array
     {
         $output = [];
-        if (null !== $this->baz) {
+        if (isset($this->_usedProperties['baz'])) {
             $output['baz'] = $this->baz;
         }
-        if (null !== $this->qux) {
+        if (isset($this->_usedProperties['qux'])) {
             $output['qux'] = $this->qux;
         }
-    
+
         return $output + $this->_extraKeys;
     }
-    
+
     /**
      * @param ParamConfigurator|mixed $value
      *
@@ -76,12 +78,8 @@ class FooConfig
      */
     public function set(string $key, mixed $value): static
     {
-        if (null === $value) {
-            unset($this->_extraKeys[$key]);
-        } else {
-            $this->_extraKeys[$key] = $value;
-        }
-    
+        $this->_extraKeys[$key] = $value;
+
         return $this;
     }
 

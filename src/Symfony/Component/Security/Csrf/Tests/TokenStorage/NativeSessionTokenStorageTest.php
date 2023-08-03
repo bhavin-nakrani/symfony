@@ -19,16 +19,14 @@ use Symfony\Component\Security\Csrf\TokenStorage\NativeSessionTokenStorage;
  * @author Bernhard Schussek <bschussek@gmail.com>
  *
  * @runTestsInSeparateProcesses
+ *
  * @preserveGlobalState disabled
  */
 class NativeSessionTokenStorageTest extends TestCase
 {
     private const SESSION_NAMESPACE = 'foobar';
 
-    /**
-     * @var NativeSessionTokenStorage
-     */
-    private $storage;
+    private NativeSessionTokenStorage $storage;
 
     protected function setUp(): void
     {

@@ -13,6 +13,8 @@ namespace Symfony\Component\BrowserKit\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\Cookie;
+use Symfony\Component\BrowserKit\Exception\InvalidArgumentException;
+use Symfony\Component\BrowserKit\Exception\UnexpectedValueException;
 
 class CookieTest extends TestCase
 {
@@ -42,7 +44,7 @@ class CookieTest extends TestCase
         $this->assertEquals($cookie, (string) Cookie::fromString($cookie, $url));
     }
 
-    public function getTestsForToFromString()
+    public static function getTestsForToFromString()
     {
         return [
             ['foo=bar; path=/'],
@@ -71,7 +73,7 @@ class CookieTest extends TestCase
         $this->assertEquals(1596185377, Cookie::fromString($cookie)->getExpiresTime());
     }
 
-    public function getExpireCookieStrings()
+    public static function getExpireCookieStrings()
     {
         return [
             ['foo=bar; expires=Fri, 31-Jul-2020 08:49:37 GMT'],
@@ -104,7 +106,7 @@ class CookieTest extends TestCase
 
     public function testFromStringThrowsAnExceptionIfCookieIsNotValid()
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         Cookie::fromString('foo');
     }
 
@@ -117,7 +119,7 @@ class CookieTest extends TestCase
 
     public function testFromStringThrowsAnExceptionIfUrlIsNotValid()
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         Cookie::fromString('foo=bar', 'foobar');
     }
 
@@ -200,7 +202,7 @@ class CookieTest extends TestCase
 
     public function testConstructException()
     {
-        $this->expectException(\UnexpectedValueException::class);
+        $this->expectException(UnexpectedValueException::class);
         $this->expectExceptionMessage('The cookie expiration time "string" is not valid.');
         new Cookie('foo', 'bar', 'string');
     }

@@ -21,14 +21,19 @@ use Symfony\Component\Lock\Store\MemcachedStore;
  * @author Jérémy Derussé <jeremy@derusse.com>
  *
  * @requires extension memcached
+ *
  * @group integration
  */
-class MemcachedStoreTest extends AbstractStoreTest
+class MemcachedStoreTest extends AbstractStoreTestCase
 {
     use ExpiringStoreTestTrait;
 
     public static function setUpBeforeClass(): void
     {
+        if (version_compare(phpversion('memcached'), '3.1.6', '<')) {
+            throw new SkippedTestSuiteError('Extension memcached > 3.1.5 required.');
+        }
+
         $memcached = new \Memcached();
         $memcached->addServer(getenv('MEMCACHED_HOST'), 11211);
         $memcached->get('foo');
@@ -39,17 +44,11 @@ class MemcachedStoreTest extends AbstractStoreTest
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getClockDelay()
     {
         return 1000000;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getStore(): PersistingStoreInterface
     {
         $memcached = new \Memcached();

@@ -37,13 +37,13 @@ class ExprBuilderTest extends TestCase
         $this->assertFinalizedValueIs('new_value', $test, ['key' => true]);
 
         $test = $this->getTestBuilder()
-            ->ifTrue(function () { return true; })
+            ->ifTrue(fn () => true)
             ->then($this->returnClosure('new_value'))
         ->end();
         $this->assertFinalizedValueIs('new_value', $test);
 
         $test = $this->getTestBuilder()
-            ->ifTrue(function () { return false; })
+            ->ifTrue(fn () => false)
             ->then($this->returnClosure('new_value'))
         ->end();
         $this->assertFinalizedValueIs('value', $test);
@@ -159,7 +159,7 @@ class ExprBuilderTest extends TestCase
         $this->assertFinalizedValueIs($expectedValue, $test, ['key' => $configValue]);
     }
 
-    public function castToArrayValues(): iterable
+    public static function castToArrayValues(): iterable
     {
         yield ['value', ['value']];
         yield [-3.14, [-3.14]];
@@ -198,7 +198,7 @@ class ExprBuilderTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('You must specify a then part.');
         $builder = $this->getTestBuilder();
-        $builder->ifPart = 'test';
+        $builder->ifPart = static fn () => false;
         $builder->end();
     }
 
@@ -241,9 +241,7 @@ class ExprBuilderTest extends TestCase
      */
     protected function returnClosure($val): \Closure
     {
-        return function () use ($val) {
-            return $val;
-        };
+        return fn () => $val;
     }
 
     /**

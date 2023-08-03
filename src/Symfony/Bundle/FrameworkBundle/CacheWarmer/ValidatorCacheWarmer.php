@@ -39,15 +39,8 @@ class ValidatorCacheWarmer extends AbstractPhpFileCacheWarmer
         $this->validatorBuilder = $validatorBuilder;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doWarmUp(string $cacheDir, ArrayAdapter $arrayAdapter): bool
     {
-        if (!method_exists($this->validatorBuilder, 'getLoaders')) {
-            return false;
-        }
-
         $loaders = $this->validatorBuilder->getLoaders();
         $metadataFactory = new LazyLoadingMetadataFactory(new LoaderChain($loaders), $arrayAdapter);
 
@@ -57,7 +50,7 @@ class ValidatorCacheWarmer extends AbstractPhpFileCacheWarmer
                     if ($metadataFactory->hasMetadataFor($mappedClass)) {
                         $metadataFactory->getMetadataFor($mappedClass);
                     }
-                } catch (AnnotationException $e) {
+                } catch (AnnotationException) {
                     // ignore failing annotations
                 } catch (\Exception $e) {
                     $this->ignoreAutoloadException($mappedClass, $e);
@@ -74,7 +67,7 @@ class ValidatorCacheWarmer extends AbstractPhpFileCacheWarmer
     protected function warmUpPhpArrayAdapter(PhpArrayAdapter $phpArrayAdapter, array $values): array
     {
         // make sure we don't cache null values
-        $values = array_filter($values, function ($val) { return null !== $val; });
+        $values = array_filter($values, fn ($val) => null !== $val);
 
         return parent::warmUpPhpArrayAdapter($phpArrayAdapter, $values);
     }

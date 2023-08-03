@@ -26,13 +26,11 @@ use Twig\Loader\FilesystemLoader;
  *
  * @author Hidde Wieringa <hidde@hiddewieringa.nl>
  */
-class FormExtensionBootstrap4LayoutTest extends AbstractBootstrap4LayoutTest
+class FormExtensionBootstrap4LayoutTest extends AbstractBootstrap4LayoutTestCase
 {
     use RuntimeLoaderProvider;
-    /**
-     * @var FormRenderer
-     */
-    private $renderer;
+
+    private FormRenderer $renderer;
 
     protected function setUp(): void
     {
@@ -102,11 +100,11 @@ class FormExtensionBootstrap4LayoutTest extends AbstractBootstrap4LayoutTest
         ;
 
         $this->assertSame(<<<'HTML'
-<div class="input-group"><div class="input-group-prepend">
+<div class="input-group "><div class="input-group-prepend">
                     <span class="input-group-text">&euro; </span>
-                </div><input type="text" id="name" name="name" required="required" class="form-control" /></div>
+                </div><input type="text" id="name" name="name" required="required" class="form-control"></div>
 HTML
-        , trim($this->renderWidget($view)));
+            , trim($this->renderWidget($view)));
     }
 
     protected function renderForm(FormView $view, array $vars = [])

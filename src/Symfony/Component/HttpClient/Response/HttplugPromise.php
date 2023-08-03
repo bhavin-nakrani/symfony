@@ -11,7 +11,7 @@
 
 namespace Symfony\Component\HttpClient\Response;
 
-use function GuzzleHttp\Promise\promise_for;
+use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface as GuzzlePromiseInterface;
 use Http\Promise\Promise as HttplugPromiseInterface;
 use Psr\Http\Message\ResponseInterface as Psr7ResponseInterface;
@@ -43,17 +43,12 @@ final class HttplugPromise implements HttplugPromiseInterface
         $this->promise->cancel();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getState(): string
     {
         return $this->promise->getState();
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @return Psr7ResponseInterface|mixed
      */
     public function wait($unwrap = true): mixed
@@ -73,8 +68,6 @@ final class HttplugPromise implements HttplugPromiseInterface
             return null;
         }
 
-        return static function ($value) use ($callback) {
-            return promise_for($callback($value));
-        };
+        return static fn ($value) => Create::promiseFor($callback($value));
     }
 }

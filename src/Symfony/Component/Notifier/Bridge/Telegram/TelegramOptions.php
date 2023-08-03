@@ -83,6 +83,38 @@ final class TelegramOptions implements MessageOptionsInterface
     /**
      * @return $this
      */
+    public function protectContent(bool $bool): static
+    {
+        $this->options['protect_content'] = $bool;
+
+        return $this;
+    }
+
+    /**
+     * Work only when photo option is defined.
+     *
+     * @return $this
+     */
+    public function hasSpoiler(bool $bool): static
+    {
+        $this->options['has_spoiler'] = $bool;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function photo(string $url): static
+    {
+        $this->options['photo'] = $url;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
     public function replyTo(int $messageId): static
     {
         $this->options['reply_to_message_id'] = $messageId;
@@ -96,6 +128,31 @@ final class TelegramOptions implements MessageOptionsInterface
     public function replyMarkup(AbstractTelegramReplyMarkup $markup): static
     {
         $this->options['reply_markup'] = $markup->toArray();
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function edit(int $messageId): static
+    {
+        $this->options['message_id'] = $messageId;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function answerCallbackQuery(string $callbackQueryId, bool $showAlert = false, int $cacheTime = 0): static
+    {
+        $this->options['callback_query_id'] = $callbackQueryId;
+        $this->options['show_alert'] = $showAlert;
+
+        if ($cacheTime > 0) {
+            $this->options['cache_time'] = $cacheTime;
+        }
 
         return $this;
     }

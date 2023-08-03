@@ -29,19 +29,21 @@ class YamlFileLoader extends FileLoader
      *
      * @var array
      */
-    protected $classes = null;
+    protected $classes;
+
+    public function __construct(string $file)
+    {
+        $this->file = $file;
+    }
 
     /**
      * Caches the used YAML parser.
      */
     private YamlParser $yamlParser;
 
-    /**
-     * {@inheritdoc}
-     */
     public function loadClassMetadata(ClassMetadata $metadata): bool
     {
-        if (null === $this->classes) {
+        if (!isset($this->classes)) {
             $this->loadClassesFromYaml();
         }
 
@@ -63,7 +65,7 @@ class YamlFileLoader extends FileLoader
      */
     public function getMappedClasses(): array
     {
-        if (null === $this->classes) {
+        if (!isset($this->classes)) {
             $this->loadClassesFromYaml();
         }
 
@@ -129,8 +131,10 @@ class YamlFileLoader extends FileLoader
         return $classes;
     }
 
-    private function loadClassesFromYaml()
+    private function loadClassesFromYaml(): void
     {
+        parent::__construct($this->file);
+
         $this->yamlParser ??= new YamlParser();
         $this->classes = $this->parseFile($this->file);
 
@@ -143,7 +147,7 @@ class YamlFileLoader extends FileLoader
         }
     }
 
-    private function loadClassMetadataFromYaml(ClassMetadata $metadata, array $classDescription)
+    private function loadClassMetadataFromYaml(ClassMetadata $metadata, array $classDescription): void
     {
         if (isset($classDescription['group_sequence_provider'])) {
             $metadata->setGroupSequenceProvider(

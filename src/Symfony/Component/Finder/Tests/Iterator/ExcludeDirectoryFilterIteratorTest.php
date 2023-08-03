@@ -28,7 +28,7 @@ class ExcludeDirectoryFilterIteratorTest extends RealIteratorTestCase
         $this->assertIterator($expected, $iterator);
     }
 
-    public function getAcceptData()
+    public static function getAcceptData()
     {
         $foo = [
             '.bar',
@@ -43,6 +43,8 @@ class ExcludeDirectoryFilterIteratorTest extends RealIteratorTestCase
             'foo bar',
             'qux',
             'qux/baz_100_1.py',
+            'zebulon.php',
+            'Zephire.php',
             'qux/baz_1_2.py',
             'qux_0_1.php',
             'qux_1000_1.php',
@@ -67,6 +69,8 @@ class ExcludeDirectoryFilterIteratorTest extends RealIteratorTestCase
             'foo bar',
             'qux',
             'qux/baz_100_1.py',
+            'zebulon.php',
+            'Zephire.php',
             'qux/baz_1_2.py',
             'qux_0_1.php',
             'qux_1000_1.php',
@@ -89,6 +93,8 @@ class ExcludeDirectoryFilterIteratorTest extends RealIteratorTestCase
             'foo bar',
             'qux',
             'qux/baz_100_1.py',
+            'zebulon.php',
+            'Zephire.php',
             'qux/baz_1_2.py',
             'qux_0_1.php',
             'qux_1000_1.php',
@@ -99,9 +105,9 @@ class ExcludeDirectoryFilterIteratorTest extends RealIteratorTestCase
         ];
 
         return [
-            [['foo'], $this->toAbsolute($foo)],
-            [['fo'], $this->toAbsolute($fo)],
-            [['toto/'], $this->toAbsolute($toto)],
+            [['foo'], self::toAbsolute($foo)],
+            [['fo'], self::toAbsolute($fo)],
+            [['toto/'], self::toAbsolute($toto)],
         ];
     }
 }

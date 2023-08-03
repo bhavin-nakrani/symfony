@@ -30,6 +30,9 @@ class MemcachedStore implements PersistingStoreInterface
     private int $initialTtl;
     private bool $useExtendedReturn;
 
+    /**
+     * @return bool
+     */
     public static function isSupported()
     {
         return \extension_loaded('memcached');
@@ -53,7 +56,7 @@ class MemcachedStore implements PersistingStoreInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function save(Key $key)
     {
@@ -68,7 +71,7 @@ class MemcachedStore implements PersistingStoreInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function putOffExpiration(Key $key, float $ttl)
     {
@@ -107,7 +110,7 @@ class MemcachedStore implements PersistingStoreInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function delete(Key $key)
     {
@@ -130,9 +133,6 @@ class MemcachedStore implements PersistingStoreInterface
         $this->memcached->delete((string) $key);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function exists(Key $key): bool
     {
         return $this->memcached->get((string) $key) === $this->getUniqueToken($key);

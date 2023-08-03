@@ -65,7 +65,7 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setDecorated(bool $decorated)
     {
@@ -74,7 +74,7 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setFormatter(OutputFormatterInterface $formatter)
     {
@@ -83,7 +83,7 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setVerbosity(int $level)
     {
@@ -91,16 +91,13 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
         $this->stderr->setVerbosity($level);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getErrorOutput(): OutputInterface
     {
         return $this->stderr;
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setErrorOutput(OutputInterface $error)
     {
@@ -149,7 +146,8 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
             return fopen('php://output', 'w');
         }
 
-        return @fopen('php://stdout', 'w') ?: fopen('php://output', 'w');
+        // Use STDOUT when possible to prevent from opening too many file descriptors
+        return \defined('STDOUT') ? \STDOUT : (@fopen('php://stdout', 'w') ?: fopen('php://output', 'w'));
     }
 
     /**
@@ -157,6 +155,11 @@ class ConsoleOutput extends StreamOutput implements ConsoleOutputInterface
      */
     private function openErrorStream()
     {
-        return fopen($this->hasStderrSupport() ? 'php://stderr' : 'php://output', 'w');
+        if (!$this->hasStderrSupport()) {
+            return fopen('php://output', 'w');
+        }
+
+        // Use STDERR when possible to prevent from opening too many file descriptors
+        return \defined('STDERR') ? \STDERR : (@fopen('php://stderr', 'w') ?: fopen('php://output', 'w'));
     }
 }

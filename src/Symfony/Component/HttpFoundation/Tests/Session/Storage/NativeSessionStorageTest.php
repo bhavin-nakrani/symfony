@@ -27,11 +27,12 @@ use Symfony\Component\HttpFoundation\Session\Storage\Proxy\SessionHandlerProxy;
  * These tests require separate processes.
  *
  * @runTestsInSeparateProcesses
+ *
  * @preserveGlobalState disabled
  */
 class NativeSessionStorageTest extends TestCase
 {
-    private $savePath;
+    private string $savePath;
 
     protected function setUp(): void
     {
@@ -49,8 +50,6 @@ class NativeSessionStorageTest extends TestCase
         if (is_dir($this->savePath)) {
             @rmdir($this->savePath);
         }
-
-        $this->savePath = null;
     }
 
     protected function getStorage(array $options = []): NativeSessionStorage
@@ -130,7 +129,7 @@ class NativeSessionStorageTest extends TestCase
         $storage->regenerate(false, $lifetime);
         $this->assertNotEquals($id, $storage->getId());
         $this->assertEquals(11, $storage->getBag('attributes')->get('legs'));
-        $this->assertEquals($lifetime, ini_get('session.cookie_lifetime'));
+        $this->assertEquals($lifetime, \ini_get('session.cookie_lifetime'));
     }
 
     public function testSessionGlobalIsUpToDateAfterIdRegeneration()
@@ -156,7 +155,7 @@ class NativeSessionStorageTest extends TestCase
         $this->iniSet('session.cache_limiter', 'nocache');
 
         new NativeSessionStorage();
-        $this->assertEquals('', ini_get('session.cache_limiter'));
+        $this->assertEquals('', \ini_get('session.cache_limiter'));
     }
 
     public function testExplicitSessionCacheLimiter()
@@ -164,7 +163,7 @@ class NativeSessionStorageTest extends TestCase
         $this->iniSet('session.cache_limiter', 'nocache');
 
         new NativeSessionStorage(['cache_limiter' => 'public']);
-        $this->assertEquals('public', ini_get('session.cache_limiter'));
+        $this->assertEquals('public', \ini_get('session.cache_limiter'));
     }
 
     public function testCookieOptions()
@@ -198,16 +197,14 @@ class NativeSessionStorageTest extends TestCase
 
         $this->getStorage($options);
 
-        $this->assertSame('a=href', ini_get('session.trans_sid_tags'));
-        $this->assertSame('200', ini_get('session.cache_expire'));
+        $this->assertSame('a=href', \ini_get('session.trans_sid_tags'));
+        $this->assertSame('200', \ini_get('session.cache_expire'));
     }
 
     public function testSetSaveHandler()
     {
         $this->iniSet('session.save_handler', 'files');
         $storage = $this->getStorage();
-        $storage->setSaveHandler();
-        $this->assertInstanceOf(SessionHandlerProxy::class, $storage->getSaveHandler());
         $storage->setSaveHandler(null);
         $this->assertInstanceOf(SessionHandlerProxy::class, $storage->getSaveHandler());
         $storage->setSaveHandler(new SessionHandlerProxy(new NativeFileSessionHandler()));
@@ -282,5 +279,42 @@ class NativeSessionStorageTest extends TestCase
         $storage->registerBag($bag);
 
         $this->assertEquals($storage->getBag('flashes'), $bag);
+    }
+
+    public function testRegenerateInvalidSessionIdForNativeFileSessionHandler()
+    {
+        $_COOKIE[session_name()] = '&~[';
+        session_id('&~[');
+        $storage = new NativeSessionStorage([], new NativeFileSessionHandler());
+        $started = $storage->start();
+
+        $this->assertTrue($started);
+        $this->assertMatchesRegularExpression('/^[a-zA-Z0-9,-]{22,250}$/', session_id());
+        $storage->save();
+
+        $_COOKIE[session_name()] = '&~[';
+        session_id('&~[');
+        $storage = new NativeSessionStorage([], new SessionHandlerProxy(new NativeFileSessionHandler()));
+        $started = $storage->start();
+
+        $this->assertTrue($started);
+        $this->assertMatchesRegularExpression('/^[a-zA-Z0-9,-]{22,250}$/', session_id());
+        $storage->save();
+
+        $_COOKIE[session_name()] = '&~[';
+        session_id('&~[');
+        $storage = new NativeSessionStorage([], new NullSessionHandler());
+        $started = $storage->start();
+        $this->assertTrue($started);
+        $this->assertSame('&~[', session_id());
+    }
+
+    public function testSaveHandlesNullSessionGracefully()
+    {
+        $storage = $this->getStorage();
+        $_SESSION = null;
+        $storage->save();
+
+        $this->addToAssertionCount(1);
     }
 }

@@ -17,9 +17,9 @@ use Symfony\Component\ErrorHandler\DebugClassLoader;
 
 class DebugClassLoaderTest extends TestCase
 {
-    private $patchTypes;
-    private $errorReporting;
-    private $loader;
+    private string|false $patchTypes;
+    private int $errorReporting;
+    private array $loader;
 
     protected function setUp(): void
     {
@@ -50,7 +50,6 @@ class DebugClassLoaderTest extends TestCase
             if (\is_array($function) && $function[0] instanceof DebugClassLoader) {
                 $reflClass = new \ReflectionClass($function[0]);
                 $reflProp = $reflClass->getProperty('classLoader');
-                $reflProp->setAccessible(true);
 
                 $this->assertNotInstanceOf(DebugClassLoader::class, $reflProp->getValue($function[0]));
 
@@ -121,7 +120,7 @@ class DebugClassLoaderTest extends TestCase
      */
     public function testDeprecatedSuper(string $class, string $super, string $type)
     {
-        set_error_handler(function () { return false; });
+        set_error_handler(fn () => false);
         $e = error_reporting(0);
         trigger_error('', E_USER_DEPRECATED);
 
@@ -141,7 +140,7 @@ class DebugClassLoaderTest extends TestCase
         $this->assertSame($xError, $lastError);
     }
 
-    public function provideDeprecatedSuper(): array
+    public static function provideDeprecatedSuper(): array
     {
         return [
             ['DeprecatedInterfaceClass', 'DeprecatedInterface', 'implements'],
@@ -151,7 +150,7 @@ class DebugClassLoaderTest extends TestCase
 
     public function testInterfaceExtendsDeprecatedInterface()
     {
-        set_error_handler(function () { return false; });
+        set_error_handler(fn () => false);
         $e = error_reporting(0);
         trigger_error('', E_USER_NOTICE);
 
@@ -173,7 +172,7 @@ class DebugClassLoaderTest extends TestCase
 
     public function testDeprecatedSuperInSameNamespace()
     {
-        set_error_handler(function () { return false; });
+        set_error_handler(fn () => false);
         $e = error_reporting(0);
         trigger_error('', E_USER_NOTICE);
 
@@ -243,7 +242,7 @@ class DebugClassLoaderTest extends TestCase
 
     public function testExtendedDeprecatedMethodDoesntTriggerAnyNotice()
     {
-        set_error_handler(function () { return false; });
+        set_error_handler(fn () => false);
         $e = error_reporting(0);
         trigger_error('', E_USER_NOTICE);
 
@@ -398,6 +397,65 @@ class DebugClassLoaderTest extends TestCase
             'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::mixed()" might add "mixed" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
             'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::nullableMixed()" might add "mixed" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
             'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::static()" might add "static" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
+            'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::false()" might add "false" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
+            'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::true()" might add "true" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
+            'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::never()" might add "never" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
+            'Method "Symfony\Component\ErrorHandler\Tests\Fixtures\ReturnTypeParent::null()" might add "null" as a native return type declaration in the future. Do the same in child class "Test\Symfony\Component\ErrorHandler\Tests\ReturnType" now to avoid errors or add an explicit @return annotation to suppress this message.',
+        ], $deprecations);
+    }
+
+    public function testOverrideFinalProperty()
+    {
+        $deprecations = [];
+        set_error_handler(function ($type, $msg) use (&$deprecations) { $deprecations[] = $msg; });
+        $e = error_reporting(E_USER_DEPRECATED);
+
+        class_exists(Fixtures\OverrideFinalProperty::class, true);
+        class_exists(Fixtures\FinalProperty\OverrideFinalPropertySameNamespace::class, true);
+        class_exists('Test\\'.OverrideOutsideFinalProperty::class, true);
+
+        error_reporting($e);
+        restore_error_handler();
+
+        $this->assertSame([
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalProperty\FinalProperty::$pub" property is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\OverrideFinalProperty".',
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalProperty\FinalProperty::$prot" property is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\OverrideFinalProperty".',
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalProperty\FinalProperty::$implicitlyFinal" property is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\OverrideFinalProperty".',
+            'The "Test\Symfony\Component\ErrorHandler\Tests\FinalProperty\OutsideFinalProperty::$final" property is considered final. You should not override it in "Test\Symfony\Component\ErrorHandler\Tests\OverrideOutsideFinalProperty".'
+        ], $deprecations);
+    }
+
+    public function testOverrideFinalConstant()
+    {
+        $deprecations = [];
+        set_error_handler(function ($type, $msg) use (&$deprecations) { $deprecations[] = $msg; });
+        $e = error_reporting(E_USER_DEPRECATED);
+
+        class_exists(Fixtures\FinalConstant\OverrideFinalConstant::class, true);
+
+        error_reporting($e);
+        restore_error_handler();
+
+        $this->assertSame([
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\FinalConstants::OVERRIDDEN_FINAL_PARENT_CLASS" constant is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\OverrideFinalConstant".',
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\FinalConstants2::OVERRIDDEN_FINAL_PARENT_PARENT_CLASS" constant is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\OverrideFinalConstant".',
+        ], $deprecations);
+    }
+
+    public function testOverrideFinalConstant81()
+    {
+        $deprecations = [];
+        set_error_handler(function ($type, $msg) use (&$deprecations) { $deprecations[] = $msg; });
+        $e = error_reporting(E_USER_DEPRECATED);
+
+        class_exists( Fixtures\FinalConstant\OverrideFinalConstant81::class, true);
+
+        error_reporting($e);
+        restore_error_handler();
+
+        $this->assertSame([
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\FinalConstantsInterface::OVERRIDDEN_FINAL_INTERFACE" constant is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\OverrideFinalConstant81".',
+            'The "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\FinalConstantsInterface2::OVERRIDDEN_FINAL_INTERFACE_2" constant is considered final. You should not override it in "Symfony\Component\ErrorHandler\Tests\Fixtures\FinalConstant\OverrideFinalConstant81".',
         ], $deprecations);
     }
 }
@@ -486,6 +544,10 @@ class ClassLoader
             return $fixtureDir.\DIRECTORY_SEPARATOR.'ReturnType.php';
         } elseif ('Test\\'.Fixtures\OutsideInterface::class === $class) {
             return $fixtureDir.\DIRECTORY_SEPARATOR.'OutsideInterface.php';
+        } elseif ('Test\\'.OverrideOutsideFinalProperty::class === $class) {
+            return $fixtureDir.'OverrideOutsideFinalProperty.php';
+        } elseif ('Test\\Symfony\\Component\\ErrorHandler\\Tests\\FinalProperty\\OutsideFinalProperty' === $class) {
+            return $fixtureDir.'FinalProperty'.\DIRECTORY_SEPARATOR.'OutsideFinalProperty.php';
         }
     }
 }

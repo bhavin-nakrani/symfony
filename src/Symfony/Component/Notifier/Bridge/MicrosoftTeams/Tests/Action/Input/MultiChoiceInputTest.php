@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Notifier\Bridge\MicrosoftTeams\Tests\Action\Input;
 
 use Symfony\Component\Notifier\Bridge\MicrosoftTeams\Action\Input\MultiChoiceInput;
@@ -56,7 +65,7 @@ final class MultiChoiceInputTest extends AbstractInputTestCase
     /**
      * @return \Generator<string, array{0: string}>
      */
-    public function styles(): \Generator
+    public static function styles(): \Generator
     {
         yield 'style-expanded' => ['expanded'];
         yield 'style-normal' => ['normal'];

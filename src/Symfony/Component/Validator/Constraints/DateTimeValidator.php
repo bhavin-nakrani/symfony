@@ -22,7 +22,7 @@ use Symfony\Component\Validator\Exception\UnexpectedValueException;
 class DateTimeValidator extends DateValidator
 {
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function validate(mixed $value, Constraint $constraint)
     {
@@ -34,15 +34,15 @@ class DateTimeValidator extends DateValidator
             return;
         }
 
-        if (!is_scalar($value) && !$value instanceof \Stringable) {
+        if (!\is_scalar($value) && !$value instanceof \Stringable) {
             throw new UnexpectedValueException($value, 'string');
         }
 
         $value = (string) $value;
 
-        \DateTime::createFromFormat($constraint->format, $value);
+        \DateTimeImmutable::createFromFormat($constraint->format, $value);
 
-        $errors = \DateTime::getLastErrors();
+        $errors = \DateTimeImmutable::getLastErrors() ?: ['error_count' => 0, 'warnings' => []];
 
         if (0 < $errors['error_count']) {
             $this->context->buildViolation($constraint->message)
@@ -54,9 +54,7 @@ class DateTimeValidator extends DateValidator
         }
 
         if (str_ends_with($constraint->format, '+')) {
-            $errors['warnings'] = array_filter($errors['warnings'], function ($warning) {
-                return 'Trailing data' !== $warning;
-            });
+            $errors['warnings'] = array_filter($errors['warnings'], fn ($warning) => 'Trailing data' !== $warning);
         }
 
         foreach ($errors['warnings'] as $warning) {

@@ -17,23 +17,21 @@ use Symfony\Component\Serializer\Exception\CircularReferenceException;
 use Symfony\Component\Serializer\Exception\InvalidArgumentException;
 use Symfony\Component\Serializer\Normalizer\JsonSerializableNormalizer;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Serializer\Tests\Fixtures\JsonSerializableCircularReferenceDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\JsonSerializableDummy;
+use Symfony\Component\Serializer\Tests\Normalizer\Features\CircularReferenceTestTrait;
 
 /**
  * @author Fred Cox <mcfedr@gmail.com>
  */
 class JsonSerializableNormalizerTest extends TestCase
 {
-    /**
-     * @var JsonSerializableNormalizer
-     */
-    private $normalizer;
+    use CircularReferenceTestTrait;
 
-    /**
-     * @var MockObject&JsonSerializerNormalizer
-     */
-    private $serializer;
+    private JsonSerializableNormalizer $normalizer;
+    private MockObject&JsonSerializerNormalizer $serializer;
 
     protected function setUp(): void
     {
@@ -84,6 +82,19 @@ class JsonSerializableNormalizerTest extends TestCase
         ;
 
         $this->assertEquals('string_object', $this->normalizer->normalize(new JsonSerializableDummy()));
+    }
+
+    protected function getNormalizerForCircularReference(array $defaultContext): JsonSerializableNormalizer
+    {
+        $normalizer = new JsonSerializableNormalizer(null, null, $defaultContext);
+        new Serializer([$normalizer]);
+
+        return $normalizer;
+    }
+
+    protected function getSelfReferencingModel()
+    {
+        return new JsonSerializableCircularReferenceDummy();
     }
 
     public function testInvalidDataThrowException()

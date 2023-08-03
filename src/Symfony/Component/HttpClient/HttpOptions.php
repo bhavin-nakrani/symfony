@@ -32,7 +32,7 @@ class HttpOptions
     /**
      * @return $this
      */
-    public function setAuthBasic(string $user, string $password = ''): static
+    public function setAuthBasic(string $user, #[\SensitiveParameter] string $password = ''): static
     {
         $this->options['auth_basic'] = $user;
 
@@ -46,7 +46,7 @@ class HttpOptions
     /**
      * @return $this
      */
-    public function setAuthBearer(string $token): static
+    public function setAuthBearer(#[\SensitiveParameter] string $token): static
     {
         $this->options['auth_bearer'] = $token;
 
@@ -138,6 +138,16 @@ class HttpOptions
     /**
      * @return $this
      */
+    public function setVars(array $vars): static
+    {
+        $this->options['vars'] = $vars;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
     public function buffer(bool $buffer): static
     {
         $this->options['buffer'] = $buffer;
@@ -191,6 +201,16 @@ class HttpOptions
     public function setTimeout(float $timeout): static
     {
         $this->options['timeout'] = $timeout;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function setMaxDuration(float $maxDuration): static
+    {
+        $this->options['max_duration'] = $maxDuration;
 
         return $this;
     }

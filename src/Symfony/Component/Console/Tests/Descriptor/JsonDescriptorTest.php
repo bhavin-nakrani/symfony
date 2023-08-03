@@ -13,27 +13,27 @@ namespace Symfony\Component\Console\Tests\Descriptor;
 
 use Symfony\Component\Console\Descriptor\JsonDescriptor;
 
-class JsonDescriptorTest extends AbstractDescriptorTest
+class JsonDescriptorTest extends AbstractDescriptorTestCase
 {
     protected function getDescriptor()
     {
         return new JsonDescriptor();
     }
 
-    protected function getFormat()
+    protected static function getFormat()
     {
         return 'json';
     }
 
     protected function normalizeOutput($output)
     {
-        return array_map([$this, 'normalizeOutputRecursively'], json_decode($output, true));
+        return array_map($this->normalizeOutputRecursively(...), json_decode($output, true));
     }
 
     private function normalizeOutputRecursively($output)
     {
         if (\is_array($output)) {
-            return array_map([$this, 'normalizeOutputRecursively'], $output);
+            return array_map($this->normalizeOutputRecursively(...), $output);
         }
 
         if (null === $output) {

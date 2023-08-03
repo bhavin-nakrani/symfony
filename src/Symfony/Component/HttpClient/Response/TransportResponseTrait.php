@@ -38,7 +38,7 @@ trait TransportResponseTrait
         'canceled' => false,
     ];
 
-    /** @var object|resource */
+    /** @var object|resource|null */
     private $handle;
     private int|string $id;
     private ?float $timeout = 0;
@@ -46,9 +46,6 @@ trait TransportResponseTrait
     private ?array $finalInfo = null;
     private ?LoggerInterface $logger = null;
 
-    /**
-     * {@inheritdoc}
-     */
     public function getStatusCode(): int
     {
         if ($this->initializer) {
@@ -58,9 +55,6 @@ trait TransportResponseTrait
         return $this->info['http_code'];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getHeaders(bool $throw = true): array
     {
         if ($this->initializer) {
@@ -74,9 +68,6 @@ trait TransportResponseTrait
         return $this->headers;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function cancel(): void
     {
         $this->info['canceled'] = true;
@@ -131,7 +122,7 @@ trait TransportResponseTrait
     /**
      * Ensures the request is always sent and that the response code was checked.
      */
-    private function doDestruct()
+    private function doDestruct(): void
     {
         $this->shouldBuffer = true;
 
@@ -156,7 +147,7 @@ trait TransportResponseTrait
             self::schedule($response, $runningResponses);
         }
 
-        $lastActivity = microtime(true);
+        $lastActivity = hrtime(true) / 1E9;
         $elapsedTimeout = 0;
 
         if ($fromLastTimeout = 0.0 === $timeout && '-0' === (string) $timeout) {
@@ -181,7 +172,7 @@ trait TransportResponseTrait
                     $chunk = false;
 
                     if ($fromLastTimeout && null !== $multi->lastTimeout) {
-                        $elapsedTimeout = microtime(true) - $multi->lastTimeout;
+                        $elapsedTimeout = hrtime(true) / 1E9 - $multi->lastTimeout;
                     }
 
                     if (isset($multi->handlesActivity[$j])) {
@@ -300,7 +291,7 @@ trait TransportResponseTrait
             }
 
             if ($hasActivity) {
-                $lastActivity = microtime(true);
+                $lastActivity = hrtime(true) / 1E9;
                 continue;
             }
 
@@ -308,7 +299,7 @@ trait TransportResponseTrait
                 usleep(min(500, 1E6 * $timeoutMin));
             }
 
-            $elapsedTimeout = microtime(true) - $lastActivity;
+            $elapsedTimeout = hrtime(true) / 1E9 - $lastActivity;
         }
     }
 }

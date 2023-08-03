@@ -24,9 +24,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 class CompleteCommandTest extends TestCase
 {
-    private $command;
-    private $application;
-    private $tester;
+    private CompleteCommand $command;
+    private Application $application;
+    private CommandTester $tester;
 
     protected function setUp(): void
     {
@@ -47,7 +47,7 @@ class CompleteCommandTest extends TestCase
 
     public function testUnsupportedShellOption()
     {
-        $this->expectExceptionMessage('Shell completion is not supported for your shell: "unsupported" (supported: "bash", "fish").');
+        $this->expectExceptionMessage('Shell completion is not supported for your shell: "unsupported" (supported: "bash", "fish", "zsh").');
         $this->execute(['--shell' => 'unsupported']);
     }
 
@@ -81,7 +81,7 @@ class CompleteCommandTest extends TestCase
         }
     }
 
-    public function provideInputAndCurrentOptionValues()
+    public static function provideInputAndCurrentOptionValues()
     {
         yield [[], 'The "--current" option must be set and it must be an integer'];
         yield [['--current' => 'a'], 'The "--current" option must be set and it must be an integer'];
@@ -100,11 +100,12 @@ class CompleteCommandTest extends TestCase
         $this->assertEquals(implode("\n", $suggestions).\PHP_EOL, $this->tester->getDisplay());
     }
 
-    public function provideCompleteCommandNameInputs()
+    public static function provideCompleteCommandNameInputs()
     {
-        yield 'empty' => [['bin/console'], ['help', 'list', 'completion', 'hello']];
-        yield 'partial' => [['bin/console', 'he'], ['help', 'list', 'completion', 'hello']];
-        yield 'complete-shortcut-name' => [['bin/console', 'hell'], ['hello']];
+        yield 'empty' => [['bin/console'], ['help', 'list', 'completion', 'hello', 'ahoy']];
+        yield 'partial' => [['bin/console', 'he'], ['help', 'list', 'completion', 'hello', 'ahoy']];
+        yield 'complete-shortcut-name' => [['bin/console', 'hell'], ['hello', 'ahoy']];
+        yield 'complete-aliases' => [['bin/console', 'ah'], ['hello', 'ahoy']];
     }
 
     /**
@@ -116,16 +117,18 @@ class CompleteCommandTest extends TestCase
         $this->assertEquals(implode("\n", $suggestions).\PHP_EOL, $this->tester->getDisplay());
     }
 
-    public function provideCompleteCommandInputDefinitionInputs()
+    public static function provideCompleteCommandInputDefinitionInputs()
     {
-        yield 'definition' => [['bin/console', 'hello', '-'], ['--help', '--quiet', '--verbose', '--version', '--ansi', '--no-interaction']];
+        yield 'definition' => [['bin/console', 'hello', '-'], ['--help', '--quiet', '--verbose', '--version', '--ansi', '--no-ansi', '--no-interaction']];
         yield 'custom' => [['bin/console', 'hello'], ['Fabien', 'Robin', 'Wouter']];
+        yield 'definition-aliased' => [['bin/console', 'ahoy', '-'], ['--help', '--quiet', '--verbose', '--version', '--ansi', '--no-ansi', '--no-interaction']];
+        yield 'custom-aliased' => [['bin/console', 'ahoy'], ['Fabien', 'Robin', 'Wouter']];
     }
 
     private function execute(array $input)
     {
         // run in verbose mode to assert exceptions
-        $this->tester->execute($input ? ($input + ['--shell' => 'bash']) : $input, ['verbosity' => OutputInterface::VERBOSITY_DEBUG]);
+        $this->tester->execute($input ? ($input + ['--shell' => 'bash', '--api-version' => CompleteCommand::COMPLETION_API_VERSION]) : $input, ['verbosity' => OutputInterface::VERBOSITY_DEBUG]);
     }
 }
 
@@ -134,8 +137,10 @@ class CompleteCommandTest_HelloCommand extends Command
     public function configure(): void
     {
         $this->setName('hello')
+             ->setAliases(['ahoy'])
+             ->setDescription('Hello test command')
              ->addArgument('name', InputArgument::REQUIRED)
-         ;
+        ;
     }
 
     public function complete(CompletionInput $input, CompletionSuggestions $suggestions): void

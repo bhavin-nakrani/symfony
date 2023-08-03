@@ -65,7 +65,7 @@ class GenericRuntime implements RuntimeInterface
         $debug = $options['debug'] ?? $_SERVER[$debugKey] ?? $_ENV[$debugKey] ?? true;
 
         if (!\is_bool($debug)) {
-            $debug = filter_var($debug, \FILTER_VALIDATE_BOOLEAN);
+            $debug = filter_var($debug, \FILTER_VALIDATE_BOOL);
         }
 
         if ($debug) {
@@ -83,15 +83,9 @@ class GenericRuntime implements RuntimeInterface
         $this->options = $options;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getResolver(callable $callable, \ReflectionFunction $reflector = null): ResolverInterface
     {
-        if (!$callable instanceof \Closure) {
-            $callable = \Closure::fromCallable($callable);
-        }
-
+        $callable = $callable(...);
         $parameters = ($reflector ?? new \ReflectionFunction($callable))->getParameters();
         $arguments = function () use ($parameters) {
             $arguments = [];
@@ -117,21 +111,16 @@ class GenericRuntime implements RuntimeInterface
         return new ClosureResolver($callable, $arguments);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getRunner(?object $application): RunnerInterface
     {
-        if (null === $application) {
-            $application = static function () { return 0; };
-        }
+        $application ??= static fn () => 0;
 
         if ($application instanceof RunnerInterface) {
             return $application;
         }
 
         if (!$application instanceof \Closure) {
-            if ($runtime = $this->resolveRuntime(\get_class($application))) {
+            if ($runtime = $this->resolveRuntime($application::class)) {
                 return $runtime->getRunner($application);
             }
 
@@ -139,7 +128,7 @@ class GenericRuntime implements RuntimeInterface
                 throw new \LogicException(sprintf('"%s" doesn\'t know how to handle apps of type "%s".', get_debug_type($this), get_debug_type($application)));
             }
 
-            $application = \Closure::fromCallable($application);
+            $application = $application(...);
         }
 
         if ($_SERVER[$this->options['debug_var_name']] && ($r = new \ReflectionFunction($application)) && $r->getNumberOfRequiredParameters()) {

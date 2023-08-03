@@ -24,26 +24,23 @@ use Symfony\Component\Lock\Strategy\UnanimousStrategy;
 
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
+ *
+ * @group integration
  */
-class CombinedStoreTest extends AbstractStoreTest
+class CombinedStoreTest extends AbstractStoreTestCase
 {
     use ExpiringStoreTestTrait;
     use SharedLockStoreTestTrait;
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getClockDelay()
     {
         return 250000;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getStore(): PersistingStoreInterface
     {
-        $redis = new \Predis\Client('tcp://'.getenv('REDIS_HOST').':6379');
+        $redis = new \Predis\Client(array_combine(['host', 'port'], explode(':', getenv('REDIS_HOST')) + [1 => 6379]));
+
         try {
             $redis->connect();
         } catch (\Exception $e) {
@@ -53,14 +50,10 @@ class CombinedStoreTest extends AbstractStoreTest
         return new CombinedStore([new RedisStore($redis)], new UnanimousStrategy());
     }
 
-    /** @var MockObject&StrategyInterface */
-    private $strategy;
-    /** @var MockObject&BlockingStoreInterface */
-    private $store1;
-    /** @var MockObject&BlockingStoreInterface */
-    private $store2;
-    /** @var CombinedStore */
-    private $store;
+    private MockObject&StrategyInterface $strategy;
+    private MockObject&BlockingStoreInterface $store1;
+    private MockObject&BlockingStoreInterface $store2;
+    private CombinedStore $store;
 
     protected function setUp(): void
     {

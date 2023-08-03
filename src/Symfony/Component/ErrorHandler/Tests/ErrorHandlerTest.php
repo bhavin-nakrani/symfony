@@ -327,7 +327,7 @@ class ErrorHandlerTest extends TestCase
 
         $handler = ErrorHandler::register();
         try {
-            trigger_error('foo '.\get_class($anonymousObject).' bar', \E_USER_WARNING);
+            trigger_error('foo '.$anonymousObject::class.' bar', \E_USER_WARNING);
             $this->fail('Exception expected.');
         } catch (\ErrorException $e) {
         } finally {
@@ -363,16 +363,17 @@ class ErrorHandlerTest extends TestCase
     /**
      * @dataProvider handleExceptionProvider
      */
-    public function testHandleException(string $expectedMessage, \Throwable $exception)
+    public function testHandleException(string $expectedMessage, \Throwable $exception, string $enhancedMessage = null)
     {
         try {
             $logger = $this->createMock(LoggerInterface::class);
             $handler = ErrorHandler::register();
 
             $logArgCheck = function ($level, $message, $context) use ($expectedMessage, $exception) {
+                $this->assertSame('critical', $level);
                 $this->assertSame($expectedMessage, $message);
                 $this->assertArrayHasKey('exception', $context);
-                $this->assertInstanceOf(\get_class($exception), $context['exception']);
+                $this->assertInstanceOf($exception::class, $context['exception']);
             };
 
             $logger
@@ -388,11 +389,13 @@ class ErrorHandlerTest extends TestCase
                 $handler->handleException($exception);
                 $this->fail('Exception expected');
             } catch (\Throwable $e) {
-                $this->assertSame($exception, $e);
+                $this->assertInstanceOf($exception::class, $e);
+                $this->assertSame($enhancedMessage ?? $exception->getMessage(), $e->getMessage());
             }
 
-            $handler->setExceptionHandler(function ($e) use ($exception) {
-                $this->assertSame($exception, $e);
+            $handler->setExceptionHandler(function ($e) use ($exception, $enhancedMessage) {
+                $this->assertInstanceOf($exception::class, $e);
+                $this->assertSame($enhancedMessage ?? $exception->getMessage(), $e->getMessage());
             });
 
             $handler->handleException($exception);
@@ -402,16 +405,21 @@ class ErrorHandlerTest extends TestCase
         }
     }
 
-    public function handleExceptionProvider(): array
+    public static function handleExceptionProvider(): array
     {
         return [
             ['Uncaught Exception: foo', new \Exception('foo')],
             ['Uncaught Exception: foo', new class('foo') extends \RuntimeException {
             }],
-            ['Uncaught Exception: foo stdClass@anonymous bar', new \RuntimeException('foo '.\get_class(new class() extends \stdClass {
-            }).' bar')],
+            ['Uncaught Exception: foo stdClass@anonymous bar', new \RuntimeException('foo '.(new class() extends \stdClass {
+            })::class.' bar')],
             ['Uncaught Error: bar', new \Error('bar')],
             ['Uncaught ccc', new \ErrorException('ccc')],
+            [
+                'Uncaught Error: Class "App\Controller\ClassDoesNotExist" not found',
+                new \Error('Class "App\Controller\ClassDoesNotExist" not found'),
+                "Attempted to load class \"ClassDoesNotExist\" from namespace \"App\Controller\".\nDid you forget a \"use\" statement for another namespace?",
+            ],
         ];
     }
 
@@ -602,7 +610,7 @@ class ErrorHandlerTest extends TestCase
         }
     }
 
-    public function errorHandlerWhenLoggingProvider(): iterable
+    public static function errorHandlerWhenLoggingProvider(): iterable
     {
         foreach ([false, true] as $previousHandlerWasDefined) {
             foreach ([false, true] as $loggerSetsAnotherHandler) {
@@ -615,10 +623,11 @@ class ErrorHandlerTest extends TestCase
 
     public function testAssertQuietEval()
     {
-        if ('-1' === ini_get('zend.assertions')) {
+        if ('-1' === \ini_get('zend.assertions')) {
             $this->markTestSkipped('zend.assertions is forcibly disabled');
         }
 
+        set_error_handler(function () {});
         $ini = [
             ini_set('zend.assertions', 1),
             ini_set('assert.active', 1),
@@ -627,6 +636,7 @@ class ErrorHandlerTest extends TestCase
             ini_set('assert.callback', null),
             ini_set('assert.exception', 0),
         ];
+        restore_error_handler();
 
         $logger = new BufferingLogger();
         $handler = new ErrorHandler($logger);

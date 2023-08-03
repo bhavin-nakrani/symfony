@@ -32,9 +32,6 @@ class AmazonSqsSender implements SenderInterface
         $this->serializer = $serializer;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function send(Envelope $envelope): Envelope
     {
         $encodedMessage = $this->serializer->encode($envelope);
@@ -45,7 +42,6 @@ class AmazonSqsSender implements SenderInterface
 
         $messageGroupId = null;
         $messageDeduplicationId = null;
-        $xrayTraceId = null;
 
         /** @var AmazonSqsFifoStamp|null $amazonSqsFifoStamp */
         $amazonSqsFifoStamp = $envelope->last(AmazonSqsFifoStamp::class);

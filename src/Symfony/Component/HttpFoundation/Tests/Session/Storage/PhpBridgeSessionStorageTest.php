@@ -23,11 +23,12 @@ use Symfony\Component\HttpFoundation\Session\Storage\PhpBridgeSessionStorage;
  * These tests require separate processes.
  *
  * @runTestsInSeparateProcesses
+ *
  * @preserveGlobalState disabled
  */
 class PhpBridgeSessionStorageTest extends TestCase
 {
-    private $savePath;
+    private string $savePath;
 
     protected function setUp(): void
     {
@@ -45,8 +46,6 @@ class PhpBridgeSessionStorageTest extends TestCase
         if (is_dir($this->savePath)) {
             @rmdir($this->savePath);
         }
-
-        $this->savePath = null;
     }
 
     protected function getStorage(): PhpBridgeSessionStorage

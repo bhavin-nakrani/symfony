@@ -27,8 +27,8 @@ use Symfony\Component\Translation\Writer\TranslationWriter;
 
 class TranslationUpdateCommandCompletionTest extends TestCase
 {
-    private $fs;
-    private $translationDir;
+    private Filesystem $fs;
+    private string $translationDir;
 
     /**
      * @dataProvider provideCompletionSuggestions
@@ -42,7 +42,7 @@ class TranslationUpdateCommandCompletionTest extends TestCase
         $this->assertSame($expectedSuggestions, $suggestions);
     }
 
-    public function provideCompletionSuggestions()
+    public static function provideCompletionSuggestions()
     {
         $bundle = new ExtensionPresentBundle();
 

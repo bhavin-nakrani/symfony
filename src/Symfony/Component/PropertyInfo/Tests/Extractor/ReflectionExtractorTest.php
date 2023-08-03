@@ -25,6 +25,7 @@ use Symfony\Component\PropertyInfo\Tests\Fixtures\Php71DummyExtended2;
 use Symfony\Component\PropertyInfo\Tests\Fixtures\Php74Dummy;
 use Symfony\Component\PropertyInfo\Tests\Fixtures\Php7Dummy;
 use Symfony\Component\PropertyInfo\Tests\Fixtures\Php7ParentDummy;
+use Symfony\Component\PropertyInfo\Tests\Fixtures\Php81Dummy;
 use Symfony\Component\PropertyInfo\Type;
 
 /**
@@ -32,10 +33,7 @@ use Symfony\Component\PropertyInfo\Type;
  */
 class ReflectionExtractorTest extends TestCase
 {
-    /**
-     * @var ReflectionExtractor
-     */
-    private $extractor;
+    private ReflectionExtractor $extractor;
 
     protected function setUp(): void
     {
@@ -58,6 +56,8 @@ class ReflectionExtractorTest extends TestCase
                 'i',
                 'j',
                 'nullableCollectionOfNonNullableElements',
+                'nonNullableCollectionOfNullableElements',
+                'nullableCollectionOfMultipleNonNullableElementTypes',
                 'emptyVar',
                 'iteratorCollection',
                 'iteratorCollectionWithKey',
@@ -120,6 +120,8 @@ class ReflectionExtractorTest extends TestCase
                 'i',
                 'j',
                 'nullableCollectionOfNonNullableElements',
+                'nonNullableCollectionOfNullableElements',
+                'nullableCollectionOfMultipleNonNullableElementTypes',
                 'emptyVar',
                 'iteratorCollection',
                 'iteratorCollectionWithKey',
@@ -171,6 +173,8 @@ class ReflectionExtractorTest extends TestCase
                 'i',
                 'j',
                 'nullableCollectionOfNonNullableElements',
+                'nonNullableCollectionOfNullableElements',
+                'nullableCollectionOfMultipleNonNullableElementTypes',
                 'emptyVar',
                 'iteratorCollection',
                 'iteratorCollectionWithKey',
@@ -203,7 +207,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypes('Symfony\Component\PropertyInfo\Tests\Fixtures\Dummy', $property, []));
     }
 
-    public function typesProvider()
+    public static function typesProvider()
     {
         return [
             ['a', null],
@@ -211,14 +215,14 @@ class ReflectionExtractorTest extends TestCase
             ['c', [new Type(Type::BUILTIN_TYPE_BOOL)]],
             ['d', [new Type(Type::BUILTIN_TYPE_BOOL)]],
             ['e', null],
-            ['f', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTime'))]],
+            ['f', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTimeImmutable'))]],
             ['donotexist', null],
             ['staticGetter', null],
             ['staticSetter', null],
             ['self', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Component\PropertyInfo\Tests\Fixtures\Dummy')]],
             ['realParent', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Component\PropertyInfo\Tests\Fixtures\ParentDummy')]],
-            ['date', [new Type(Type::BUILTIN_TYPE_OBJECT, false, \DateTime::class)]],
-            ['dates', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_OBJECT, false, \DateTime::class))]],
+            ['date', [new Type(Type::BUILTIN_TYPE_OBJECT, false, \DateTimeImmutable::class)]],
+            ['dates', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_OBJECT, false, \DateTimeImmutable::class))]],
         ];
     }
 
@@ -230,7 +234,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypes($class, $property, []));
     }
 
-    public function php7TypesProvider()
+    public static function php7TypesProvider()
     {
         return [
             [Php7Dummy::class, 'foo', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true)]],
@@ -251,7 +255,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypes('Symfony\Component\PropertyInfo\Tests\Fixtures\Php71Dummy', $property, []));
     }
 
-    public function php71TypesProvider()
+    public static function php71TypesProvider()
     {
         return [
             ['foo', [new Type(Type::BUILTIN_TYPE_ARRAY, true, null, true)]],
@@ -270,7 +274,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypes('Symfony\Component\PropertyInfo\Tests\Fixtures\Php80Dummy', $property, []));
     }
 
-    public function php80TypesProvider()
+    public static function php80TypesProvider()
     {
         return [
             ['foo', [new Type(Type::BUILTIN_TYPE_ARRAY, true, null, true)]],
@@ -286,19 +290,44 @@ class ReflectionExtractorTest extends TestCase
 
     /**
      * @dataProvider php81TypesProvider
-     * @requires PHP 8.1
      */
     public function testExtractPhp81Type($property, array $type = null)
     {
         $this->assertEquals($type, $this->extractor->getTypes('Symfony\Component\PropertyInfo\Tests\Fixtures\Php81Dummy', $property, []));
     }
 
-    public function php81TypesProvider()
+    public static function php81TypesProvider()
     {
         return [
             ['nothing', null],
             ['collection', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Traversable'), new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Countable')]],
         ];
+    }
+
+    public function testReadonlyPropertiesAreNotWriteable()
+    {
+        $this->assertFalse($this->extractor->isWritable(Php81Dummy::class, 'foo'));
+    }
+
+    /**
+     * @dataProvider php82TypesProvider
+     *
+     * @requires PHP 8.2
+     */
+    public function testExtractPhp82Type($property, array $type = null)
+    {
+        $this->assertEquals($type, $this->extractor->getTypes('Symfony\Component\PropertyInfo\Tests\Fixtures\Php82Dummy', $property, []));
+    }
+
+    public static function php82TypesProvider(): iterable
+    {
+        yield ['nil', null];
+        yield ['false', [new Type(Type::BUILTIN_TYPE_FALSE)]];
+        yield ['true', [new Type(Type::BUILTIN_TYPE_TRUE)]];
+
+        // Nesting intersection and union types is not supported yet,
+        // but we should make sure this kind of composite types does not crash the extractor.
+        yield ['someCollection', null];
     }
 
     /**
@@ -309,7 +338,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypes(DefaultValue::class, $property, []));
     }
 
-    public function defaultValueProvider()
+    public static function defaultValueProvider()
     {
         return [
             ['defaultInt', [new Type(Type::BUILTIN_TYPE_INT, false)]],
@@ -331,7 +360,7 @@ class ReflectionExtractorTest extends TestCase
         );
     }
 
-    public function getReadableProperties()
+    public static function getReadableProperties()
     {
         return [
             ['bar', false],
@@ -362,7 +391,7 @@ class ReflectionExtractorTest extends TestCase
         );
     }
 
-    public function getWritableProperties()
+    public static function getWritableProperties()
     {
         return [
             ['bar', false],
@@ -416,7 +445,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertSame($expected, $this->extractor->isInitializable($class, $property));
     }
 
-    public function getInitializableProperties(): array
+    public static function getInitializableProperties(): array
     {
         return [
             [Php71Dummy::class, 'string', true],
@@ -440,7 +469,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertNull($this->extractor->getTypes($class, $property, ['enable_constructor_extraction' => false]));
     }
 
-    public function constructorTypesProvider(): array
+    public static function constructorTypesProvider(): array
     {
         return [
             // php71 dummy has following constructor: __construct(string $string, int $intPrivate)
@@ -496,7 +525,7 @@ class ReflectionExtractorTest extends TestCase
         $this->assertSame($static, $readAcessor->isStatic());
     }
 
-    public function readAccessorProvider(): array
+    public static function readAccessorProvider(): array
     {
         return [
             [Dummy::class, 'bar', true, PropertyReadInfo::TYPE_PROPERTY, 'bar', PropertyReadInfo::VISIBILITY_PRIVATE, false],
@@ -554,7 +583,7 @@ class ReflectionExtractorTest extends TestCase
         }
     }
 
-    public function writeMutatorProvider(): array
+    public static function writeMutatorProvider(): array
     {
         return [
             [Dummy::class, 'bar', false, true, PropertyWriteInfo::TYPE_PROPERTY, 'bar', null, null, PropertyWriteInfo::VISIBILITY_PRIVATE, false],
@@ -578,6 +607,15 @@ class ReflectionExtractorTest extends TestCase
         ];
     }
 
+    public function testGetWriteInfoReadonlyProperties()
+    {
+        $writeMutatorConstructor = $this->extractor->getWriteInfo(Php81Dummy::class, 'foo', ['enable_constructor_extraction' => true]);
+        $writeMutatorWithoutConstructor = $this->extractor->getWriteInfo(Php81Dummy::class, 'foo', ['enable_constructor_extraction' => false]);
+
+        $this->assertSame(PropertyWriteInfo::TYPE_CONSTRUCTOR, $writeMutatorConstructor->getType());
+        $this->assertSame(PropertyWriteInfo::TYPE_NONE, $writeMutatorWithoutConstructor->getType());
+    }
+
     /**
      * @dataProvider extractConstructorTypesProvider
      */
@@ -586,13 +624,13 @@ class ReflectionExtractorTest extends TestCase
         $this->assertEquals($type, $this->extractor->getTypesFromConstructor('Symfony\Component\PropertyInfo\Tests\Fixtures\ConstructorDummy', $property));
     }
 
-    public function extractConstructorTypesProvider(): array
+    public static function extractConstructorTypesProvider(): array
     {
         return [
             ['timezone', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTimeZone')]],
             ['date', null],
             ['dateObject', null],
-            ['dateTime', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTime')]],
+            ['dateTime', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTimeImmutable')]],
             ['ddd', null],
         ];
     }

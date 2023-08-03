@@ -26,6 +26,7 @@ class CachePoolsTest extends AbstractWebTestCase
 
     /**
      * @requires extension redis
+     *
      * @group integration
      */
     public function testRedisCachePools()
@@ -49,6 +50,7 @@ class CachePoolsTest extends AbstractWebTestCase
 
     /**
      * @requires extension redis
+     *
      * @group integration
      */
     public function testRedisCustomCachePools()
@@ -121,7 +123,7 @@ class CachePoolsTest extends AbstractWebTestCase
     private function skipIfRedisUnavailable()
     {
         try {
-            (new \Redis())->connect(getenv('REDIS_HOST'));
+            (new \Redis())->connect(...explode(':', getenv('REDIS_HOST')));
         } catch (\Exception $e) {
             self::markTestSkipped($e->getMessage());
         }

@@ -46,7 +46,7 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
     public function __construct(string $namespace = '', int $defaultLifetime = 0, string $directory = null, bool $appendOnly = false)
     {
         $this->appendOnly = $appendOnly;
-        self::$startTime = self::$startTime ?? $_SERVER['REQUEST_TIME'] ?? time();
+        self::$startTime ??= $_SERVER['REQUEST_TIME'] ?? time();
         parent::__construct('', $defaultLifetime);
         $this->init($namespace, $directory);
         $this->includeHandler = static function ($type, $msg, $file, $line) {
@@ -54,11 +54,14 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         };
     }
 
+    /**
+     * @return bool
+     */
     public static function isSupported()
     {
-        self::$startTime = self::$startTime ?? $_SERVER['REQUEST_TIME'] ?? time();
+        self::$startTime ??= $_SERVER['REQUEST_TIME'] ?? time();
 
-        return \function_exists('opcache_invalidate') && filter_var(ini_get('opcache.enable'), \FILTER_VALIDATE_BOOLEAN) && (!\in_array(\PHP_SAPI, ['cli', 'phpdbg'], true) || filter_var(ini_get('opcache.enable_cli'), \FILTER_VALIDATE_BOOLEAN));
+        return \function_exists('opcache_invalidate') && filter_var(\ini_get('opcache.enable'), \FILTER_VALIDATE_BOOL) && (!\in_array(\PHP_SAPI, ['cli', 'phpdbg'], true) || filter_var(\ini_get('opcache.enable_cli'), \FILTER_VALIDATE_BOOL));
     }
 
     public function prune(): bool
@@ -79,7 +82,7 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
                 }
 
                 if ($time >= $expiresAt) {
-                    $pruned = $this->doUnlink($file) && !file_exists($file) && $pruned;
+                    $pruned = ($this->doUnlink($file) || !file_exists($file)) && $pruned;
                 }
             }
         } finally {
@@ -89,9 +92,6 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         return $pruned;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doFetch(array $ids): iterable
     {
         if ($this->appendOnly) {
@@ -165,9 +165,6 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         goto begin;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doHave(string $id): bool
     {
         if ($this->appendOnly && isset($this->values[$id])) {
@@ -190,7 +187,7 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
             } elseif ($this->appendOnly) {
                 $value = new LazyValue($file);
             }
-        } catch (\ErrorException $e) {
+        } catch (\ErrorException) {
             return false;
         } finally {
             restore_error_handler();
@@ -205,9 +202,6 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         return $now < $expiresAt;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doSave(array $values, int $lifetime): array|bool
     {
         $ok = true;
@@ -231,7 +225,7 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
                     $isStaticValue = false;
                 }
                 $value = var_export($value, true);
-            } elseif (!is_scalar($value)) {
+            } elseif (!\is_scalar($value)) {
                 throw new InvalidArgumentException(sprintf('Cache key "%s" has non-serializable "%s" value.', $key, get_debug_type($value)));
             } else {
                 $value = var_export($value, true);
@@ -242,7 +236,7 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
             if ($isStaticValue) {
                 $value = "return [{$expiry}, {$value}];";
             } elseif ($this->appendOnly) {
-                $value = "return [{$expiry}, static function () { return {$value}; }];";
+                $value = "return [{$expiry}, static fn () => {$value}];";
             } else {
                 // We cannot use a closure here because of https://bugs.php.net/76982
                 $value = str_replace('\Symfony\Component\VarExporter\Internal\\', '', $value);
@@ -267,9 +261,6 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         return $ok;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doClear(string $namespace): bool
     {
         $this->values = [];
@@ -277,9 +268,6 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         return $this->doCommonClear($namespace);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doDelete(array $ids): bool
     {
         foreach ($ids as $id) {
@@ -289,6 +277,9 @@ class PhpFilesAdapter extends AbstractAdapter implements PruneableInterface
         return $this->doCommonDelete($ids);
     }
 
+    /**
+     * @return bool
+     */
     protected function doUnlink(string $file)
     {
         unset(self::$valuesCache[$file]);

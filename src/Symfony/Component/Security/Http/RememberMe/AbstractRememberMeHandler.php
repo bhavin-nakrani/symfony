@@ -53,13 +53,10 @@ abstract class AbstractRememberMeHandler implements RememberMeHandlerInterface
      * - Create a new remember-me cookie to be sent with the response (using {@see createCookie()});
      * - If you store the token somewhere else (e.g. in a database), invalidate the stored token.
      *
-     * @throws AuthenticationException throw this exception if the remember me details are not accepted
+     * @throws AuthenticationException If the remember-me details are not accepted
      */
     abstract protected function processRememberMe(RememberMeDetails $rememberMeDetails, UserInterface $user): void;
 
-    /**
-     * {@inheritdoc}
-     */
     public function consumeRememberMeCookie(RememberMeDetails $rememberMeDetails): UserInterface
     {
         try {
@@ -79,9 +76,6 @@ abstract class AbstractRememberMeHandler implements RememberMeHandlerInterface
         return $user;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function clearRememberMeCookie(): void
     {
         $this->logger?->debug('Clearing remember-me cookie.', ['name' => $this->options['name']]);
@@ -93,6 +87,8 @@ abstract class AbstractRememberMeHandler implements RememberMeHandlerInterface
      * Creates the remember-me cookie using the correct configuration.
      *
      * @param RememberMeDetails|null $rememberMeDetails The details for the cookie, or null to clear the remember-me cookie
+     *
+     * @return void
      */
     protected function createCookie(?RememberMeDetails $rememberMeDetails)
     {

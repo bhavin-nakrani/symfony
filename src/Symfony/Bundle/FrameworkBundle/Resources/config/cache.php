@@ -39,6 +39,7 @@ return static function (ContainerConfigurator $container) {
 
         ->set('cache.app.taggable', TagAwareAdapter::class)
             ->args([service('cache.app')])
+            ->tag('cache.taggable', ['pool' => 'cache.app'])
 
         ->set('cache.system')
             ->parent('cache.adapter.system')
@@ -65,7 +66,17 @@ return static function (ContainerConfigurator $container) {
             ->private()
             ->tag('cache.pool')
 
+        ->set('cache.asset_mapper')
+            ->parent('cache.system')
+            ->private()
+            ->tag('cache.pool')
+
         ->set('cache.messenger.restart_workers_signal')
+            ->parent('cache.app')
+            ->private()
+            ->tag('cache.pool')
+
+        ->set('cache.scheduler')
             ->parent('cache.app')
             ->private()
             ->tag('cache.pool')

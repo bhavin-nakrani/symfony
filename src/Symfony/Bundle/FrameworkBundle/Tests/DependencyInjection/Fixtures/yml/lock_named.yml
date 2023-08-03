@@ -2,6 +2,8 @@ parameters:
     env(REDIS_DSN): redis://paas.com
 
 framework:
+    annotations: false
+    http_method_override: false
     lock:
         foo: semaphore
         bar: flock

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\DependencyInjection\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -11,6 +20,8 @@ use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Exception\EnvNotFoundException;
 use Symfony\Component\DependencyInjection\Exception\ParameterCircularReferenceException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\IntBackedEnum;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\StringBackedEnum;
 
 class EnvVarProcessorTest extends TestCase
 {
@@ -34,7 +45,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validStrings()
+    public static function validStrings()
     {
         return [
             ['hello', 'hello'],
@@ -46,6 +57,67 @@ class EnvVarProcessorTest extends TestCase
             ['1.1', '1.1'],
             ['1e1', '1e1'],
         ];
+    }
+
+    /**
+     * @dataProvider validRealEnvValues
+     */
+    public function testGetEnvRealEnv($value, $processed)
+    {
+        $_ENV['FOO'] = $value;
+
+        $processor = new EnvVarProcessor(new Container());
+
+        $result = $processor->getEnv('string', 'FOO', function () {
+            $this->fail('Should not be called');
+        });
+
+        $this->assertSame($processed, $result);
+
+        unset($_ENV['FOO']);
+    }
+
+    public static function validRealEnvValues()
+    {
+        return [
+            ['hello', 'hello'],
+            [true, '1'],
+            [false, ''],
+            [1, '1'],
+            [0, '0'],
+            [1.1, '1.1'],
+            [10, '10'],
+        ];
+    }
+
+    public function testGetEnvRealEnvInvalid()
+    {
+        $_ENV['FOO'] = null;
+        $this->expectException(EnvNotFoundException::class);
+        $this->expectExceptionMessage('Environment variable not found: "FOO".');
+
+        $processor = new EnvVarProcessor(new Container());
+
+        $processor->getEnv('string', 'FOO', function () {
+            $this->fail('Should not be called');
+        });
+
+        unset($_ENV['FOO']);
+    }
+
+    public function testGetEnvRealEnvNonScalar()
+    {
+        $_ENV['FOO'] = [];
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Non-scalar env var "FOO" cannot be cast to "string".');
+
+        $processor = new EnvVarProcessor(new Container());
+
+        $processor->getEnv('string', 'FOO', function () {
+            $this->fail('Should not be called');
+        });
+
+        unset($_ENV['FOO']);
     }
 
     /**
@@ -80,12 +152,13 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame(!$processed, $result);
     }
 
-    public function validBools()
+    public static function validBools()
     {
         return [
             ['true', true],
             ['false', false],
             ['null', false],
+            ['', false],
             ['1', true],
             ['0', false],
             ['1.1', true],
@@ -109,7 +182,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validInts()
+    public static function validInts()
     {
         return [
             ['1', 1],
@@ -134,7 +207,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function invalidInts()
+    public static function invalidInts()
     {
         return [
             ['foo'],
@@ -159,7 +232,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validFloats()
+    public static function validFloats()
     {
         return [
             ['1', 1.0],
@@ -184,7 +257,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function invalidFloats()
+    public static function invalidFloats()
     {
         return [
             ['foo'],
@@ -209,7 +282,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validConsts()
+    public static function validConsts()
     {
         return [
             ['Symfony\Component\DependencyInjection\Tests\EnvVarProcessorTest::TEST_CONST', self::TEST_CONST],
@@ -233,7 +306,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function invalidConsts()
+    public static function invalidConsts()
     {
         return [
             ['Symfony\Component\DependencyInjection\Tests\EnvVarProcessorTest::UNDEFINED_CONST'],
@@ -253,10 +326,10 @@ class EnvVarProcessorTest extends TestCase
 
         $this->assertSame('hello', $result);
 
-        $result = $processor->getEnv('base64', 'foo', function ($name) { return '/+0='; });
+        $result = $processor->getEnv('base64', 'foo', fn ($name) => '/+0=');
         $this->assertSame("\xFF\xED", $result);
 
-        $result = $processor->getEnv('base64', 'foo', function ($name) { return '_-0='; });
+        $result = $processor->getEnv('base64', 'foo', fn ($name) => '_-0=');
         $this->assertSame("\xFF\xED", $result);
     }
 
@@ -289,7 +362,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validJson()
+    public static function validJson()
     {
         return [
             ['[1]', [1]],
@@ -327,7 +400,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function otherJsonValues()
+    public static function otherJsonValues()
     {
         return [
             [1],
@@ -378,7 +451,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function noArrayValues()
+    public static function noArrayValues()
     {
         return [
             [null],
@@ -404,7 +477,7 @@ class EnvVarProcessorTest extends TestCase
         });
     }
 
-    public function invalidArrayValues()
+    public static function invalidArrayValues()
     {
         return [
             [[]],
@@ -427,7 +500,7 @@ class EnvVarProcessorTest extends TestCase
         }));
     }
 
-    public function arrayValues()
+    public static function arrayValues()
     {
         return [
             [['index' => 'password']],
@@ -456,6 +529,72 @@ class EnvVarProcessorTest extends TestCase
     }
 
     /**
+     * @dataProvider provideGetEnvEnum
+     */
+    public function testGetEnvEnum(\BackedEnum $backedEnum)
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $result = $processor->getEnv('enum', $backedEnum::class.':foo', function (string $name) use ($backedEnum) {
+            $this->assertSame('foo', $name);
+
+            return $backedEnum->value;
+        });
+
+        $this->assertSame($backedEnum, $result);
+    }
+
+    public static function provideGetEnvEnum(): iterable
+    {
+        return [
+            [StringBackedEnum::Bar],
+            [IntBackedEnum::Nine],
+        ];
+    }
+
+    public function testGetEnvEnumInvalidEnum()
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Invalid env "enum:foo": a "BackedEnum" class-string should be provided.');
+
+        $processor->getEnv('enum', 'foo', function () {
+            $this->fail('Should not get here');
+        });
+    }
+
+    public function testGetEnvEnumInvalidResolvedValue()
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Resolved value of "foo" did not result in a string or int value.');
+
+        $processor->getEnv('enum', StringBackedEnum::class.':foo', fn () => null);
+    }
+
+    public function testGetEnvEnumInvalidArg()
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('"bogus" is not a "BackedEnum".');
+
+        $processor->getEnv('enum', 'bogus:foo', fn () => '');
+    }
+
+    public function testGetEnvEnumInvalidBackedValue()
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Enum value "bogus" is not backed by "'.StringBackedEnum::class.'".');
+
+        $processor->getEnv('enum', StringBackedEnum::class.':foo', fn () => 'bogus');
+    }
+
+    /**
      * @dataProvider validNullables
      */
     public function testGetEnvNullable($value, $processed)
@@ -469,7 +608,7 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validNullables()
+    public static function validNullables()
     {
         return [
             ['hello', 'hello'],
@@ -486,9 +625,7 @@ class EnvVarProcessorTest extends TestCase
         $this->expectExceptionMessage('missing-file');
         $processor = new EnvVarProcessor(new Container());
 
-        $processor->getEnv('require', '/missing-file', function ($name) {
-            return $name;
-        });
+        $processor->getEnv('require', '/missing-file', fn ($name) => $name);
     }
 
     public function testRequireFile()
@@ -507,6 +644,99 @@ class EnvVarProcessorTest extends TestCase
     }
 
     /**
+     * @dataProvider validResolve
+     */
+    public function testGetEnvResolve($value, $processed)
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('bar', $value);
+        $container->compile();
+
+        $processor = new EnvVarProcessor($container);
+
+        $result = $processor->getEnv('resolve', 'foo', fn () => '%bar%');
+
+        $this->assertSame($processed, $result);
+    }
+
+    public static function validResolve()
+    {
+        return [
+            ['string', 'string'],
+            [1, '1'],
+            [1.1, '1.1'],
+            [true, '1'],
+            [false, ''],
+        ];
+    }
+
+    public function testGetEnvResolveNoMatch()
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $result = $processor->getEnv('resolve', 'foo', fn () => '%%');
+
+        $this->assertSame('%', $result);
+    }
+
+    /**
+     * @dataProvider notScalarResolve
+     */
+    public function testGetEnvResolveNotScalar($value)
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parameter "bar" found when resolving env var "foo" must be scalar');
+
+        $container = new ContainerBuilder();
+        $container->setParameter('bar', $value);
+        $container->compile();
+
+        $processor = new EnvVarProcessor($container);
+
+        $processor->getEnv('resolve', 'foo', fn () => '%bar%');
+    }
+
+    public static function notScalarResolve()
+    {
+        return [
+            [null],
+            [[]],
+        ];
+    }
+
+    public function testGetEnvResolveNestedEnv()
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('env(BAR)', 'BAR in container');
+        $container->compile();
+
+        $processor = new EnvVarProcessor($container);
+        $getEnv = $processor->getEnv(...);
+
+        $result = $processor->getEnv('resolve', 'foo', fn ($name) => 'foo' === $name ? '%env(BAR)%' : $getEnv('string', $name, function () {}));
+
+        $this->assertSame('BAR in container', $result);
+    }
+
+    public function testGetEnvResolveNestedRealEnv()
+    {
+        $_ENV['BAR'] = 'BAR in environment';
+
+        $container = new ContainerBuilder();
+        $container->setParameter('env(BAR)', 'BAR in container');
+        $container->compile();
+
+        $processor = new EnvVarProcessor($container);
+        $getEnv = $processor->getEnv(...);
+
+        $result = $processor->getEnv('resolve', 'foo', fn ($name) => 'foo' === $name ? '%env(BAR)%' : $getEnv('string', $name, function () {}));
+
+        $this->assertSame('BAR in environment', $result);
+
+        unset($_ENV['BAR']);
+    }
+
+    /**
      * @dataProvider validCsv
      */
     public function testGetEnvCsv($value, $processed)
@@ -522,14 +752,31 @@ class EnvVarProcessorTest extends TestCase
         $this->assertSame($processed, $result);
     }
 
-    public function validCsv()
+    public function testGetEnvShuffle()
+    {
+        mt_srand(2);
+
+        $this->assertSame(
+            ['bar', 'foo'],
+            (new EnvVarProcessor(new Container()))->getEnv('shuffle', '', fn () => ['foo', 'bar']),
+        );
+    }
+
+    public function testGetEnvShuffleInvalid()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Env var "foo" cannot be shuffled, expected array, got "string".');
+        (new EnvVarProcessor(new Container()))->getEnv('shuffle', 'foo', fn () => 'bar');
+    }
+
+    public static function validCsv()
     {
         $complex = <<<'CSV'
 ,"""","foo""","\""",\,foo\
 CSV;
 
         return [
-            ['', [null]],
+            ['', []],
             [',', ['', '']],
             ['1', ['1']],
             ['1,2," 3 "', ['1', '2', ' 3 ']],
@@ -541,12 +788,16 @@ CSV;
 
     public function testEnvLoader()
     {
+        $_ENV['BAZ_ENV_LOADER'] = '';
+        $_ENV['BUZ_ENV_LOADER'] = '';
+
         $loaders = function () {
             yield new class() implements EnvVarLoaderInterface {
                 public function loadEnvVars(): array
                 {
                     return [
                         'FOO_ENV_LOADER' => '123',
+                        'BAZ_ENV_LOADER' => '',
                     ];
                 }
             };
@@ -557,12 +808,13 @@ CSV;
                     return [
                         'FOO_ENV_LOADER' => '234',
                         'BAR_ENV_LOADER' => '456',
+                        'BAZ_ENV_LOADER' => '567',
                     ];
                 }
             };
         };
 
-        $processor = new EnvVarProcessor(new Container(), $loaders());
+        $processor = new EnvVarProcessor(new Container(), new RewindableGenerator($loaders, 2));
 
         $result = $processor->getEnv('string', 'FOO_ENV_LOADER', function () {});
         $this->assertSame('123', $result);
@@ -570,8 +822,17 @@ CSV;
         $result = $processor->getEnv('string', 'BAR_ENV_LOADER', function () {});
         $this->assertSame('456', $result);
 
+        $result = $processor->getEnv('string', 'BAZ_ENV_LOADER', function () {});
+        $this->assertSame('567', $result);
+
+        $result = $processor->getEnv('string', 'BUZ_ENV_LOADER', function () {});
+        $this->assertSame('', $result);
+
         $result = $processor->getEnv('string', 'FOO_ENV_LOADER', function () {});
         $this->assertSame('123', $result); // check twice
+
+        unset($_ENV['BAZ_ENV_LOADER']);
+        unset($_ENV['BUZ_ENV_LOADER']);
     }
 
     public function testCircularEnvLoader()
@@ -632,12 +893,10 @@ CSV;
      */
     public function testGetEnvUrlPath(?string $expected, string $url)
     {
-        $this->assertSame($expected, (new EnvVarProcessor(new Container()))->getEnv('url', 'foo', static function () use ($url): string {
-            return $url;
-        })['path']);
+        $this->assertSame($expected, (new EnvVarProcessor(new Container()))->getEnv('url', 'foo', static fn (): string => $url)['path']);
     }
 
-    public function provideGetEnvUrlPath()
+    public static function provideGetEnvUrlPath()
     {
         return [
             ['', 'https://symfony.com'],
@@ -647,5 +906,54 @@ CSV;
             ['blog/', 'https://symfony.com/blog/'],
             ['blog//', 'https://symfony.com/blog//'],
         ];
+    }
+
+    /**
+     * @testWith    ["", "string"]
+     *              [null, ""]
+     *              [false, "bool"]
+     *              [true, "not"]
+     *              [0, "int"]
+     *              [0.0, "float"]
+     */
+    public function testGetEnvCastsNullBehavior($expected, string $prefix)
+    {
+        $processor = new EnvVarProcessor(new Container());
+
+        $this->assertSame($expected, $processor->getEnv($prefix, 'default::FOO', static function () use ($processor) {
+            return $processor->getEnv('default', ':FOO', static function () {
+                return null;
+            });
+        }));
+    }
+
+    public function testGetEnvWithEmptyStringPrefixCastsToString()
+    {
+        $processor = new EnvVarProcessor(new Container());
+        unset($_ENV['FOO']);
+        $_ENV['FOO'] = 4;
+
+        try {
+            $this->assertSame('4', $processor->getEnv('', 'FOO', function () { $this->fail('Should not be called'); }));
+        } finally {
+            unset($_ENV['FOO']);
+        }
+    }
+
+    /**
+     * @dataProvider provideGetEnvDefined
+     */
+    public function testGetEnvDefined(bool $expected, callable $callback)
+    {
+        $this->assertSame($expected, (new EnvVarProcessor(new Container()))->getEnv('defined', 'NO_SOMETHING', $callback));
+    }
+
+    public static function provideGetEnvDefined(): iterable
+    {
+        yield 'Defined' => [true, fn () => 'foo'];
+        yield 'Falsy but defined' => [true, fn () => '0'];
+        yield 'Empty string' => [false, fn () => ''];
+        yield 'Null' => [false, fn () => null];
+        yield 'Env var not defined' => [false, fn () => throw new EnvNotFoundException()];
     }
 }

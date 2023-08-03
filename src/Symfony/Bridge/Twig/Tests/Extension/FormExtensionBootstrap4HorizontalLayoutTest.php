@@ -26,15 +26,15 @@ use Twig\Loader\FilesystemLoader;
  *
  * @author Hidde Wieringa <hidde@hiddewieringa.nl>
  */
-class FormExtensionBootstrap4HorizontalLayoutTest extends AbstractBootstrap4HorizontalLayoutTest
+class FormExtensionBootstrap4HorizontalLayoutTest extends AbstractBootstrap4HorizontalLayoutTestCase
 {
     use RuntimeLoaderProvider;
 
-    protected $testableFeatures = [
+    protected array $testableFeatures = [
         'choice_attr',
     ];
 
-    private $renderer;
+    private FormRenderer $renderer;
 
     protected function setUp(): void
     {

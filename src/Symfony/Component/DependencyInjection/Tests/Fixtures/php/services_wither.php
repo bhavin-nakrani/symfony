@@ -3,8 +3,8 @@
 use Symfony\Component\DependencyInjection\Argument\RewindableGenerator;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Container;
-use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
+use Symfony\Component\DependencyInjection\Exception\ParameterNotFoundException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\ParameterBag\FrozenParameterBag;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
@@ -48,14 +48,15 @@ class Symfony_DI_PhpDumper_Service_Wither extends Container
      *
      * @return \Symfony\Component\DependencyInjection\Tests\Compiler\Wither
      */
-    protected function getWitherService()
+    protected static function getWitherService($container)
     {
         $instance = new \Symfony\Component\DependencyInjection\Tests\Compiler\Wither();
 
         $a = new \Symfony\Component\DependencyInjection\Tests\Compiler\Foo();
+        $a = $a->cloneFoo();
 
         $instance = $instance->withFoo1($a);
-        $this->services['wither'] = $instance = $instance->withFoo2($a);
+        $container->services['wither'] = $instance = $instance->withFoo2($a);
         $instance->setFoo($a);
 
         return $instance;

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Bundle\WebProfilerBundle\Tests\Functional;
 
 use Psr\Log\NullLogger;
@@ -39,16 +48,20 @@ class WebProfilerBundleKernel extends Kernel
         $routes->add('_', '/')->controller('kernel::homepageController');
     }
 
-    protected function configureContainer(ContainerBuilder $containerBuilder, LoaderInterface $loader): void
+    protected function configureContainer(ContainerBuilder $container, LoaderInterface $loader): void
     {
-        $containerBuilder->loadFromExtension('framework', [
+        $config = [
+            'annotations' => false,
+            'http_method_override' => false,
             'secret' => 'foo-secret',
             'profiler' => ['only_exceptions' => false],
             'session' => ['storage_factory_id' => 'session.storage.factory.mock_file'],
             'router' => ['utf8' => true],
-        ]);
+        ];
 
-        $containerBuilder->loadFromExtension('web_profiler', [
+        $container->loadFromExtension('framework', $config);
+
+        $container->loadFromExtension('web_profiler', [
             'toolbar' => true,
             'intercept_redirects' => false,
         ]);
@@ -64,7 +77,7 @@ class WebProfilerBundleKernel extends Kernel
         return sys_get_temp_dir().'/log-'.spl_object_hash($this);
     }
 
-    protected function build(ContainerBuilder $container)
+    protected function build(ContainerBuilder $container): void
     {
         $container->register('data_collector.dump', DumpDataCollector::class);
         $container->register('logger', NullLogger::class);

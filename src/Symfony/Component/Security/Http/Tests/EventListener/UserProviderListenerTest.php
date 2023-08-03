@@ -22,8 +22,8 @@ use Symfony\Component\Security\Http\EventListener\UserProviderListener;
 
 class UserProviderListenerTest extends TestCase
 {
-    private $userProvider;
-    private $listener;
+    private InMemoryUserProvider $userProvider;
+    private UserProviderListener $listener;
 
     protected function setUp(): void
     {
@@ -36,9 +36,6 @@ class UserProviderListenerTest extends TestCase
         $passport = new SelfValidatingPassport(new UserBadge('wouter'));
 
         $this->listener->checkPassport(new CheckPassportEvent($this->createMock(AuthenticatorInterface::class), $passport));
-
-        $badge = $passport->getBadge(UserBadge::class);
-        $this->assertEquals([$this->userProvider, 'loadUserByIdentifier'], $badge->getUserLoader());
 
         $user = new InMemoryUser('wouter', null);
         $this->userProvider->createUser($user);
@@ -56,7 +53,7 @@ class UserProviderListenerTest extends TestCase
         $this->assertEquals($passport->hasBadge(UserBadge::class) ? $passport->getBadge(UserBadge::class) : null, $badgeBefore);
     }
 
-    public function provideCompletePassports()
+    public static function provideCompletePassports()
     {
         yield [new SelfValidatingPassport(new UserBadge('wouter', function () {}))];
     }

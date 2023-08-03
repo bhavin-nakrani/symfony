@@ -24,7 +24,7 @@ class UrlSanitizerTest extends TestCase
         $this->assertSame($expected, UrlSanitizer::sanitize($input, $allowedSchemes, $forceHttps, $allowedHosts, $allowRelative));
     }
 
-    public function provideSanitize()
+    public static function provideSanitize()
     {
         // Simple accepted cases
         yield [
@@ -43,6 +43,33 @@ class UrlSanitizerTest extends TestCase
             'forceHttps' => false,
             'allowRelative' => false,
             'output' => null,
+        ];
+
+        yield [
+            'input' => 'http://trusted.com/link.php',
+            'allowedSchemes' => null,
+            'allowedHosts' => null,
+            'forceHttps' => false,
+            'allowRelative' => false,
+            'output' => 'http://trusted.com/link.php',
+        ];
+
+        yield [
+            'input' => 'https://trusted.com/link.php',
+            'allowedSchemes' => null,
+            'allowedHosts' => null,
+            'forceHttps' => false,
+            'allowRelative' => false,
+            'output' => 'https://trusted.com/link.php',
+        ];
+
+        yield [
+            'input' => 'data:text/plain;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+            'allowedSchemes' => null,
+            'allowedHosts' => null,
+            'forceHttps' => false,
+            'allowRelative' => false,
+            'output' => 'data:text/plain;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
         ];
 
         yield [
@@ -285,7 +312,7 @@ class UrlSanitizerTest extends TestCase
         }
     }
 
-    public function provideParse(): iterable
+    public static function provideParse(): iterable
     {
         $urls = [
             '' => null,

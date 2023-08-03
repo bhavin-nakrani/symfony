@@ -19,7 +19,7 @@ use Symfony\Component\VarDumper\Dumper\HtmlDumper;
 
 class HtmlDescriptorTest extends TestCase
 {
-    private static $timezone;
+    private static string $timezone;
 
     public static function setUpBeforeClass(): void
     {
@@ -63,7 +63,7 @@ class HtmlDescriptorTest extends TestCase
         $this->assertStringMatchesFormat(trim($expectedOutput), trim(preg_replace('@<style>.*</style><script>.*</script>@s', '', $output->fetch())));
     }
 
-    public function provideContext()
+    public static function provideContext()
     {
         yield 'source' => [
             [

@@ -32,6 +32,9 @@ class Connection
         'x-message-ttl',
     ];
 
+    /**
+     * @see https://github.com/php-amqp/php-amqp/blob/master/amqp_connection_resource.h
+     */
     private const AVAILABLE_OPTIONS = [
         'host',
         'port',
@@ -52,11 +55,13 @@ class Connection
         'write_timeout',
         'confirm_timeout',
         'connect_timeout',
+        'rpc_timeout',
         'cacert',
         'cert',
         'key',
         'verify',
         'sasl_method',
+        'connection_name',
     ];
 
     private const AVAILABLE_QUEUE_OPTIONS = [
@@ -89,6 +94,7 @@ class Connection
     private array $amqpQueues = [];
 
     private \AMQPExchange $amqpDelayExchange;
+    private int $lastActivityTime = 0;
 
     public function __construct(array $connectionOptions, array $exchangeOptions, array $queuesOptions, AmqpFactory $amqpFactory = null)
     {
@@ -154,12 +160,12 @@ class Connection
      *     * verify: Enable or disable peer verification. If peer verification is enabled then the common name in the
      *       server certificate must match the server name. Peer verification is enabled by default.
      */
-    public static function fromDsn(string $dsn, array $options = [], AmqpFactory $amqpFactory = null): self
+    public static function fromDsn(#[\SensitiveParameter] string $dsn, array $options = [], AmqpFactory $amqpFactory = null): self
     {
         if (false === $parsedUrl = parse_url($dsn)) {
             // this is a valid URI that parse_url cannot handle when you want to pass all parameters as options
             if (!\in_array($dsn, ['amqp://', 'amqps://'])) {
-                throw new InvalidArgumentException(sprintf('The given AMQP DSN "%s" is invalid.', $dsn));
+                throw new InvalidArgumentException('The given AMQP DSN is invalid.');
             }
 
             $parsedUrl = [];
@@ -183,11 +189,11 @@ class Connection
         self::validateOptions($amqpOptions);
 
         if (isset($parsedUrl['user'])) {
-            $amqpOptions['login'] = $parsedUrl['user'];
+            $amqpOptions['login'] = urldecode($parsedUrl['user']);
         }
 
         if (isset($parsedUrl['pass'])) {
-            $amqpOptions['password'] = $parsedUrl['pass'];
+            $amqpOptions['password'] = urldecode($parsedUrl['pass']);
         }
 
         if (!isset($amqpOptions['queues'])) {
@@ -198,7 +204,7 @@ class Connection
         $queuesOptions = $amqpOptions['queues'];
         unset($amqpOptions['queues'], $amqpOptions['exchange']);
         if (isset($amqpOptions['auto_setup'])) {
-            $amqpOptions['auto_setup'] = filter_var($amqpOptions['auto_setup'], \FILTER_VALIDATE_BOOLEAN);
+            $amqpOptions['auto_setup'] = filter_var($amqpOptions['auto_setup'], \FILTER_VALIDATE_BOOL);
         }
 
         $queuesOptions = array_map(function ($queueOptions) {
@@ -266,7 +272,7 @@ class Connection
 
     private static function hasCaCertConfigured(array $amqpOptions): bool
     {
-        return (isset($amqpOptions['cacert']) && '' !== $amqpOptions['cacert']) || '' !== ini_get('amqp.cacert');
+        return (isset($amqpOptions['cacert']) && '' !== $amqpOptions['cacert']) || '' !== \ini_get('amqp.cacert');
     }
 
     /**
@@ -300,15 +306,13 @@ class Connection
      */
     public function countMessagesInQueues(): int
     {
-        return array_sum(array_map(function ($queueName) {
-            return $this->queue($queueName)->declareQueue();
-        }, $this->getQueueNames()));
+        return array_sum(array_map(fn ($queueName) => $this->queue($queueName)->declareQueue(), $this->getQueueNames()));
     }
 
     /**
      * @throws \AMQPException
      */
-    private function publishWithDelay(string $body, array $headers, int $delay, AmqpStamp $amqpStamp = null)
+    private function publishWithDelay(string $body, array $headers, int $delay, AmqpStamp $amqpStamp = null): void
     {
         $routingKey = $this->getRoutingKeyForMessage($amqpStamp);
         $isRetryAttempt = $amqpStamp ? $amqpStamp->isRetryAttempt() : false;
@@ -324,12 +328,14 @@ class Connection
         );
     }
 
-    private function publishOnExchange(\AMQPExchange $exchange, string $body, string $routingKey = null, array $headers = [], AmqpStamp $amqpStamp = null)
+    private function publishOnExchange(\AMQPExchange $exchange, string $body, string $routingKey = null, array $headers = [], AmqpStamp $amqpStamp = null): void
     {
         $attributes = $amqpStamp ? $amqpStamp->getAttributes() : [];
         $attributes['headers'] = array_merge($attributes['headers'] ?? [], $headers);
-        $attributes['delivery_mode'] = $attributes['delivery_mode'] ?? 2;
-        $attributes['timestamp'] = $attributes['timestamp'] ?? time();
+        $attributes['delivery_mode'] ??= 2;
+        $attributes['timestamp'] ??= time();
+
+        $this->lastActivityTime = time();
 
         $exchange->publish(
             $body,
@@ -343,7 +349,7 @@ class Connection
         }
     }
 
-    private function setupDelay(int $delay, ?string $routingKey, bool $isRetryAttempt)
+    private function setupDelay(int $delay, ?string $routingKey, bool $isRetryAttempt): void
     {
         if ($this->autoSetupDelayExchange) {
             $this->setupDelayExchange();
@@ -385,7 +391,7 @@ class Connection
             // delete the delay queue 10 seconds after the message expires
             // publishing another message redeclares the queue which renews the lease
             'x-expires' => $delay + 10000,
-            // message should be broadcasted to all consumers during delay, but to only one queue during retry
+            // message should be broadcast to all consumers during delay, but to only one queue during retry
             // empty name is default direct exchange
             'x-dead-letter-exchange' => $isRetryAttempt ? '' : $this->exchangeOptions['name'],
             // after being released from to DLX, make sure the original routing key will be used
@@ -429,7 +435,7 @@ class Connection
 
     public function ack(\AMQPEnvelope $message, string $queueName): bool
     {
-        return $this->queue($queueName)->ack($message->getDeliveryTag());
+        return $this->queue($queueName)->ack($message->getDeliveryTag()) ?? true;
     }
 
     public function nack(\AMQPEnvelope $message, string $queueName, int $flags = \AMQP_NOPARAM): bool
@@ -486,14 +492,15 @@ class Connection
             if ('' !== ($this->connectionOptions['confirm_timeout'] ?? '')) {
                 $this->amqpChannel->confirmSelect();
                 $this->amqpChannel->setConfirmCallback(
-                    static function (): bool {
-                        return false;
-                    },
-                    static function (): bool {
-                        return false;
-                    }
+                    static fn (): bool => false,
+                    static fn (): bool => false
                 );
             }
+
+            $this->lastActivityTime = time();
+        } elseif (0 < ($this->connectionOptions['heartbeat'] ?? 0) && time() > $this->lastActivityTime + 2 * $this->connectionOptions['heartbeat']) {
+            $disconnectMethod = 'true' === ($this->connectionOptions['persistent'] ?? 'false') ? 'pdisconnect' : 'disconnect';
+            $this->amqpChannel->getConnection()->{$disconnectMethod}();
         }
 
         return $this->amqpChannel;
@@ -547,7 +554,7 @@ class Connection
         return $this->exchangeOptions['default_publish_routing_key'] ?? null;
     }
 
-    public function purgeQueues()
+    public function purgeQueues(): void
     {
         foreach ($this->getQueueNames() as $queueName) {
             $this->queue($queueName)->purge();
@@ -558,8 +565,4 @@ class Connection
     {
         return $amqpStamp?->getRoutingKey() ?? $this->getDefaultPublishRoutingKey();
     }
-}
-
-if (!class_exists(\Symfony\Component\Messenger\Transport\AmqpExt\Connection::class, false)) {
-    class_alias(Connection::class, \Symfony\Component\Messenger\Transport\AmqpExt\Connection::class);
 }

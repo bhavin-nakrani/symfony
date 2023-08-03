@@ -18,14 +18,12 @@ use Symfony\Component\Intl\Exception\RuntimeException;
 
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
+ *
  * @requires extension intl
  */
 class IntlBundleReaderTest extends TestCase
 {
-    /**
-     * @var IntlBundleReader
-     */
-    private $reader;
+    private IntlBundleReader $reader;
 
     protected function setUp(): void
     {

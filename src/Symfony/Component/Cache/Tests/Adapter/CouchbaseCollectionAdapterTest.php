@@ -19,6 +19,7 @@ use Symfony\Component\Cache\Adapter\CouchbaseCollectionAdapter;
 /**
  * @requires extension couchbase <4.0.0
  * @requires extension couchbase >=3.0.0
+ *
  * @group integration
  *
  * @author Antonio Jose Cerezo Aranda <aj.cerezo@gmail.com>
@@ -29,8 +30,7 @@ class CouchbaseCollectionAdapterTest extends AdapterTestCase
         'testClearPrefix' => 'Couchbase cannot clear by prefix',
     ];
 
-    /** @var Collection */
-    protected static $client;
+    protected static Collection $client;
 
     public static function setupBeforeClass(): void
     {
@@ -43,9 +43,6 @@ class CouchbaseCollectionAdapterTest extends AdapterTestCase
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function createCachePool($defaultLifetime = 0): CacheItemPoolInterface
     {
         if (!CouchbaseCollectionAdapter::isSupported()) {

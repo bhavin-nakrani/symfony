@@ -23,10 +23,9 @@ use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 
 class LoaderResolverTest extends TestCase
 {
-    private static $fixturesPath;
+    private static string $fixturesPath;
 
-    /** @var LoaderResolver */
-    private $resolver;
+    private LoaderResolver $resolver;
 
     protected function setUp(): void
     {
@@ -42,7 +41,7 @@ class LoaderResolverTest extends TestCase
         ]);
     }
 
-    public function provideResourcesToLoad()
+    public static function provideResourcesToLoad()
     {
         return [
             ['ini_with_wrong_ext.xml', 'ini', IniFileLoader::class],

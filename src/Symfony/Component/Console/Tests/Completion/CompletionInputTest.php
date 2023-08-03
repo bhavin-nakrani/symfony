@@ -39,7 +39,7 @@ class CompletionInputTest extends TestCase
         $this->assertEquals($expectedValue, $input->getCompletionValue(), 'Unexpected value');
     }
 
-    public function provideBindData()
+    public static function provideBindData()
     {
         // option names
         yield 'optname-minimal-input' => [CompletionInput::fromTokens(['bin/console', '-'], 1), CompletionInput::TYPE_OPTION_NAME, null, '-'];
@@ -90,7 +90,7 @@ class CompletionInputTest extends TestCase
         $this->assertEquals($expectedValue, $input->getCompletionValue(), 'Unexpected value');
     }
 
-    public function provideBindWithLastArrayArgumentData()
+    public static function provideBindWithLastArrayArgumentData()
     {
         yield [CompletionInput::fromTokens(['bin/console'], 1), null];
         yield [CompletionInput::fromTokens(['bin/console', 'symfony', 'sensiolabs'], 3), null];
@@ -119,12 +119,11 @@ class CompletionInputTest extends TestCase
         $input = CompletionInput::fromString($inputStr, 1);
 
         $tokensProperty = (new \ReflectionClass($input))->getProperty('tokens');
-        $tokensProperty->setAccessible(true);
 
         $this->assertEquals($expectedTokens, $tokensProperty->getValue($input));
     }
 
-    public function provideFromStringData()
+    public static function provideFromStringData()
     {
         yield ['bin/console cache:clear', ['bin/console', 'cache:clear']];
         yield ['bin/console --env prod', ['bin/console', '--env', 'prod']];

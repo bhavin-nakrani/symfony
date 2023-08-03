@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Notifier\Tests;
 
 use PHPUnit\Framework\MockObject\MockObject;
@@ -13,11 +22,8 @@ use Symfony\Component\Notifier\Transport\TransportInterface;
 
 class TexterTest extends TestCase
 {
-    /** @var MockObject&TransportInterface */
-    private $transport;
-
-    /** @var MockObject&MessageBusInterface */
-    private $bus;
+    private MockObject&TransportInterface $transport;
+    private MockObject&MessageBusInterface $bus;
 
     protected function setUp(): void
     {

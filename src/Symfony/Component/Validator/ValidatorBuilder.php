@@ -187,7 +187,7 @@ class ValidatorBuilder
     }
 
     /**
-     * Enables annotation based constraint mapping.
+     * Enables annotation and attribute based constraint mapping.
      *
      * @return $this
      */
@@ -203,7 +203,7 @@ class ValidatorBuilder
     }
 
     /**
-     * Disables annotation based constraint mapping.
+     * Disables annotation and attribute based constraint mapping.
      *
      * @return $this
      */
@@ -216,20 +216,28 @@ class ValidatorBuilder
     }
 
     /**
+     * @deprecated since Symfony 6.4 without replacement
+     *
      * @return $this
      */
     public function setDoctrineAnnotationReader(?Reader $reader): static
     {
+        trigger_deprecation('symfony/validator', '6.4', 'Method "%s()" is deprecated without replacement.', __METHOD__);
+
         $this->annotationReader = $reader;
 
         return $this;
     }
 
     /**
+     * @deprecated since Symfony 6.4 without replacement
+     *
      * @return $this
      */
     public function addDefaultDoctrineAnnotationReader(): static
     {
+        trigger_deprecation('symfony/validator', '6.4', 'Method "%s()" is deprecated without replacement.', __METHOD__);
+
         $this->annotationReader = $this->createAnnotationReader();
 
         return $this;

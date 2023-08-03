@@ -20,7 +20,7 @@ use Symfony\Component\Cache\Adapter\PdoAdapter;
  */
 class PdoAdapterTest extends AdapterTestCase
 {
-    protected static $dbFile;
+    protected static string $dbFile;
 
     public static function setUpBeforeClass(): void
     {
@@ -48,9 +48,7 @@ class PdoAdapterTest extends AdapterTestCase
     {
         $pdo = new \PDO('sqlite:'.self::$dbFile);
 
-        $getCacheItemCount = function () use ($pdo) {
-            return (int) $pdo->query('SELECT COUNT(*) FROM cache_items')->fetch(\PDO::FETCH_COLUMN);
-        };
+        $getCacheItemCount = fn () => (int) $pdo->query('SELECT COUNT(*) FROM cache_items')->fetch(\PDO::FETCH_COLUMN);
 
         $this->assertSame(0, $getCacheItemCount());
 
@@ -89,7 +87,7 @@ class PdoAdapterTest extends AdapterTestCase
         }
     }
 
-    public function provideDsn()
+    public static function provideDsn()
     {
         $dbFile = tempnam(sys_get_temp_dir(), 'sf_sqlite_cache');
         yield ['sqlite:'.$dbFile.'2', $dbFile.'2'];
@@ -101,7 +99,6 @@ class PdoAdapterTest extends AdapterTestCase
         $o = new \ReflectionObject($cache);
 
         $getPdoConn = $o->getMethod('getConnection');
-        $getPdoConn->setAccessible(true);
 
         /** @var \PDOStatement $select */
         $select = $getPdoConn->invoke($cache)->prepare('SELECT 1 FROM cache_items WHERE item_id LIKE :id');

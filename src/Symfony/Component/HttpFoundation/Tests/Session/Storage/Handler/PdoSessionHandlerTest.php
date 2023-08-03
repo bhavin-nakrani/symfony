@@ -11,16 +11,18 @@
 
 namespace Symfony\Component\HttpFoundation\Tests\Session\Storage\Handler;
 
+use Doctrine\DBAL\Schema\Schema;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
 /**
  * @requires extension pdo_sqlite
+ *
  * @group time-sensitive
  */
 class PdoSessionHandlerTest extends TestCase
 {
-    private $dbFile;
+    private ?string $dbFile = null;
 
     protected function tearDown(): void
     {
@@ -147,7 +149,7 @@ class PdoSessionHandlerTest extends TestCase
 
     public function testReadLockedConvertsStreamToString()
     {
-        if (filter_var(ini_get('session.use_strict_mode'), \FILTER_VALIDATE_BOOLEAN)) {
+        if (filter_var(\ini_get('session.use_strict_mode'), \FILTER_VALIDATE_BOOL)) {
             $this->markTestSkipped('Strict mode needs no locking for new sessions.');
         }
 
@@ -155,9 +157,7 @@ class PdoSessionHandlerTest extends TestCase
         $selectStmt = $this->createMock(\PDOStatement::class);
         $insertStmt = $this->createMock(\PDOStatement::class);
 
-        $pdo->prepareResult = function ($statement) use ($selectStmt, $insertStmt) {
-            return str_starts_with($statement, 'INSERT') ? $insertStmt : $selectStmt;
-        };
+        $pdo->prepareResult = fn ($statement) => str_starts_with($statement, 'INSERT') ? $insertStmt : $selectStmt;
 
         $content = 'foobar';
         $stream = $this->createStream($content);
@@ -296,7 +296,6 @@ class PdoSessionHandlerTest extends TestCase
         $storage = new PdoSessionHandler($this->getMemorySqlitePdo());
 
         $method = new \ReflectionMethod($storage, 'getConnection');
-        $method->setAccessible(true);
 
         $this->assertInstanceOf(\PDO::class, $method->invoke($storage));
     }
@@ -306,7 +305,6 @@ class PdoSessionHandlerTest extends TestCase
         $storage = new PdoSessionHandler('sqlite::memory:');
 
         $method = new \ReflectionMethod($storage, 'getConnection');
-        $method->setAccessible(true);
 
         $this->assertInstanceOf(\PDO::class, $method->invoke($storage));
     }
@@ -324,12 +322,40 @@ class PdoSessionHandlerTest extends TestCase
                 continue;
             }
             $property = $reflection->getProperty($property);
-            $property->setAccessible(true);
             $this->assertSame($expectedValue, $property->getValue($storage));
         }
     }
 
-    public function provideUrlDsnPairs()
+    public function testConfigureSchemaDifferentDatabase()
+    {
+        $schema = new Schema();
+
+        $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
+        $pdoSessionHandler->configureSchema($schema, fn () => false);
+        $this->assertFalse($schema->hasTable('sessions'));
+    }
+
+    public function testConfigureSchemaSameDatabase()
+    {
+        $schema = new Schema();
+
+        $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
+        $pdoSessionHandler->configureSchema($schema, fn () => true);
+        $this->assertTrue($schema->hasTable('sessions'));
+    }
+
+    public function testConfigureSchemaTableExistsPdo()
+    {
+        $schema = new Schema();
+        $schema->createTable('sessions');
+
+        $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
+        $pdoSessionHandler->configureSchema($schema, fn () => true);
+        $table = $schema->getTable('sessions');
+        $this->assertEmpty($table->getColumns(), 'The table was not overwritten');
+    }
+
+    public static function provideUrlDsnPairs()
     {
         yield ['mysql://localhost/test', 'mysql:host=localhost;dbname=test;'];
         yield ['mysql://localhost/test?charset=utf8mb4', 'mysql:charset=utf8mb4;host=localhost;dbname=test;'];
@@ -348,6 +374,21 @@ class PdoSessionHandlerTest extends TestCase
         yield ['mssql://localhost:56/test', 'sqlsrv:server=localhost,56;Database=test'];
     }
 
+    public function testTtl()
+    {
+        foreach ([60, fn () => 60] as $ttl) {
+            $pdo = $this->getMemorySqlitePdo();
+            $storage = new PdoSessionHandler($pdo, ['ttl' => $ttl]);
+
+            $storage->open('', 'sid');
+            $storage->read('id');
+            $storage->write('id', 'data');
+            $storage->close();
+
+            $this->assertEqualsWithDelta(time() + 60, $pdo->query('SELECT sess_lifetime FROM sessions')->fetchColumn(), 5);
+        }
+    }
+
     /**
      * @return resource
      */
@@ -363,9 +404,9 @@ class PdoSessionHandlerTest extends TestCase
 
 class MockPdo extends \PDO
 {
-    public $prepareResult;
-    private $driverName;
-    private $errorMode;
+    public \Closure|\PDOStatement|false $prepareResult;
+    private ?string $driverName;
+    private bool|int $errorMode;
 
     public function __construct(string $driverName = null, int $errorMode = null)
     {

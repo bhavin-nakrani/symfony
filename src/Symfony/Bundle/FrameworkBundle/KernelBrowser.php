@@ -34,9 +34,6 @@ class KernelBrowser extends HttpKernelBrowser
     private bool $profiler = false;
     private bool $reboot = true;
 
-    /**
-     * {@inheritdoc}
-     */
     public function __construct(KernelInterface $kernel, array $server = [], History $history = null, CookieJar $cookieJar = null)
     {
         parent::__construct($kernel, $server, $history, $cookieJar);
@@ -76,6 +73,8 @@ class KernelBrowser extends HttpKernelBrowser
      * Enables the profiler for the very next request.
      *
      * If the profiler is not enabled, the call to this method does nothing.
+     *
+     * @return void
      */
     public function enableProfiler()
     {
@@ -89,6 +88,8 @@ class KernelBrowser extends HttpKernelBrowser
      *
      * By default, the Client reboots the Kernel for each request. This method
      * allows to keep the same kernel across requests.
+     *
+     * @return void
      */
     public function disableReboot()
     {
@@ -97,6 +98,8 @@ class KernelBrowser extends HttpKernelBrowser
 
     /**
      * Enables kernel reboot between requests.
+     *
+     * @return void
      */
     public function enableReboot()
     {
@@ -111,15 +114,15 @@ class KernelBrowser extends HttpKernelBrowser
     public function loginUser(object $user, string $firewallContext = 'main'): static
     {
         if (!interface_exists(UserInterface::class)) {
-            throw new \LogicException(sprintf('"%s" requires symfony/security-core to be installed.', __METHOD__));
+            throw new \LogicException(sprintf('"%s" requires symfony/security-core to be installed. Try running "composer require symfony/security-core".', __METHOD__));
         }
 
         if (!$user instanceof UserInterface) {
-            throw new \LogicException(sprintf('The first argument of "%s" must be instance of "%s", "%s" provided.', __METHOD__, UserInterface::class, \is_object($user) ? \get_class($user) : \gettype($user)));
+            throw new \LogicException(sprintf('The first argument of "%s" must be instance of "%s", "%s" provided.', __METHOD__, UserInterface::class, get_debug_type($user)));
         }
 
         $token = new TestBrowserToken($user->getRoles(), $user, $firewallContext);
-        // required for compatibilty with Symfony 5.4
+        // required for compatibility with Symfony 5.4
         if (method_exists($token, 'isAuthenticated')) {
             $token->setAuthenticated(true, false);
         }
@@ -135,9 +138,7 @@ class KernelBrowser extends HttpKernelBrowser
         $session->set('_security_'.$firewallContext, serialize($token));
         $session->save();
 
-        $domains = array_unique(array_map(function (Cookie $cookie) use ($session) {
-            return $cookie->getName() === $session->getName() ? $cookie->getDomain() : '';
-        }, $this->getCookieJar()->all())) ?: [''];
+        $domains = array_unique(array_map(fn (Cookie $cookie) => $cookie->getName() === $session->getName() ? $cookie->getDomain() : '', $this->getCookieJar()->all())) ?: [''];
         foreach ($domains as $domain) {
             $cookie = new Cookie($session->getName(), $session->getId(), null, null, $domain);
             $this->getCookieJar()->set($cookie);
@@ -147,8 +148,6 @@ class KernelBrowser extends HttpKernelBrowser
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @param Request $request
      */
     protected function doRequest(object $request): Response
@@ -156,6 +155,7 @@ class KernelBrowser extends HttpKernelBrowser
         // avoid shutting down the Kernel if no request has been performed yet
         // WebTestCase::createClient() boots the Kernel but do not handle a request
         if ($this->hasPerformedRequest && $this->reboot) {
+            $this->kernel->boot();
             $this->kernel->shutdown();
         } else {
             $this->hasPerformedRequest = true;
@@ -172,8 +172,6 @@ class KernelBrowser extends HttpKernelBrowser
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @param Request $request
      */
     protected function doRequestInProcess(object $request): Response

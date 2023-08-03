@@ -18,17 +18,17 @@ use Symfony\Component\Serializer\Exception\InvalidArgumentException;
  *
  * @Annotation
  * @NamedArgumentConstructor
- * @Target({"PROPERTY", "METHOD"})
+ * @Target({"PROPERTY", "METHOD", "CLASS"})
  *
  * @author Kévin Dunglas <dunglas@gmail.com>
  */
-#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_PROPERTY)]
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_PROPERTY | \Attribute::TARGET_CLASS)]
 class Groups
 {
     /**
      * @var string[]
      */
-    private array $groups;
+    private readonly array $groups;
 
     /**
      * @param string|string[] $groups
@@ -37,7 +37,7 @@ class Groups
     {
         $this->groups = (array) $groups;
 
-        if (empty($this->groups)) {
+        if (!$this->groups) {
             throw new InvalidArgumentException(sprintf('Parameter of annotation "%s" cannot be empty.', static::class));
         }
 

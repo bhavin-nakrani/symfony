@@ -22,7 +22,7 @@ class DateRangeFilterIteratorTest extends RealIteratorTestCase
     public function testAccept($size, $expected)
     {
         $files = self::$files;
-        $files[] = self::toAbsolute('doesnotexist');
+        $files[] = static::toAbsolute('doesnotexist');
         $inner = new Iterator($files);
 
         $iterator = new DateRangeFilterIterator($inner, $size);
@@ -30,7 +30,7 @@ class DateRangeFilterIteratorTest extends RealIteratorTestCase
         $this->assertIterator($expected, $iterator);
     }
 
-    public function getAcceptData()
+    public static function getAcceptData()
     {
         $since20YearsAgo = [
             '.git',
@@ -47,6 +47,8 @@ class DateRangeFilterIteratorTest extends RealIteratorTestCase
             '.foo/bar',
             'qux',
             'qux/baz_100_1.py',
+            'zebulon.php',
+            'Zephire.php',
             'qux/baz_1_2.py',
             'qux_0_1.php',
             'qux_1000_1.php',
@@ -69,6 +71,8 @@ class DateRangeFilterIteratorTest extends RealIteratorTestCase
             '.foo/bar',
             'qux',
             'qux/baz_100_1.py',
+            'zebulon.php',
+            'Zephire.php',
             'qux/baz_1_2.py',
             'qux_0_1.php',
             'qux_1000_1.php',
@@ -84,9 +88,9 @@ class DateRangeFilterIteratorTest extends RealIteratorTestCase
         ];
 
         return [
-            [[new DateComparator('since 20 years ago')], $this->toAbsolute($since20YearsAgo)],
-            [[new DateComparator('since 2 months ago')], $this->toAbsolute($since2MonthsAgo)],
-            [[new DateComparator('until last month')], $this->toAbsolute($untilLastMonth)],
+            [[new DateComparator('since 20 years ago')], static::toAbsolute($since20YearsAgo)],
+            [[new DateComparator('since 2 months ago')], static::toAbsolute($since2MonthsAgo)],
+            [[new DateComparator('until last month')], static::toAbsolute($untilLastMonth)],
         ];
     }
 }

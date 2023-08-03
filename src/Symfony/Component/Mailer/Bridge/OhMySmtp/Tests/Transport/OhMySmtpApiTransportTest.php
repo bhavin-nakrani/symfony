@@ -22,6 +22,9 @@ use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
+/**
+ * @group legacy
+ */
 final class OhMySmtpApiTransportTest extends TestCase
 {
     /**
@@ -32,7 +35,7 @@ final class OhMySmtpApiTransportTest extends TestCase
         $this->assertSame($expected, (string) $transport);
     }
 
-    public function getTransportData(): array
+    public static function getTransportData(): array
     {
         return [
             [
@@ -58,7 +61,6 @@ final class OhMySmtpApiTransportTest extends TestCase
 
         $transport = new OhMySmtpApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(OhMySmtpApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayHasKey('Headers', $payload);
@@ -100,14 +102,12 @@ final class OhMySmtpApiTransportTest extends TestCase
 
     public function testSendThrowsForErrorResponse()
     {
-        $client = new MockHttpClient(static function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse(json_encode(['Message' => 'i\'m a teapot', 'ErrorCode' => 418]), [
-                'http_code' => 418,
-                'response_headers' => [
-                    'content-type' => 'application/json',
-                ],
-            ]);
-        });
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new MockResponse(json_encode(['error' => 'i\'m a teapot']), [
+            'http_code' => 418,
+            'response_headers' => [
+                'content-type' => 'application/json',
+            ],
+        ]));
         $transport = new OhMySmtpApiTransport('KEY', $client);
         $transport->setPort(8984);
 
@@ -118,7 +118,29 @@ final class OhMySmtpApiTransportTest extends TestCase
             ->text('Hello There!');
 
         $this->expectException(HttpTransportException::class);
-        $this->expectExceptionMessage('Unable to send an email: i\'m a teapot (code 418).');
+        $this->expectExceptionMessage('Unable to send an email: {"error":"i\'m a teapot"}');
+        $transport->send($mail);
+    }
+
+    public function testSendThrowsForMultipleErrorResponses()
+    {
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new MockResponse(json_encode(['errors' => ['to' => 'undefined field']]), [
+            'http_code' => 418,
+            'response_headers' => [
+                'content-type' => 'application/json',
+            ],
+        ]));
+        $transport = new OhMySmtpApiTransport('KEY', $client);
+        $transport->setPort(8984);
+
+        $mail = new Email();
+        $mail->subject('Hello!')
+            ->to(new Address('saif.gmati@symfony.com', 'Saif Eddin'))
+            ->from(new Address('fabpot@symfony.com', 'Fabien'))
+            ->text('Hello There!');
+
+        $this->expectException(HttpTransportException::class);
+        $this->expectExceptionMessage('Unable to send an email: {"errors":{"to":"undefined field"}}');
         $transport->send($mail);
     }
 
@@ -132,7 +154,6 @@ final class OhMySmtpApiTransportTest extends TestCase
 
         $transport = new OhMySmtpApiTransport('ACCESS_KEY');
         $method = new \ReflectionMethod(OhMySmtpApiTransport::class, 'getPayload');
-        $method->setAccessible(true);
         $payload = $method->invoke($transport, $email, $envelope);
 
         $this->assertArrayNotHasKey('Headers', $payload);

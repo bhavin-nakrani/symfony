@@ -23,10 +23,12 @@ use Symfony\Component\DependencyInjection\Reference;
  */
 class ResolveHotPathPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private array $resolvedIds = [];
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function process(ContainerBuilder $container)
     {
@@ -38,9 +40,6 @@ class ResolveHotPathPass extends AbstractRecursivePass
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function processValue(mixed $value, bool $isRoot = false): mixed
     {
         if ($value instanceof ArgumentInterface) {

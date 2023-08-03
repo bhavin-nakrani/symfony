@@ -84,7 +84,7 @@ class HeadersTest extends TestCase
         $this->assertSame('bar', $headers->get('foo')->getBody());
 
         $this->assertInstanceOf(DateHeader::class, $headers->get('date'));
-        $this->assertSame($now, $headers->get('date')->getBody());
+        $this->assertEquals($now, $headers->get('date')->getBody());
 
         $this->assertInstanceOf(IdentificationHeader::class, $headers->get('message-id'));
         $this->assertSame(['id@id'], $headers->get('message-id')->getBody());
@@ -287,11 +287,25 @@ class HeadersTest extends TestCase
         $this->assertEquals('foobar', $headers->get('In-Reply-To')->getBody());
     }
 
+    public function testInReplyToAcceptsIdentifierValues()
+    {
+        $headers = new Headers();
+        $headers->addIdHeader('In-Reply-To', 'foo@bar.com');
+        $this->assertEquals('<foo@bar.com>', $headers->get('In-Reply-To')->getBodyAsString());
+    }
+
     public function testReferencesAcceptsNonIdentifierValues()
     {
         $headers = new Headers();
-        $headers->addTextHeader('References' , 'foobar');
+        $headers->addTextHeader('References', 'foobar');
         $this->assertEquals('foobar', $headers->get('References')->getBody());
+    }
+
+    public function testReferencesAcceptsIdentifierValues()
+    {
+        $headers = new Headers();
+        $headers->addIdHeader('References', 'foo@bar.com');
+        $this->assertEquals('<foo@bar.com>', $headers->get('References')->getBodyAsString());
     }
 
     public function testHeaderBody()

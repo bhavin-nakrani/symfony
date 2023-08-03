@@ -52,10 +52,7 @@ class Application extends BaseApplication
         return $this->kernel;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function reset()
+    public function reset(): void
     {
         if ($this->kernel->getContainer()->has('services_resetter')) {
             $this->kernel->getContainer()->get('services_resetter')->reset();
@@ -80,9 +77,6 @@ class Application extends BaseApplication
         return parent::doRun($input, $output);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
     {
         if (!$command instanceof ListCommand) {
@@ -104,9 +98,6 @@ class Application extends BaseApplication
         return $returnCode;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function find(string $name): Command
     {
         $this->registerCommands();
@@ -114,9 +105,6 @@ class Application extends BaseApplication
         return parent::find($name);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function get(string $name): Command
     {
         $this->registerCommands();
@@ -124,15 +112,13 @@ class Application extends BaseApplication
         $command = parent::get($name);
 
         if ($command instanceof ContainerAwareInterface) {
+            trigger_deprecation('symfony/dependency-injection', '6.4', 'Relying on "%s" to get the container in "%s" is deprecated, register the command as a service and use dependency injection instead.', ContainerAwareInterface::class, get_debug_type($command));
             $command->setContainer($this->kernel->getContainer());
         }
 
         return $command;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function all(string $namespace = null): array
     {
         $this->registerCommands();
@@ -140,12 +126,9 @@ class Application extends BaseApplication
         return parent::all($namespace);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getLongVersion(): string
     {
-        return parent::getLongVersion().sprintf(' (env: <comment>%s</>, debug: <comment>%s</>)', $this->kernel->getEnvironment(), $this->kernel->isDebug() ? 'true' : 'false');
+        return parent::getLongVersion().sprintf(' (env: <comment>%s</>, debug: <comment>%s</>) <bg=#0057B7;fg=#FFDD00>#StandWith</><bg=#FFDD00;fg=#0057B7>Ukraine</> <href=https://sf.to/ukraine>https://sf.to/ukraine</>', $this->kernel->getEnvironment(), $this->kernel->isDebug() ? 'true' : 'false');
     }
 
     public function add(Command $command): ?Command
@@ -155,6 +138,9 @@ class Application extends BaseApplication
         return parent::add($command);
     }
 
+    /**
+     * @return void
+     */
     protected function registerCommands()
     {
         if ($this->commandsRegistered) {
@@ -195,7 +181,7 @@ class Application extends BaseApplication
         }
     }
 
-    private function renderRegistrationErrors(InputInterface $input, OutputInterface $output)
+    private function renderRegistrationErrors(InputInterface $input, OutputInterface $output): void
     {
         if ($output instanceof ConsoleOutputInterface) {
             $output = $output->getErrorOutput();

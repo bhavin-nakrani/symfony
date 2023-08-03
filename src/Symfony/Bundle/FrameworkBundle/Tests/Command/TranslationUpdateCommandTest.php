@@ -26,8 +26,8 @@ use Symfony\Component\Translation\Writer\TranslationWriter;
 
 class TranslationUpdateCommandTest extends TestCase
 {
-    private $fs;
-    private $translationDir;
+    private Filesystem $fs;
+    private string $translationDir;
 
     public function testDumpMessagesAndCleanWithDeprecatedCommandName()
     {
@@ -138,6 +138,45 @@ class TranslationUpdateCommandTest extends TestCase
         $tester = $this->createCommandTester(['messages' => ['foo' => 'foo'], 'mydomain' => ['bar' => 'bar']]);
         $tester->execute(['command' => 'translation:extract', 'locale' => 'en', 'bundle' => 'foo', '--force' => true, '--domain' => 'mydomain']);
         $this->assertMatchesRegularExpression('/Translation files were successfully updated./', $tester->getDisplay());
+    }
+
+    public function testFilterDuplicateTransPaths()
+    {
+        $transPaths = [
+            $this->translationDir.'/a/test/folder/with/a/subfolder',
+            $this->translationDir.'/a/test/folder/',
+            $this->translationDir.'/a/test/folder/with/a/subfolder/and/a/file.txt',
+            $this->translationDir.'/a/different/test/folder',
+        ];
+
+        foreach ($transPaths as $transPath) {
+            if (realpath($transPath)) {
+                continue;
+            }
+
+            if (preg_match('/\.[a-z]+$/', $transPath)) {
+                if (!realpath(\dirname($transPath))) {
+                    mkdir(\dirname($transPath), 0777, true);
+                }
+
+                touch($transPath);
+            } else {
+                mkdir($transPath, 0777, true);
+            }
+        }
+
+        $command = $this->createMock(TranslationUpdateCommand::class);
+
+        $method = new \ReflectionMethod(TranslationUpdateCommand::class, 'filterDuplicateTransPaths');
+
+        $filteredTransPaths = $method->invoke($command, $transPaths);
+
+        $expectedPaths = [
+            realpath($this->translationDir.'/a/different/test/folder'),
+            realpath($this->translationDir.'/a/test/folder'),
+        ];
+
+        $this->assertEquals($expectedPaths, $filteredTransPaths);
     }
 
     protected function setUp(): void

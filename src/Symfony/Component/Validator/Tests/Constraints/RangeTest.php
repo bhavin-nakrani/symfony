@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Validator\Tests\Constraints;
 
 use PHPUnit\Framework\TestCase;
@@ -23,7 +32,7 @@ class RangeTest extends TestCase
     {
         $this->expectException(\Symfony\Component\Validator\Exception\ConstraintDefinitionException::class);
         $this->expectExceptionMessage('requires only one of the "min" or "minPropertyPath" options to be set, not both.');
-        eval('new \Symfony\Component\Validator\Constraints\Range(min: "min", minPropertyPath: "minPropertyPath");');
+        new Range(min: 'min', minPropertyPath: 'minPropertyPath');
     }
 
     public function testThrowsConstraintExceptionIfBothMaxLimitAndPropertyPath()
@@ -40,7 +49,7 @@ class RangeTest extends TestCase
     {
         $this->expectException(\Symfony\Component\Validator\Exception\ConstraintDefinitionException::class);
         $this->expectExceptionMessage('requires only one of the "max" or "maxPropertyPath" options to be set, not both.');
-        eval('new \Symfony\Component\Validator\Constraints\Range(max: "max", maxPropertyPath: "maxPropertyPath");');
+        new Range(max: 'max', maxPropertyPath: 'maxPropertyPath');
     }
 
     public function testThrowsConstraintExceptionIfNoLimitNorPropertyPath()
@@ -60,6 +69,6 @@ class RangeTest extends TestCase
     {
         $this->expectException(\Symfony\Component\Validator\Exception\ConstraintDefinitionException::class);
         $this->expectExceptionMessage('can not use "minMessage" and "maxMessage" when the "min" and "max" options are both set. Use "notInRangeMessage" instead.');
-        eval('new \Symfony\Component\Validator\Constraints\Range(min: "min", max: "max", minMessage: "minMessage", maxMessage: "maxMessage");');
+        new Range(min: 'min', max: 'max', minMessage: 'minMessage', maxMessage: 'maxMessage');
     }
 }

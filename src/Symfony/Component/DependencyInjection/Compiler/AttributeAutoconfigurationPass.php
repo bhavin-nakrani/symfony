@@ -22,10 +22,12 @@ use Symfony\Component\DependencyInjection\Exception\RuntimeException;
  */
 final class AttributeAutoconfigurationPass extends AbstractRecursivePass
 {
-    private $classAttributeConfigurators = [];
-    private $methodAttributeConfigurators = [];
-    private $propertyAttributeConfigurators = [];
-    private $parameterAttributeConfigurators = [];
+    protected bool $skipScalars = true;
+
+    private array $classAttributeConfigurators = [];
+    private array $methodAttributeConfigurators = [];
+    private array $propertyAttributeConfigurators = [];
+    private array $parameterAttributeConfigurators = [];
 
     public function process(ContainerBuilder $container): void
     {
@@ -34,7 +36,7 @@ final class AttributeAutoconfigurationPass extends AbstractRecursivePass
         }
 
         foreach ($container->getAutoconfiguredAttributes() as $attributeName => $callable) {
-            $callableReflector = new \ReflectionFunction(\Closure::fromCallable($callable));
+            $callableReflector = new \ReflectionFunction($callable(...));
             if ($callableReflector->getNumberOfParameters() <= 2) {
                 $this->classAttributeConfigurators[$attributeName] = $callable;
                 continue;
@@ -55,7 +57,7 @@ final class AttributeAutoconfigurationPass extends AbstractRecursivePass
 
             try {
                 $attributeReflector = new \ReflectionClass($attributeName);
-            } catch (\ReflectionException $e) {
+            } catch (\ReflectionException) {
                 continue;
             }
 
@@ -103,7 +105,7 @@ final class AttributeAutoconfigurationPass extends AbstractRecursivePass
         if ($this->parameterAttributeConfigurators) {
             try {
                 $constructorReflector = $this->getConstructor($value, false);
-            } catch (RuntimeException $e) {
+            } catch (RuntimeException) {
                 $constructorReflector = null;
             }
 
@@ -120,7 +122,7 @@ final class AttributeAutoconfigurationPass extends AbstractRecursivePass
 
         if ($this->methodAttributeConfigurators || $this->parameterAttributeConfigurators) {
             foreach ($classReflector->getMethods(\ReflectionMethod::IS_PUBLIC) as $methodReflector) {
-                if ($methodReflector->isStatic() || $methodReflector->isConstructor() || $methodReflector->isDestructor()) {
+                if ($methodReflector->isConstructor() || $methodReflector->isDestructor()) {
                     continue;
                 }
 

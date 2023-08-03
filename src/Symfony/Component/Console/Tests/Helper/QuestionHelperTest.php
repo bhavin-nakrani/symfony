@@ -30,7 +30,7 @@ use Symfony\Component\Console\Tester\ApplicationTester;
 /**
  * @group tty
  */
-class QuestionHelperTest extends AbstractQuestionHelperTest
+class QuestionHelperTest extends AbstractQuestionHelperTestCase
 {
     public function testAskChoice()
     {
@@ -286,9 +286,7 @@ class QuestionHelperTest extends AbstractQuestionHelperTest
             $suggestionBase = $inputWords ? implode(' ', $inputWords).' ' : '';
 
             return array_map(
-                function ($word) use ($suggestionBase) {
-                    return $suggestionBase.$word.' ';
-                },
+                fn ($word) => $suggestionBase.$word.' ',
                 $knownWords
             );
         };
@@ -340,7 +338,7 @@ class QuestionHelperTest extends AbstractQuestionHelperTest
         $this->assertSame('b', $dialog->ask($this->createStreamableInputInterfaceMock($inputStream), $this->createOutputInterface(), $question));
     }
 
-    public function getInputs()
+    public static function getInputs()
     {
         return [
             ['$'], // 1 byte character
@@ -430,7 +428,7 @@ class QuestionHelperTest extends AbstractQuestionHelperTest
         $this->assertEquals('8AM', $dialog->ask($this->createStreamableInputInterfaceMock($this->getInputStream("8AM\n")), $this->createOutputInterface(), $question));
     }
 
-    public function testAskHiddenResponseTrimmed()
+    public function testAskHiddenResponseNotTrimmed()
     {
         if ('\\' === \DIRECTORY_SEPARATOR) {
             $this->markTestSkipped('This test is not supported on Windows');
@@ -442,7 +440,7 @@ class QuestionHelperTest extends AbstractQuestionHelperTest
         $question->setHidden(true);
         $question->setTrimmable(false);
 
-        $this->assertEquals(' 8AM', $dialog->ask($this->createStreamableInputInterfaceMock($this->getInputStream(' 8AM')), $this->createOutputInterface(), $question));
+        $this->assertEquals(' 8AM'.\PHP_EOL, $dialog->ask($this->createStreamableInputInterfaceMock($this->getInputStream(' 8AM'.\PHP_EOL)), $this->createOutputInterface(), $question));
     }
 
     public function testAskMultilineResponseWithEOF()
@@ -536,7 +534,7 @@ EOD;
         $this->assertEquals($expected, $dialog->ask($this->createStreamableInputInterfaceMock($inputStream), $this->createOutputInterface(), $question), 'confirmation question should '.($expected ? 'pass' : 'cancel'));
     }
 
-    public function getAskConfirmationData()
+    public static function getAskConfirmationData()
     {
         return [
             ['', true],
@@ -612,7 +610,7 @@ EOD;
         $this->assertSame($expectedValue, $answer);
     }
 
-    public function simpleAnswerProvider()
+    public static function simpleAnswerProvider()
     {
         return [
             [0, 'My environment 1'],
@@ -647,7 +645,7 @@ EOD;
         $this->assertSame($expectedValue, $answer);
     }
 
-    public function specialCharacterInMultipleChoice()
+    public static function specialCharacterInMultipleChoice()
     {
         return [
             ['.', ['.']],
@@ -697,7 +695,7 @@ EOD;
         $dialog->ask($this->createStreamableInputInterfaceMock($this->getInputStream("My environment\n")), $this->createOutputInterface(), $question);
     }
 
-    public function answerProvider()
+    public static function answerProvider()
     {
         return [
             ['env_1', 'env_1'],
@@ -714,9 +712,6 @@ EOD;
         $this->assertEquals('not yet', $dialog->ask($this->createStreamableInputInterfaceMock(null, false), $this->createOutputInterface(), $question));
     }
 
-    /**
-     * @requires function mb_strwidth
-     */
     public function testChoiceOutputFormattingQuestionForUtf8Keys()
     {
         $question = 'Lorem ipsum?';
@@ -872,7 +867,6 @@ EOD;
             $dialog->ask($this->createStreamableInputInterfaceMock($inputStream), $this->createOutputInterface(), $question);
         } finally {
             $reflection = new \ReflectionProperty(QuestionHelper::class, 'stty');
-            $reflection->setAccessible(true);
             $reflection->setValue(null, true);
         }
     }
@@ -958,7 +952,7 @@ EOD;
 
 class AutocompleteValues implements \IteratorAggregate
 {
-    private $values;
+    private array $values;
 
     public function __construct(array $values)
     {

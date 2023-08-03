@@ -26,12 +26,9 @@ class ActivationMiddleware implements MiddlewareInterface
     public function __construct(MiddlewareInterface $inner, bool|callable $activated)
     {
         $this->inner = $inner;
-        $this->activated = $activated instanceof \Closure || \is_bool($activated) ? $activated : \Closure::fromCallable($activated);
+        $this->activated = \is_bool($activated) ? $activated : $activated(...);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {
         if (\is_callable($this->activated) ? ($this->activated)($envelope) : $this->activated) {

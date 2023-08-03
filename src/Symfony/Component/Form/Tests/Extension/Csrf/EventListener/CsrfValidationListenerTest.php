@@ -18,15 +18,17 @@ use Symfony\Component\Form\Extension\Csrf\EventListener\CsrfValidationListener;
 use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormFactoryBuilder;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Util\ServerParams;
 use Symfony\Component\Security\Csrf\CsrfTokenManager;
 
 class CsrfValidationListenerTest extends TestCase
 {
-    protected $dispatcher;
-    protected $factory;
-    protected $tokenManager;
-    protected $form;
+    protected EventDispatcher $dispatcher;
+    protected FormFactoryInterface $factory;
+    protected CsrfTokenManager $tokenManager;
+    protected FormInterface $form;
 
     protected function setUp(): void
     {
@@ -36,14 +38,6 @@ class CsrfValidationListenerTest extends TestCase
         $this->form = $this->getBuilder()
             ->setDataMapper(new DataMapper())
             ->getForm();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->dispatcher = null;
-        $this->factory = null;
-        $this->tokenManager = null;
-        $this->form = null;
     }
 
     protected function getBuilder()
@@ -76,17 +70,18 @@ class CsrfValidationListenerTest extends TestCase
 
     public function testMaxPostSizeExceeded()
     {
-        $serverParams = $this->createMock(ServerParams::class);
-        $serverParams
-            ->expects($this->once())
-            ->method('hasPostMaxSizeBeenExceeded')
-            ->willReturn(true)
-        ;
-
         $event = new FormEvent($this->form, ['csrf' => 'token']);
-        $validation = new CsrfValidationListener('csrf', $this->tokenManager, 'unknown', 'Error message', null, null, $serverParams);
+        $validation = new CsrfValidationListener('csrf', $this->tokenManager, 'unknown', 'Error message', null, null, new ServerParamsPostMaxSizeExceeded());
 
         $validation->preSubmit($event);
         $this->assertEmpty($this->form->getErrors());
+    }
+}
+
+class ServerParamsPostMaxSizeExceeded extends ServerParams
+{
+    public function hasPostMaxSizeBeenExceeded(): bool
+    {
+        return true;
     }
 }

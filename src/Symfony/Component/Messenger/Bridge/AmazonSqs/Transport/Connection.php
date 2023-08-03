@@ -26,6 +26,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * @author Jérémy Derussé <jeremy@derusse.com>
  *
  * @internal
+ *
  * @final
  */
 class Connection
@@ -41,6 +42,7 @@ class Connection
         'auto_setup' => true,
         'access_key' => null,
         'secret_key' => null,
+        'session_token' => null,
         'endpoint' => 'https://sqs.eu-west-1.amazonaws.com',
         'region' => 'eu-west-1',
         'queue_name' => 'messages',
@@ -68,6 +70,9 @@ class Connection
         throw new \BadMethodCallException('Cannot serialize '.__CLASS__);
     }
 
+    /**
+     * @return void
+     */
     public function __wakeup()
     {
         throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
@@ -89,6 +94,7 @@ class Connection
      * * account: identifier of the AWS account
      * * access_key: AWS access key
      * * secret_key: AWS secret key
+     * * session_token: AWS session token (required only when using temporary credentials)
      * * buffer_size: number of messages to prefetch (Default: 9)
      * * wait_time: long polling duration in seconds (Default: 20)
      * * poll_timeout: amount of seconds the transport should wait for new message
@@ -97,10 +103,10 @@ class Connection
      * * auto_setup: Whether the queue should be created automatically during send / get (Default: true)
      * * debug: Log all HTTP requests and responses as LoggerInterface::DEBUG (Default: false)
      */
-    public static function fromDsn(string $dsn, array $options = [], HttpClientInterface $client = null, LoggerInterface $logger = null): self
+    public static function fromDsn(#[\SensitiveParameter] string $dsn, array $options = [], HttpClientInterface $client = null, LoggerInterface $logger = null): self
     {
         if (false === $parsedUrl = parse_url($dsn)) {
-            throw new InvalidArgumentException(sprintf('The given Amazon SQS DSN "%s" is invalid.', $dsn));
+            throw new InvalidArgumentException('The given Amazon SQS DSN is invalid.');
         }
 
         $query = [];
@@ -126,7 +132,7 @@ class Connection
             'wait_time' => (int) $options['wait_time'],
             'poll_timeout' => $options['poll_timeout'],
             'visibility_timeout' => $options['visibility_timeout'],
-            'auto_setup' => filter_var($options['auto_setup'], \FILTER_VALIDATE_BOOLEAN),
+            'auto_setup' => filter_var($options['auto_setup'], \FILTER_VALIDATE_BOOL),
             'queue_name' => (string) $options['queue_name'],
         ];
 
@@ -135,6 +141,9 @@ class Connection
             'accessKeyId' => urldecode($parsedUrl['user'] ?? '') ?: $options['access_key'] ?? self::DEFAULT_OPTIONS['access_key'],
             'accessKeySecret' => urldecode($parsedUrl['pass'] ?? '') ?: $options['secret_key'] ?? self::DEFAULT_OPTIONS['secret_key'],
         ];
+        if (null !== $options['session_token']) {
+            $clientConfiguration['sessionToken'] = $options['session_token'];
+        }
         if (isset($options['debug'])) {
             $clientConfiguration['debug'] = $options['debug'];
         }
@@ -337,7 +346,7 @@ class Connection
             ]);
         }
 
-        if (!empty($specialHeaders)) {
+        if ($specialHeaders) {
             $parameters['MessageAttributes'][self::MESSAGE_ATTRIBUTE_NAME] = new MessageAttributeValue([
                 'DataType' => 'String',
                 'StringValue' => json_encode($specialHeaders),

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Validator\Tests\Constraints;
 
 use Symfony\Component\Validator\Constraints\Cidr;
@@ -126,7 +135,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getWithInvalidIps(): array
+    public static function getWithInvalidIps(): array
     {
         return [
             ['0/20'],
@@ -155,7 +164,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    public function getValid(): array
+    public static function getValid(): array
     {
         return [
             ['127.0.0.0/32', Ip::ALL],
@@ -189,7 +198,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    public function getWithInvalidNetmask(): array
+    public static function getWithInvalidNetmask(): array
     {
         return [
             ['192.168.1.0/-1'],
@@ -208,7 +217,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    public function getWithInvalidMasksAndIps(): array
+    public static function getWithInvalidMasksAndIps(): array
     {
         return [
             ['0.0.0.0/foobar'],
@@ -227,7 +236,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    public function getOutOfRangeNetmask(): array
+    public static function getOutOfRangeNetmask(): array
     {
         return [
             ['10.0.0.0/24', Ip::V4, 10, 20],
@@ -235,7 +244,7 @@ class CidrValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    public function getWithWrongVersion(): array
+    public static function getWithWrongVersion(): array
     {
         return [
             ['2001:0db8:85a3:0000:0000:8a2e:0370:7334/12', Ip::V4],

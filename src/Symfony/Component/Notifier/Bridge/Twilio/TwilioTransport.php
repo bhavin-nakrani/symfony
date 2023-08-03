@@ -12,6 +12,7 @@
 namespace Symfony\Component\Notifier\Bridge\Twilio;
 
 use Symfony\Component\Notifier\Exception\InvalidArgumentException;
+use Symfony\Component\Notifier\Exception\LogicException;
 use Symfony\Component\Notifier\Exception\TransportException;
 use Symfony\Component\Notifier\Exception\UnsupportedMessageTypeException;
 use Symfony\Component\Notifier\Message\MessageInterface;
@@ -33,7 +34,7 @@ final class TwilioTransport extends AbstractTransport
     private string $authToken;
     private string $from;
 
-    public function __construct(string $accountSid, string $authToken, string $from, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
+    public function __construct(string $accountSid, #[\SensitiveParameter] string $authToken, string $from, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
     {
         $this->accountSid = $accountSid;
         $this->authToken = $authToken;
@@ -49,7 +50,7 @@ final class TwilioTransport extends AbstractTransport
 
     public function supports(MessageInterface $message): bool
     {
-        return $message instanceof SmsMessage;
+        return $message instanceof SmsMessage && (null === $message->getOptions() || $message->getOptions() instanceof TwilioOptions);
     }
 
     protected function doSend(MessageInterface $message): SentMessage
@@ -58,18 +59,25 @@ final class TwilioTransport extends AbstractTransport
             throw new UnsupportedMessageTypeException(__CLASS__, SmsMessage::class, $message);
         }
 
-        if (!preg_match('/^[a-zA-Z0-9\s]{2,11}$/', $this->from) && !preg_match('/^\+[1-9]\d{1,14}$/', $this->from)) {
-            throw new InvalidArgumentException(sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $this->from));
+        $from = $message->getFrom() ?: $this->from;
+
+        if (!preg_match('/^[a-zA-Z0-9\s]{2,11}$/', $from) && !preg_match('/^\+[1-9]\d{1,14}$/', $from)) {
+            throw new InvalidArgumentException(sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $from));
         }
 
         $endpoint = sprintf('https://%s/2010-04-01/Accounts/%s/Messages.json', $this->getEndpoint(), $this->accountSid);
+        $options = $message->getOptions()?->toArray() ?? [];
+        $body = [
+            'From' => $from,
+            'To' => $message->getPhone(),
+            'Body' => $message->getSubject(),
+        ];
+        if (isset($options['webhook_url'])) {
+            $body['StatusCallback'] = $options['webhook_url'];
+        }
         $response = $this->client->request('POST', $endpoint, [
-            'auth_basic' => $this->accountSid.':'.$this->authToken,
-            'body' => [
-                'From' => $this->from,
-                'To' => $message->getPhone(),
-                'Body' => $message->getSubject(),
-            ],
+            'auth_basic' => [$this->accountSid, $this->authToken],
+            'body' => $body,
         ]);
 
         try {

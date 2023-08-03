@@ -23,6 +23,7 @@ use Symfony\Component\DependencyInjection\Exception\InvalidParameterTypeExceptio
 use Symfony\Component\DependencyInjection\ParameterBag\EnvPlaceholderParameterBag;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\Bar;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\BarErroredDependency;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\BarMethodCall;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\BarOptionalArgument;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\BarOptionalArgumentNotNull;
@@ -31,6 +32,7 @@ use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPa
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\FooObject;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\IntersectionConstructor;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\UnionConstructor;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\UnionConstructorPHP82;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\Waldo;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\WaldoFoo;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\Wobble;
@@ -497,12 +499,12 @@ class CheckTypeDeclarationsPassTest extends TestCase
     {
         $container = new ContainerBuilder();
 
-        $container->register('bar', \DateTime::class)
-            ->setFactory('date_create');
+        $container->register('bar', \DateTimeImmutable::class)
+            ->setFactory('date_create_immutable');
 
         (new CheckTypeDeclarationsPass(true))->process($container);
 
-        $this->assertInstanceOf(\DateTime::class, $container->get('bar'));
+        $this->assertInstanceOf(\DateTimeImmutable::class, $container->get('bar'));
     }
 
     public function testProcessDoesNotLoadCodeByDefault()
@@ -858,6 +860,26 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    /**
+     * @requires PHP 8.2
+     */
+    public function testUnionTypePassesWithTrue()
+    {
+        $container = new ContainerBuilder();
+
+        $container->register('unionTrue', UnionConstructorPHP82::class)
+            ->setFactory([UnionConstructorPHP82::class, 'createTrue'])
+            ->setArguments([true]);
+
+        $container->register('unionNull', UnionConstructorPHP82::class)
+            ->setFactory([UnionConstructorPHP82::class, 'createNull'])
+            ->setArguments([null]);
+
+        (new CheckTypeDeclarationsPass(true))->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+
     public function testUnionTypeFailsWithReference()
     {
         $container = new ContainerBuilder();
@@ -929,9 +951,6 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testIntersectionTypePassesWithReference()
     {
         $container = new ContainerBuilder();
@@ -945,9 +964,6 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testIntersectionTypeFailsWithReference()
     {
         $container = new ContainerBuilder();
@@ -969,6 +985,34 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $definition->addMethodCall('callMethod', [123]);
 
         (new CheckTypeDeclarationsPass())->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testIgnoreDefinitionFactoryArgument()
+    {
+        $container = new ContainerBuilder();
+        $container->register('bar', Bar::class)
+            ->setArguments([
+                (new Definition(Foo::class))
+                    ->setFactory([Foo::class, 'createStdClass']),
+            ]);
+
+        (new CheckTypeDeclarationsPass())->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testErroredDefinitionsAreNotChecked()
+    {
+        $container = new ContainerBuilder();
+        $container->register('errored_dependency', BarErroredDependency::class)
+            ->setArguments([
+                (new Definition(Foo::class))
+                    ->addError('error'),
+            ]);
+
+        (new CheckTypeDeclarationsPass(true))->process($container);
 
         $this->addToAssertionCount(1);
     }

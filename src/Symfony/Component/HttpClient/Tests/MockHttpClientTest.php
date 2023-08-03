@@ -14,6 +14,7 @@ namespace Symfony\Component\HttpClient\Tests;
 use Symfony\Component\HttpClient\Chunk\DataChunk;
 use Symfony\Component\HttpClient\Chunk\ErrorChunk;
 use Symfony\Component\HttpClient\Chunk\FirstChunk;
+use Symfony\Component\HttpClient\Exception\InvalidArgumentException;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\NativeHttpClient;
@@ -41,12 +42,10 @@ class MockHttpClientTest extends HttpClientTestCase
         $this->assertSame(2, $client->getRequestsCount());
     }
 
-    public function mockingProvider(): iterable
+    public static function mockingProvider(): iterable
     {
         yield 'callable' => [
-            static function (string $method, string $url, array $options = []) {
-                return new MockResponse($method.': '.$url.' (body='.$options['body'].')');
-            },
+            static fn (string $method, string $url, array $options = []) => new MockResponse($method.': '.$url.' (body='.$options['body'].')'),
             [
                 'POST: https://example.com/foo (body=payload)',
                 'POST: https://example.com/bar (body=payload)',
@@ -55,12 +54,8 @@ class MockHttpClientTest extends HttpClientTestCase
 
         yield 'array of callable' => [
             [
-                static function (string $method, string $url, array $options = []) {
-                    return new MockResponse($method.': '.$url.' (body='.$options['body'].') [1]');
-                },
-                static function (string $method, string $url, array $options = []) {
-                    return new MockResponse($method.': '.$url.' (body='.$options['body'].') [2]');
-                },
+                static fn (string $method, string $url, array $options = []) => new MockResponse($method.': '.$url.' (body='.$options['body'].') [1]'),
+                static fn (string $method, string $url, array $options = []) => new MockResponse($method.': '.$url.' (body='.$options['body'].') [2]'),
             ],
             [
                 'POST: https://example.com/foo (body=payload) [1]',
@@ -111,10 +106,10 @@ class MockHttpClientTest extends HttpClientTestCase
         $this->addToAssertionCount(1);
     }
 
-    public function validResponseFactoryProvider()
+    public static function validResponseFactoryProvider()
     {
         return [
-            [static function (): MockResponse { return new MockResponse(); }],
+            [static fn (): MockResponse => new MockResponse()],
             [new MockResponse()],
             [[new MockResponse()]],
             [new \ArrayIterator([new MockResponse()])],
@@ -137,16 +132,12 @@ class MockHttpClientTest extends HttpClientTestCase
         $client->request('POST', '/foo');
     }
 
-    public function transportExceptionProvider(): iterable
+    public static function transportExceptionProvider(): iterable
     {
         yield 'array of callable' => [
             [
-                static function (string $method, string $url, array $options = []) {
-                    return new MockResponse();
-                },
-                static function (string $method, string $url, array $options = []) {
-                    return new MockResponse();
-                },
+                static fn (string $method, string $url, array $options = []) => new MockResponse(),
+                static fn (string $method, string $url, array $options = []) => new MockResponse(),
             ],
         ];
 
@@ -178,11 +169,11 @@ class MockHttpClientTest extends HttpClientTestCase
         (new MockHttpClient($responseFactory))->request('GET', 'https://foo.bar');
     }
 
-    public function invalidResponseFactoryProvider()
+    public static function invalidResponseFactoryProvider()
     {
         return [
             [static function (): \Generator { yield new MockResponse(); }, 'The response factory passed to MockHttpClient must return/yield an instance of ResponseInterface, "Generator" given.'],
-            [static function (): array { return [new MockResponse()]; }, 'The response factory passed to MockHttpClient must return/yield an instance of ResponseInterface, "array" given.'],
+            [static fn (): array => [new MockResponse()], 'The response factory passed to MockHttpClient must return/yield an instance of ResponseInterface, "array" given.'],
             [(static function (): \Generator { yield 'ccc'; })(), 'The response factory passed to MockHttpClient must return/yield an instance of ResponseInterface, "string" given.'],
         ];
     }
@@ -192,6 +183,43 @@ class MockHttpClientTest extends HttpClientTestCase
         $client = new MockHttpClient(new MockResponse('', ['response_headers' => ['HTTP/1.1 000 ']]));
         $response = $client->request('GET', 'https://foo.bar');
         $this->assertSame(0, $response->getStatusCode());
+    }
+
+    public function testFixContentLength()
+    {
+        $client = new MockHttpClient();
+
+        $response = $client->request('POST', 'http://localhost:8057/post', [
+            'body' => 'abc=def',
+            'headers' => ['Content-Length: 4'],
+        ]);
+
+        $requestOptions = $response->getRequestOptions();
+        $this->assertSame('Content-Length: 7', $requestOptions['headers'][0]);
+        $this->assertSame(['Content-Length: 7'], $requestOptions['normalized_headers']['content-length']);
+
+        $response = $client->request('POST', 'http://localhost:8057/post', [
+            'body' => 'abc=def',
+        ]);
+
+        $requestOptions = $response->getRequestOptions();
+        $this->assertSame('Content-Length: 7', $requestOptions['headers'][1]);
+        $this->assertSame(['Content-Length: 7'], $requestOptions['normalized_headers']['content-length']);
+
+        $response = $client->request('POST', 'http://localhost:8057/post', [
+            'body' => "8\r\nSymfony \r\n5\r\nis aw\r\n6\r\nesome!\r\n0\r\n\r\n",
+            'headers' => ['Transfer-Encoding: chunked'],
+        ]);
+
+        $requestOptions = $response->getRequestOptions();
+        $this->assertSame(['Content-Length: 19'], $requestOptions['normalized_headers']['content-length']);
+
+        $response = $client->request('POST', 'http://localhost:8057/post', [
+            'body' => '',
+        ]);
+
+        $requestOptions = $response->getRequestOptions();
+        $this->assertFalse(isset($requestOptions['normalized_headers']['content-length']));
     }
 
     public function testThrowExceptionInBodyGenerator()
@@ -232,6 +260,15 @@ class MockHttpClientTest extends HttpClientTestCase
         $this->assertInstanceOf(ErrorChunk::class, $chunks[2]);
         $this->assertSame(3, $chunks[2]->getOffset());
         $this->assertSame('bar ccc', $chunks[2]->getError());
+    }
+
+    public function testMergeDefaultOptions()
+    {
+        $mockHttpClient = new MockHttpClient(null, 'https://example.com');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid URL: scheme is missing');
+        $mockHttpClient->request('GET', '/foo', ['base_uri' => null]);
     }
 
     public function testExceptionDirectlyInBody()
@@ -433,6 +470,7 @@ class MockHttpClientTest extends HttpClientTestCase
                 return $client;
 
             case 'testNonBlockingStream':
+            case 'testSeekAsyncStream':
                 $responses[] = new MockResponse((function () { yield '<1>'; yield ''; yield '<2>'; })(), ['response_headers' => $headers]);
                 break;
 
@@ -494,5 +532,45 @@ class MockHttpClientTest extends HttpClientTestCase
         $this->assertSame(1, $client->getRequestsCount());
         $client->reset();
         $this->assertSame(0, $client->getRequestsCount());
+    }
+
+    public function testCancelingMockResponseExecutesOnProgressWithUpdatedInfo()
+    {
+        $client = new MockHttpClient(new MockResponse(['foo', 'bar', 'ccc']));
+        $canceled = false;
+        $response = $client->request('GET', 'https://example.com', [
+            'on_progress' => static function (int $dlNow, int $dlSize, array $info) use (&$canceled): void {
+                $canceled = $info['canceled'];
+            },
+        ]);
+
+        foreach ($client->stream($response) as $response => $chunk) {
+            if ('bar' === $chunk->getContent()) {
+                $response->cancel();
+
+                break;
+            }
+        }
+
+        $this->assertTrue($canceled);
+    }
+
+    public function testEmptyResponseFactory()
+    {
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('The response factory iterator passed to MockHttpClient is empty.');
+
+        $client = new MockHttpClient([]);
+        $client->request('GET', 'https://example.com');
+    }
+
+    public function testMoreRequestsThanResponseFactoryResponses()
+    {
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('No more response left in the response factory iterator passed to MockHttpClient: the number of requests exceeds the number of responses.');
+
+        $client = new MockHttpClient([new MockResponse()]);
+        $client->request('GET', 'https://example.com');
+        $client->request('GET', 'https://example.com');
     }
 }

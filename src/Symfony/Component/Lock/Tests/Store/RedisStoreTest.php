@@ -19,16 +19,17 @@ use Symfony\Component\Lock\Store\RedisStore;
  * @author Jérémy Derussé <jeremy@derusse.com>
  *
  * @requires extension redis
+ *
  * @group integration
  */
-class RedisStoreTest extends AbstractRedisStoreTest
+class RedisStoreTest extends AbstractRedisStoreTestCase
 {
     use SharedLockStoreTestTrait;
 
     public static function setUpBeforeClass(): void
     {
         try {
-            (new \Redis())->connect(getenv('REDIS_HOST'));
+            (new \Redis())->connect(...explode(':', getenv('REDIS_HOST')));
         } catch (\Exception $e) {
             throw new SkippedTestSuiteError($e->getMessage());
         }
@@ -37,7 +38,7 @@ class RedisStoreTest extends AbstractRedisStoreTest
     protected function getRedisConnection(): \Redis
     {
         $redis = new \Redis();
-        $redis->connect(getenv('REDIS_HOST'));
+        $redis->connect(...explode(':', getenv('REDIS_HOST')));
 
         return $redis;
     }

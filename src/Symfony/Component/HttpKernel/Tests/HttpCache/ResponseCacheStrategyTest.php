@@ -5,10 +5,6 @@
  *
  * (c) Fabien Potencier <fabien@symfony.com>
  *
- * This code is partially based on the Rack-Cache library by Ryan Tomayko,
- * which is released under the MIT license.
- * (based on commit 02d2b48d75bcb63cf1c0c7149c077ad256542801)
- *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
@@ -81,7 +77,7 @@ class ResponseCacheStrategyTest extends TestCase
         $cacheStrategy = new ResponseCacheStrategy();
 
         $embeddedResponse = new Response();
-        $embeddedResponse->setLastModified(new \DateTime());
+        $embeddedResponse->setLastModified(new \DateTimeImmutable());
         $cacheStrategy->add($embeddedResponse);
 
         $mainResponse = new Response();
@@ -99,7 +95,7 @@ class ResponseCacheStrategyTest extends TestCase
 
         // This main response uses the "validation" model
         $mainResponse = new Response();
-        $mainResponse->setLastModified(new \DateTime());
+        $mainResponse->setLastModified(new \DateTimeImmutable());
         $mainResponse->setEtag('foo');
 
         // Embedded response uses "expiry" model
@@ -121,7 +117,7 @@ class ResponseCacheStrategyTest extends TestCase
         $cacheStrategy = new ResponseCacheStrategy();
 
         $mainResponse = new Response();
-        $mainResponse->setLastModified(new \DateTime());
+        $mainResponse->setLastModified(new \DateTimeImmutable());
         $cacheStrategy->update($mainResponse);
 
         $this->assertTrue($mainResponse->isValidateable());
@@ -136,6 +132,28 @@ class ResponseCacheStrategyTest extends TestCase
         $cacheStrategy->update($mainResponse);
 
         $this->assertTrue($mainResponse->isFresh());
+    }
+
+    public function testLastModifiedIsMergedWithEmbeddedResponse()
+    {
+        $cacheStrategy = new ResponseCacheStrategy();
+
+        $embeddedDate = new \DateTimeImmutable('-1 hour');
+
+        // This master response uses the "validation" model
+        $masterResponse = new Response();
+        $masterResponse->setLastModified(new \DateTimeImmutable('-2 hour'));
+        $masterResponse->setEtag('foo');
+
+        // Embedded response uses "expiry" model
+        $embeddedResponse = new Response();
+        $embeddedResponse->setLastModified($embeddedDate);
+        $cacheStrategy->add($embeddedResponse);
+
+        $cacheStrategy->update($masterResponse);
+
+        $this->assertTrue($masterResponse->isValidateable());
+        $this->assertSame($embeddedDate->getTimestamp(), $masterResponse->getLastModified()->getTimestamp());
     }
 
     public function testMainResponseIsNotCacheableWhenEmbeddedResponseIsNotCacheable()
@@ -226,7 +244,7 @@ class ResponseCacheStrategyTest extends TestCase
         $mainResponse = new Response();
         $mainResponse->setSharedMaxAge(3600);
         $mainResponse->setEtag('foo');
-        $mainResponse->setLastModified(new \DateTime());
+        $mainResponse->setLastModified(new \DateTimeImmutable());
 
         $embeddedResponse = new Response();
         $embeddedResponse->setSharedMaxAge(60);
@@ -240,6 +258,7 @@ class ResponseCacheStrategyTest extends TestCase
 
     /**
      * @group time-sensitive
+     *
      * @dataProvider cacheControlMergingProvider
      */
     public function testCacheControlMerging(array $expects, array $master, array $surrogates)
@@ -256,7 +275,7 @@ class ResponseCacheStrategyTest extends TestCase
 
                     case 'expires':
                         $expires = clone $response->getDate();
-                        $expires->modify('+'.$value.' seconds');
+                        $expires = $expires->modify('+'.$value.' seconds');
                         $response->setExpires($expires);
                         break;
 
@@ -309,7 +328,7 @@ class ResponseCacheStrategyTest extends TestCase
         }
     }
 
-    public function cacheControlMergingProvider()
+    public static function cacheControlMergingProvider()
     {
         yield 'result is public if all responses are public' => [
             ['private' => false, 'public' => true],

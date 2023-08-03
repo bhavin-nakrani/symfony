@@ -52,7 +52,7 @@ class ArrayNodeDefinitionTest extends TestCase
         $node->getNode();
     }
 
-    public function providePrototypeNodeSpecificCalls(): array
+    public static function providePrototypeNodeSpecificCalls(): array
     {
         return [
             ['defaultValue', [[]]],
@@ -132,7 +132,7 @@ class ArrayNodeDefinitionTest extends TestCase
         }
     }
 
-    public function providePrototypedArrayNodeDefaults(): array
+    public static function providePrototypedArrayNodeDefaults(): array
     {
         return [
             [null, true, false, [[]]],
@@ -239,9 +239,7 @@ class ArrayNodeDefinitionTest extends TestCase
             ->children()
                 ->scalarNode('value')
                     ->beforeNormalization()
-                        ->ifTrue(function ($value) {
-                            return empty($value);
-                        })
+                        ->ifTrue(fn ($value) => empty($value))
                         ->thenUnset()
                     ->end()
                 ->end()
@@ -293,7 +291,7 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertEquals($node->prototype('enum'), $node->enumPrototype());
     }
 
-    public function getEnableableNodeFixtures(): array
+    public static function getEnableableNodeFixtures(): array
     {
         return [
             [['enabled' => true, 'foo' => 'bar'], [true], 'true enables an enableable node'],
@@ -438,7 +436,6 @@ class ArrayNodeDefinitionTest extends TestCase
     protected function getField(object $object, string $field)
     {
         $reflection = new \ReflectionProperty($object, $field);
-        $reflection->setAccessible(true);
 
         return $reflection->getValue($object);
     }

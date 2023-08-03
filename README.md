@@ -17,15 +17,32 @@ Installation
 Sponsor
 -------
 
-Symfony 6.1 is [backed][27] by [basecom][28].
+Symfony 6.3 is [backed][27] by
+- [SensioLabs][28]
+- [Shopware][29]
+- [Les-Tilleuls.coop][30]
+- [basecom][31]
 
-As a professional software service provider, basecom implements customized
-solutions in the areas of e-commerce, PIM solutions and web portals. With our
-experience and certified expertise, we have been one of the most renowned
+As the creator of Symfony, **SensioLabs** supports companies using Symfony,
+with an offering encompassing consultancy, expertise, services, training, and
+technical assistance to ensure the success of web application development projects.
+
+**Shopware** offers you cutting-edge, highly adaptable ecommerce solutions trusted
+by the world's most acclaimed brands. Create outstanding customer experiences,
+innovate fast, and accelerate your growth in the ever-evolving space of digital
+commerce. You decide how far you want to go, and we'll be by your side.
+
+**Les-Tilleuls.coop** is a team of 70+ Symfony experts who can help you design,
+develop and fix your projects. We provide a wide range of professional services
+including development, consulting, coaching, training and audits. We also are
+highly skilled in JS, Go and DevOps. We are a worker cooperative!
+
+As a professional software service provider, **basecom** implements customized
+solutions in the areas of e-commerce, PIM solutions and web portals. With their
+experience and certified expertise, they have been one of the most renowned
 Symfony specialists in Germany for many years.
 
-Help Symfony by [sponsoring][29] its development!
-
+Help Symfony by [sponsoring][32] its development!
 
 Documentation
 -------------
@@ -40,7 +57,7 @@ Community
 ---------
 
 * [Join the Symfony Community][11] and meet other members at the [Symfony events][12].
-* [Get Symfony support][13] on Stack Overflow, Slack, IRC, etc.
+* [Get Symfony support][13] on GitHub Discussions, Slack, etc.
 * Follow us on [GitHub][14], [Twitter][15] and [Facebook][16].
 * Read our [Code of Conduct][24] and meet the [CARE Team][25].
 
@@ -88,5 +105,8 @@ and supported by [Symfony contributors][19].
 [25]: https://symfony.com/doc/current/contributing/code_of_conduct/care_team.html
 [26]: https://symfony.com/book
 [27]: https://symfony.com/backers
-[28]: https://www.basecom.de/
-[29]: https://symfony.com/sponsor
+[28]: https://sensiolabs.com
+[29]: https://www.shopware.com
+[30]: https://les-tilleuls.coop
+[31]: https://basecom.de
+[32]: https://symfony.com/sponsor

@@ -48,7 +48,7 @@ final class MercureTransport extends AbstractTransport
 
     public function __toString(): string
     {
-        return sprintf('mercure://%s?%s', $this->hubId, http_build_query(['topic' => $this->topics], '', '&'));
+        return sprintf('mercure://%s%s', $this->hubId, null !== $this->topics ? '?'.http_build_query(['topic' => $this->topics], '', '&') : '');
     }
 
     public function supports(MessageInterface $message): bool
@@ -69,9 +69,7 @@ final class MercureTransport extends AbstractTransport
             throw new LogicException(sprintf('The "%s" transport only supports instances of "%s" for options.', __CLASS__, MercureOptions::class));
         }
 
-        if (null === $options) {
-            $options = new MercureOptions($this->topics);
-        }
+        $options ??= new MercureOptions($this->topics);
 
         // @see https://www.w3.org/TR/activitystreams-core/#jsonld
         $update = new Update($options->getTopics() ?? $this->topics, json_encode([

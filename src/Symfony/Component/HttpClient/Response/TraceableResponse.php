@@ -49,7 +49,7 @@ class TraceableResponse implements ResponseInterface, StreamableInterface
         throw new \BadMethodCallException('Cannot serialize '.__CLASS__);
     }
 
-    public function __wakeup()
+    public function __wakeup(): void
     {
         throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
     }
@@ -202,7 +202,7 @@ class TraceableResponse implements ResponseInterface, StreamableInterface
         }
     }
 
-    private function checkStatusCode(int $code)
+    private function checkStatusCode(int $code): void
     {
         if (500 <= $code) {
             throw new ServerException($this);

@@ -78,7 +78,7 @@ class FormTest extends TestCase
         new Form($node, 'http://example.com');
     }
 
-    public function constructorThrowsExceptionIfNoRelatedFormProvider()
+    public static function constructorThrowsExceptionIfNoRelatedFormProvider()
     {
         $dom = new \DOMDocument();
         $dom->loadHTML('
@@ -207,7 +207,7 @@ class FormTest extends TestCase
             $values,
             array_map(
                 function ($field) {
-                    $class = \get_class($field);
+                    $class = $field::class;
 
                     return [substr($class, strrpos($class, '\\') + 1), $field->getValue()];
                 },
@@ -217,7 +217,7 @@ class FormTest extends TestCase
         );
     }
 
-    public function provideInitializeValues()
+    public static function provideInitializeValues()
     {
         return [
             [
@@ -585,7 +585,7 @@ class FormTest extends TestCase
         $this->assertEquals('http://localhost/bar', $form->getUri(), '->getUri() returns absolute URIs');
     }
 
-    public function provideGetUriValues()
+    public static function provideGetUriValues()
     {
         return [
             [
@@ -874,7 +874,7 @@ class FormTest extends TestCase
     {
         $field = $this
             ->getMockBuilder(FormField::class)
-            ->setMethods(['getName', 'getValue', 'setValue', 'initialize'])
+            ->onlyMethods(['getName', 'getValue', 'setValue', 'initialize'])
             ->disableOriginalConstructor()
             ->getMock()
         ;
@@ -902,9 +902,7 @@ class FormTest extends TestCase
         $xPath = new \DOMXPath($dom);
         $nodes = $xPath->query('//input | //button');
 
-        if (null === $currentUri) {
-            $currentUri = 'http://example.com/';
-        }
+        $currentUri ??= 'http://example.com/';
 
         return new Form($nodes->item($nodes->length - 1), $currentUri, $method);
     }

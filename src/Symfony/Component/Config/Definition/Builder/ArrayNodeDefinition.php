@@ -37,9 +37,6 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
     protected $nodeBuilder;
     protected $normalizeKeys = true;
 
-    /**
-     * {@inheritdoc}
-     */
     public function __construct(?string $name, NodeParentInterface $parent = null)
     {
         parent::__construct($name, $parent);
@@ -49,16 +46,13 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setBuilder(NodeBuilder $builder)
     {
         $this->nodeBuilder = $builder;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function children(): NodeBuilder
     {
         return $this->getNodeBuilder();
@@ -255,7 +249,7 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
             ->beforeNormalization()
                 ->ifArray()
                 ->then(function (array $v) {
-                    $v['enabled'] = $v['enabled'] ?? true;
+                    $v['enabled'] ??= true;
 
                     return $v;
                 })
@@ -335,9 +329,6 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
         return $this;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function append(NodeDefinition $node): static
     {
         $this->children[$node->name] = $node->setParent($this);
@@ -350,19 +341,14 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
      */
     protected function getNodeBuilder(): NodeBuilder
     {
-        if (null === $this->nodeBuilder) {
-            $this->nodeBuilder = new NodeBuilder();
-        }
+        $this->nodeBuilder ??= new NodeBuilder();
 
         return $this->nodeBuilder->setParent($this);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function createNode(): NodeInterface
     {
-        if (null === $this->prototype) {
+        if (!isset($this->prototype)) {
             $node = new ArrayNode($this->name, $this->parent, $this->pathSeparator);
 
             $this->validateConcreteNode($node);
@@ -396,7 +382,7 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
 
             if (false !== $this->addDefaultChildren) {
                 $node->setAddChildrenIfNoneSet($this->addDefaultChildren);
-                if ($this->prototype instanceof static && null === $this->prototype->prototype) {
+                if ($this->prototype instanceof static && !isset($this->prototype->prototype)) {
                     $this->prototype->addDefaultsIfNotSet();
                 }
             }
@@ -418,17 +404,18 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
             $node->setDeprecated($this->deprecation['package'], $this->deprecation['version'], $this->deprecation['message']);
         }
 
-        if (null !== $this->normalization) {
+        if (isset($this->normalization)) {
             $node->setNormalizationClosures($this->normalization->before);
+            $node->setNormalizedTypes($this->normalization->declaredTypes);
             $node->setXmlRemappings($this->normalization->remappings);
         }
 
-        if (null !== $this->merge) {
+        if (isset($this->merge)) {
             $node->setAllowOverwrite($this->merge->allowOverwrite);
             $node->setAllowFalse($this->merge->allowFalse);
         }
 
-        if (null !== $this->validation) {
+        if (isset($this->validation)) {
             $node->setFinalValidationClosures($this->validation->rules);
         }
 
@@ -437,6 +424,8 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
 
     /**
      * Validate the configuration of a concrete node.
+     *
+     * @return void
      *
      * @throws InvalidDefinitionException
      */
@@ -467,6 +456,8 @@ class ArrayNodeDefinition extends NodeDefinition implements ParentNodeDefinition
 
     /**
      * Validate the configuration of a prototype node.
+     *
+     * @return void
      *
      * @throws InvalidDefinitionException
      */

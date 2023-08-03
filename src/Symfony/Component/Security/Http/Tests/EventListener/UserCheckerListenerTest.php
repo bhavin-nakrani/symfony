@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Security\Http\Tests\EventListener;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Event\AuthenticationSuccessEvent;
 use Symfony\Component\Security\Core\User\InMemoryUser;
@@ -25,9 +26,9 @@ use Symfony\Component\Security\Http\EventListener\UserCheckerListener;
 
 class UserCheckerListenerTest extends TestCase
 {
-    private $userChecker;
-    private $listener;
-    private $user;
+    private MockObject&UserCheckerInterface $userChecker;
+    private UserCheckerListener $listener;
+    private InMemoryUser $user;
 
     protected function setUp(): void
     {
@@ -47,7 +48,7 @@ class UserCheckerListenerTest extends TestCase
     {
         $this->userChecker->expects($this->never())->method('checkPreAuth');
 
-        $this->listener->preCheckCredentials($this->createCheckPassportEvent(new SelfValidatingPassport(new UserBadge('test', function () { return $this->user; }), [new PreAuthenticatedUserBadge()])));
+        $this->listener->preCheckCredentials($this->createCheckPassportEvent(new SelfValidatingPassport(new UserBadge('test', fn () => $this->user), [new PreAuthenticatedUserBadge()])));
     }
 
     public function testPostAuthValidCredentials()
@@ -59,9 +60,7 @@ class UserCheckerListenerTest extends TestCase
 
     private function createCheckPassportEvent($passport = null)
     {
-        if (null === $passport) {
-            $passport = new SelfValidatingPassport(new UserBadge('test', function () { return $this->user; }));
-        }
+        $passport ??= new SelfValidatingPassport(new UserBadge('test', fn () => $this->user));
 
         return new CheckPassportEvent($this->createMock(AuthenticatorInterface::class), $passport);
     }

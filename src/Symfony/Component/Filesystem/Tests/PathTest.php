@@ -21,7 +21,7 @@ use Symfony\Component\Filesystem\Path;
  */
 class PathTest extends TestCase
 {
-    protected $storedEnv = [];
+    protected array $storedEnv = [];
 
     protected function setUp(): void
     {
@@ -41,7 +41,7 @@ class PathTest extends TestCase
         putenv('HOMEPATH='.$this->storedEnv['HOMEPATH']);
     }
 
-    public function provideCanonicalizationTests(): \Generator
+    public static function provideCanonicalizationTests(): \Generator
     {
         // relative paths (forward slash)
         yield ['css/./style.css', 'css/style.css'];
@@ -172,7 +172,7 @@ class PathTest extends TestCase
         $this->assertSame($canonicalized, Path::canonicalize($path));
     }
 
-    public function provideGetDirectoryTests(): \Generator
+    public static function provideGetDirectoryTests(): \Generator
     {
         yield ['/webmozart/symfony/style.css', '/webmozart/symfony'];
         yield ['/webmozart/symfony', '/webmozart'];
@@ -223,6 +223,8 @@ class PathTest extends TestCase
         yield ['/..', '/'];
 
         yield ['C:webmozart', ''];
+
+        yield ['D:/Folder/Aééé/Subfolder', 'D:/Folder/Aééé'];
     }
 
     /**
@@ -233,7 +235,7 @@ class PathTest extends TestCase
         $this->assertSame($directory, Path::getDirectory($path));
     }
 
-    public function provideGetFilenameWithoutExtensionTests(): \Generator
+    public static function provideGetFilenameWithoutExtensionTests(): \Generator
     {
         yield ['/webmozart/symfony/style.css.twig', null, 'style.css'];
         yield ['/webmozart/symfony/style.css.', null, 'style.css'];
@@ -264,7 +266,7 @@ class PathTest extends TestCase
         $this->assertSame($filename, Path::getFilenameWithoutExtension($path, $extension));
     }
 
-    public function provideGetExtensionTests(): \Generator
+    public static function provideGetExtensionTests(): \Generator
     {
         yield ['/webmozart/symfony/style.css.twig', false, 'twig'];
         yield ['/webmozart/symfony/style.css', false, 'css'];
@@ -289,7 +291,7 @@ class PathTest extends TestCase
         $this->assertSame($extension, Path::getExtension($path, $forceLowerCase));
     }
 
-    public function provideHasExtensionTests(): \Generator
+    public static function provideHasExtensionTests(): \Generator
     {
         yield [true, '/webmozart/symfony/style.css.twig', null, false];
         yield [true, '/webmozart/symfony/style.css', null, false];
@@ -336,7 +338,7 @@ class PathTest extends TestCase
         $this->assertSame($hasExtension, Path::hasExtension($path, $extension, $ignoreCase));
     }
 
-    public function provideChangeExtensionTests(): \Generator
+    public static function provideChangeExtensionTests(): \Generator
     {
         yield ['/webmozart/symfony/style.css.twig', 'html', '/webmozart/symfony/style.css.html'];
         yield ['/webmozart/symfony/style.css', 'sass', '/webmozart/symfony/style.sass'];
@@ -360,7 +362,7 @@ class PathTest extends TestCase
         $this->assertSame($pathExpected, Path::changeExtension($path, $extension));
     }
 
-    public function provideIsAbsolutePathTests(): \Generator
+    public static function provideIsAbsolutePathTests(): \Generator
     {
         yield ['/css/style.css', true];
         yield ['/', true];
@@ -403,7 +405,7 @@ class PathTest extends TestCase
         $this->assertSame(!$isAbsolute, Path::isRelative($path));
     }
 
-    public function provideGetRootTests(): \Generator
+    public static function provideGetRootTests(): \Generator
     {
         yield ['/css/style.css', '/'];
         yield ['/', '/'];
@@ -437,30 +439,30 @@ class PathTest extends TestCase
         $this->assertSame($root, Path::getRoot($path));
     }
 
-    public function providePathTests(): \Generator
+    private static function getPathTests(): \Generator
     {
-        // relative to absolute path
-        yield ['css/style.css', '/webmozart/symfony', '/webmozart/symfony/css/style.css'];
-        yield ['../css/style.css', '/webmozart/symfony', '/webmozart/css/style.css'];
-        yield ['../../css/style.css', '/webmozart/symfony', '/css/style.css'];
+        yield from [
+            // relative to absolute path
+            ['css/style.css', '/webmozart/symfony', '/webmozart/symfony/css/style.css'],
+            ['../css/style.css', '/webmozart/symfony', '/webmozart/css/style.css'],
+            ['../../css/style.css', '/webmozart/symfony', '/css/style.css'],
 
-        // relative to root
-        yield ['css/style.css', '/', '/css/style.css'];
-        yield ['css/style.css', 'C:', 'C:/css/style.css'];
-        yield ['css/style.css', 'C:/', 'C:/css/style.css'];
+            // relative to root
+            ['css/style.css', '/', '/css/style.css'],
+            ['css/style.css', 'C:', 'C:/css/style.css'],
+            ['css/style.css', 'C:/', 'C:/css/style.css'],
 
-        // same sub directories in different base directories
-        yield ['../../symfony/css/style.css', '/webmozart/css', '/symfony/css/style.css'];
+            // same sub directories in different base directories
+            ['../../symfony/css/style.css', '/webmozart/css', '/symfony/css/style.css'],
 
-        yield ['', '/webmozart/symfony', '/webmozart/symfony'];
-        yield ['..', '/webmozart/symfony', '/webmozart'];
+            ['', '/webmozart/symfony', '/webmozart/symfony'],
+            ['..', '/webmozart/symfony', '/webmozart'],
+        ];
     }
 
-    public function provideMakeAbsoluteTests(): \Generator
+    public static function provideMakeAbsoluteTests(): \Generator
     {
-        foreach ($this->providePathTests() as $set) {
-            yield $set;
-        }
+        yield from self::getPathTests();
 
         // collapse dots
         yield ['css/./style.css', '/webmozart/symfony', '/webmozart/symfony/css/style.css'];
@@ -549,7 +551,7 @@ class PathTest extends TestCase
         Path::makeAbsolute('css/style.css', '');
     }
 
-    public function provideAbsolutePathsWithDifferentRoots(): \Generator
+    public static function provideAbsolutePathsWithDifferentRoots(): \Generator
     {
         yield ['C:/css/style.css', '/webmozart/symfony'];
         yield ['C:/css/style.css', '\\webmozart\\symfony'];
@@ -585,9 +587,9 @@ class PathTest extends TestCase
         $this->assertSame(Path::canonicalize($absolutePath), Path::makeAbsolute($absolutePath, $basePath));
     }
 
-    public function provideMakeRelativeTests(): \Generator
+    public static function provideMakeRelativeTests(): \Generator
     {
-        foreach ($this->providePathTests() as $set) {
+        foreach (self::getPathTests() as $set) {
             yield [$set[2], $set[1], $set[0]];
         }
 
@@ -711,7 +713,7 @@ class PathTest extends TestCase
         Path::makeRelative($absolutePath, $basePath);
     }
 
-    public function provideIsLocalTests(): \Generator
+    public static function provideIsLocalTests(): \Generator
     {
         yield ['/bg.png', true];
         yield ['bg.png', true];
@@ -728,7 +730,7 @@ class PathTest extends TestCase
         $this->assertSame($isLocal, Path::isLocal($path));
     }
 
-    public function provideGetLongestCommonBasePathTests(): \Generator
+    public static function provideGetLongestCommonBasePathTests(): \Generator
     {
         // same paths
         yield [['/base/path', '/base/path'], '/base/path'];
@@ -848,7 +850,7 @@ class PathTest extends TestCase
         $this->assertSame($basePath, Path::getLongestCommonBasePath(...$paths));
     }
 
-    public function provideIsBasePathTests(): \Generator
+    public static function provideIsBasePathTests(): \Generator
     {
         // same paths
         yield ['/base/path', '/base/path', true];
@@ -937,7 +939,7 @@ class PathTest extends TestCase
         $this->assertSame($result, Path::isBasePath($path, $ofPath));
     }
 
-    public function provideJoinTests(): \Generator
+    public static function provideJoinTests(): \Generator
     {
         yield [['', ''], ''];
         yield [['/path/to/test', ''], '/path/to/test'];
@@ -1024,10 +1026,10 @@ class PathTest extends TestCase
         $this->assertSame('/path/to/test/subdir', Path::join('/path', 'to', '/test', 'subdir/'));
     }
 
-    public function testGetHomeDirectoryFailsIfNotSupportedOperationSystem()
+    public function testGetHomeDirectoryFailsIfNotSupportedOperatingSystem()
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Your environment or operation system isn\'t supported');
+        $this->expectExceptionMessage('Your environment or operating system isn\'t supported');
 
         putenv('HOME=');
 

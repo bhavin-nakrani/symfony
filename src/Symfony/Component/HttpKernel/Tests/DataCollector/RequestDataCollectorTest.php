@@ -31,6 +31,7 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernel;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\Tests\Fixtures\DataCollector\DummyController;
 
 class RequestDataCollectorTest extends TestCase
 {
@@ -91,29 +92,31 @@ class RequestDataCollectorTest extends TestCase
         $this->assertSame($expected, $c->getController()->getValue(true), sprintf('Testing: %s', $name));
     }
 
-    public function provideControllerCallables()
+    public static function provideControllerCallables(): array
     {
         // make sure we always match the line number
-        $r1 = new \ReflectionMethod($this, 'testControllerInspection');
-        $r2 = new \ReflectionMethod($this, 'staticControllerMethod');
-        $r3 = new \ReflectionClass($this);
+        $controller = new DummyController();
+
+        $r1 = new \ReflectionMethod($controller, 'regularCallable');
+        $r2 = new \ReflectionMethod($controller, 'staticControllerMethod');
+        $r3 = new \ReflectionClass($controller);
 
         // test name, callable, expected
         return [
             [
                 '"Regular" callable',
-                [$this, 'testControllerInspection'],
+                [$controller, 'regularCallable'],
                 [
-                    'class' => self::class,
-                    'method' => 'testControllerInspection',
-                    'file' => __FILE__,
+                    'class' => DummyController::class,
+                    'method' => 'regularCallable',
+                    'file' => $r1->getFileName(),
                     'line' => $r1->getStartLine(),
                 ],
             ],
 
             [
                 'Closure',
-                function () { return 'foo'; },
+                fn () => 'foo',
                 [
                     'class' => __NAMESPACE__.'\{closure}',
                     'method' => null,
@@ -123,43 +126,54 @@ class RequestDataCollectorTest extends TestCase
             ],
 
             [
-                'Static callback as string',
-                __NAMESPACE__.'\RequestDataCollectorTest::staticControllerMethod',
+                'First-class callable closure',
+                $controller->regularCallable(...),
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
+                    'method' => 'regularCallable',
+                    'file' => $r1->getFileName(),
+                    'line' => $r1->getStartLine(),
+                ],
+            ],
+
+            [
+                'Static callback as string',
+                DummyController::class.'::staticControllerMethod',
+                [
+                    'class' => DummyController::class,
                     'method' => 'staticControllerMethod',
-                    'file' => __FILE__,
+                    'file' => $r2->getFileName(),
                     'line' => $r2->getStartLine(),
                 ],
             ],
 
             [
                 'Static callable with instance',
-                [$this, 'staticControllerMethod'],
+                [$controller, 'staticControllerMethod'],
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
                     'method' => 'staticControllerMethod',
-                    'file' => __FILE__,
+                    'file' => $r2->getFileName(),
                     'line' => $r2->getStartLine(),
                 ],
             ],
 
             [
                 'Static callable with class name',
-                ['Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest', 'staticControllerMethod'],
+                [DummyController::class, 'staticControllerMethod'],
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
                     'method' => 'staticControllerMethod',
-                    'file' => __FILE__,
+                    'file' => $r2->getFileName(),
                     'line' => $r2->getStartLine(),
                 ],
             ],
 
             [
                 'Callable with instance depending on __call()',
-                [$this, 'magicMethod'],
+                [$controller, 'magicMethod'],
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
                     'method' => 'magicMethod',
                     'file' => 'n/a',
                     'line' => 'n/a',
@@ -168,9 +182,9 @@ class RequestDataCollectorTest extends TestCase
 
             [
                 'Callable with class name depending on __callStatic()',
-                ['Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest', 'magicMethod'],
+                [DummyController::class, 'magicMethod'],
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
                     'method' => 'magicMethod',
                     'file' => 'n/a',
                     'line' => 'n/a',
@@ -179,11 +193,11 @@ class RequestDataCollectorTest extends TestCase
 
             [
                 'Invokable controller',
-                $this,
+                $controller,
                 [
-                    'class' => 'Symfony\Component\HttpKernel\Tests\DataCollector\RequestDataCollectorTest',
+                    'class' => DummyController::class,
                     'method' => null,
-                    'file' => __FILE__,
+                    'file' => $r3->getFileName(),
                     'line' => $r3->getStartLine(),
                 ],
             ],
@@ -312,6 +326,15 @@ class RequestDataCollectorTest extends TestCase
         $collector->lateCollect();
 
         $this->assertTrue($collector->getStatelessCheck());
+
+        $requestStack = new RequestStack();
+        $request = $this->createRequest();
+
+        $collector = new RequestDataCollector($requestStack);
+        $collector->collect($request, $response = $this->createResponse());
+        $collector->lateCollect();
+
+        $this->assertFalse($collector->getStatelessCheck());
     }
 
     public function testItHidesPassword()
@@ -364,7 +387,7 @@ class RequestDataCollectorTest extends TestCase
         $response->headers->set('Content-Type', 'application/json');
         $response->headers->set('X-Foo-Bar', null);
         $response->headers->setCookie(new Cookie('foo', 'bar', 1, '/foo', 'localhost', true, true, false, null));
-        $response->headers->setCookie(new Cookie('bar', 'foo', new \DateTime('@946684800'), '/', null, false, true, false, null));
+        $response->headers->setCookie(new Cookie('bar', 'foo', new \DateTimeImmutable('@946684800'), '/', null, false, true, false, null));
         $response->headers->setCookie(new Cookie('bazz', 'foo', '2000-12-12', '/', null, false, true, false, null));
 
         return $response;
@@ -379,35 +402,6 @@ class RequestDataCollectorTest extends TestCase
         $httpKernel = new HttpKernel(new EventDispatcher(), $resolver, null, $this->createMock(ArgumentResolverInterface::class));
         $event = new ControllerEvent($httpKernel, $controller, $request, HttpKernelInterface::MAIN_REQUEST);
         $collector->onKernelController($event);
-    }
-
-    /**
-     * Dummy method used as controller callable.
-     */
-    public static function staticControllerMethod()
-    {
-        throw new \LogicException('Unexpected method call');
-    }
-
-    /**
-     * Magic method to allow non existing methods to be called and delegated.
-     */
-    public function __call(string $method, array $args)
-    {
-        throw new \LogicException('Unexpected method call');
-    }
-
-    /**
-     * Magic method to allow non existing methods to be called and delegated.
-     */
-    public static function __callStatic(string $method, array $args)
-    {
-        throw new \LogicException('Unexpected method call');
-    }
-
-    public function __invoke()
-    {
-        throw new \LogicException('Unexpected method call');
     }
 
     private function getCookieByName(Response $response, $name)
@@ -436,7 +430,7 @@ class RequestDataCollectorTest extends TestCase
         $this->assertSame($expected, $c->isJsonRequest());
     }
 
-    public function provideJsonContentTypes()
+    public static function provideJsonContentTypes(): array
     {
         return [
             ['text/csv', false],
@@ -463,7 +457,7 @@ class RequestDataCollectorTest extends TestCase
         $this->assertSame($expected, $c->getPrettyJson());
     }
 
-    public function providePrettyJson()
+    public static function providePrettyJson(): array
     {
         return [
             ['null', 'null'],

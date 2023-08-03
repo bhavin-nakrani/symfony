@@ -21,7 +21,7 @@ class ScriptsTest extends ResourceBundleTestCase
 {
     // The below arrays document the state of the ICU data bundled with this package.
 
-    protected static $scripts = [
+    protected static array $scripts = [
         'Adlm',
         'Afak',
         'Aghb',
@@ -98,6 +98,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Jurc',
         'Kali',
         'Kana',
+        'Kawi',
         'Khar',
         'Khmr',
         'Khoj',
@@ -137,6 +138,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Mtei',
         'Mult',
         'Mymr',
+        'Nagm',
         'Nand',
         'Narb',
         'Nbat',

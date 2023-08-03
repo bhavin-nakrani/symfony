@@ -14,13 +14,13 @@ namespace Symfony\Component\Form\Tests\Extension\Validator\Type;
 use Symfony\Component\Form\Extension\Core\Type\BirthdayType;
 use Symfony\Component\Form\Test\Traits\ValidatorExtensionTrait;
 
-class BirthdayTypeValidatorExtensionTest extends BaseValidatorExtensionTest
+class BirthdayTypeValidatorExtensionTest extends BaseValidatorExtensionTestCase
 {
     use ValidatorExtensionTrait;
 
     protected function createForm(array $options = [])
     {
-        return $this->factory->create(BirthdayType::class, null, $options);
+        return $this->factory->create(BirthdayType::class, null, $options + ['widget' => 'choice']);
     }
 
     public function testInvalidMessage()

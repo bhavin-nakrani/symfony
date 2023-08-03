@@ -16,7 +16,7 @@ use Symfony\Component\String\Inflector\EnglishInflector;
 
 class EnglishInflectorTest extends TestCase
 {
-    public function singularizeProvider()
+    public static function singularizeProvider()
     {
         // see http://english-zone.com/spelling/plurals.html
         // see http://www.scribd.com/doc/3271143/List-of-100-Irregular-Plural-Nouns-in-English
@@ -54,6 +54,7 @@ class EnglishInflectorTest extends TestCase
             ['children', 'child'],
             ['circuses', ['circus', 'circuse', 'circusis']],
             ['cliffs', 'cliff'],
+            ['codes', 'code'],
             ['committee', 'committee'],
             ['crises', ['cris', 'crise', 'crisis']],
             ['criteria', ['criterion', 'criterium']],
@@ -87,7 +88,7 @@ class EnglishInflectorTest extends TestCase
             ['halves', ['half', 'halve', 'halff']],
             ['hats', 'hat'],
             ['heroes', ['hero', 'heroe']],
-            ['hippopotamuses', ['hippopotamus', 'hippopotamuse', 'hippopotamusis']], //hippopotami
+            ['hippopotamuses', ['hippopotamus', 'hippopotamuse', 'hippopotamusis']], // hippopotami
             ['hoaxes', 'hoax'],
             ['hooves', ['hoof', 'hoove', 'hooff']],
             ['houses', ['hous', 'house', 'housis']],
@@ -108,6 +109,7 @@ class EnglishInflectorTest extends TestCase
             ['mice', 'mouse'],
             ['moves', 'move'],
             ['movies', 'movie'],
+            ['names', 'name'],
             ['nebulae', 'nebula'],
             ['neuroses', ['neuros', 'neurose', 'neurosis']],
             ['news', 'news'],
@@ -130,7 +132,7 @@ class EnglishInflectorTest extends TestCase
             ['roses', ['ros', 'rose', 'rosis']],
             ['sandwiches', ['sandwich', 'sandwiche']],
             ['scarves', ['scarf', 'scarve', 'scarff']],
-            ['schemas', 'schema'], //schemata
+            ['schemas', 'schema'], // schemata
             ['seasons', 'season'],
             ['selfies', 'selfie'],
             ['series', 'series'],
@@ -140,6 +142,8 @@ class EnglishInflectorTest extends TestCase
             ['species', 'species'],
             ['spies', 'spy'],
             ['staves', ['staf', 'stave', 'staff']],
+            ['status', 'status'],
+            ['statuses', 'status'],
             ['stories', 'story'],
             ['strata', ['straton', 'stratum']],
             ['suitcases', ['suitcas', 'suitcase', 'suitcasis']],
@@ -160,13 +164,13 @@ class EnglishInflectorTest extends TestCase
             ['SubTrees', 'SubTree'],
 
             // Known issues
-            //['insignia', 'insigne'],
-            //['insignias', 'insigne'],
-            //['rattles', 'rattle'],
+            // ['insignia', 'insigne'],
+            // ['insignias', 'insigne'],
+            // ['rattles', 'rattle'],
         ];
     }
 
-    public function pluralizeProvider()
+    public static function pluralizeProvider()
     {
         // see http://english-zone.com/spelling/plurals.html
         // see http://www.scribd.com/doc/3271143/List-of-100-Irregular-Plural-Nouns-in-English
@@ -176,7 +180,7 @@ class EnglishInflectorTest extends TestCase
             ['agenda', 'agendas'],
             ['alumnus', 'alumni'],
             ['analysis', 'analyses'],
-            ['antenna', 'antennas'], //antennae
+            ['antenna', 'antennas'], // antennae
             ['appendix', ['appendicies', 'appendixes']],
             ['arch', 'arches'],
             ['atlas', 'atlases'],
@@ -221,7 +225,7 @@ class EnglishInflectorTest extends TestCase
             ['feedback', 'feedback'],
             ['focus', 'focuses'],
             ['foot', 'feet'],
-            ['formula', 'formulas'], //formulae
+            ['formula', 'formulas'], // formulae
             ['conspectus', 'conspectuses'],
             ['fungus', 'fungi'],
             ['garage', 'garages'],
@@ -229,7 +233,7 @@ class EnglishInflectorTest extends TestCase
             ['half', ['halfs', 'halves']],
             ['hat', 'hats'],
             ['hero', 'heroes'],
-            ['hippopotamus', 'hippopotami'], //hippopotamuses
+            ['hippopotamus', 'hippopotami'], // hippopotamuses
             ['hoax', 'hoaxes'],
             ['hoof', ['hoofs', 'hooves']],
             ['house', 'houses'],
@@ -269,7 +273,7 @@ class EnglishInflectorTest extends TestCase
             ['rose', 'roses'],
             ['sandwich', 'sandwiches'],
             ['scarf', ['scarfs', 'scarves']],
-            ['schema', 'schemas'], //schemata
+            ['schema', 'schemas'], // schemata
             ['season', 'seasons'],
             ['selfie', 'selfies'],
             ['series', 'series'],
@@ -277,6 +281,7 @@ class EnglishInflectorTest extends TestCase
             ['sheriff', 'sheriffs'],
             ['shoe', 'shoes'],
             ['species', 'species'],
+            ['status', ['status', 'statuses']],
             ['spy', 'spies'],
             ['staff', 'staves'],
             ['story', 'stories'],

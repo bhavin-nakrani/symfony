@@ -15,14 +15,11 @@ use Symfony\Component\Form\Form;
 use Symfony\Component\Form\Tests\Fixtures\NotMappedType;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
-class RepeatedTypeTest extends BaseTypeTest
+class RepeatedTypeTest extends BaseTypeTestCase
 {
     public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\RepeatedType';
 
-    /**
-     * @var Form
-     */
-    protected $form;
+    protected Form $form;
 
     protected function setUp(): void
     {
@@ -107,7 +104,7 @@ class RepeatedTypeTest extends BaseTypeTest
         $this->assertTrue($form['second']->getConfig()->getMapped());
     }
 
-    public function notMappedConfigurationKeys()
+    public static function notMappedConfigurationKeys()
     {
         return [
             ['first_options'],

@@ -30,6 +30,7 @@ class UrlGenerator implements UrlGeneratorInterface, ConfigurableRequirementsInt
     private const QUERY_FRAGMENT_DECODED = [
         // RFC 3986 explicitly allows those in the query/fragment to reference other URIs unencoded
         '%2F' => '/',
+        '%252F' => '%2F',
         '%3F' => '?',
         // reserved chars that have no special meaning for HTTP URIs in a query or fragment
         // this excludes esp. "&", "=" and also "+" because PHP would treat it as a space (form-encoded)
@@ -91,40 +92,31 @@ class UrlGenerator implements UrlGeneratorInterface, ConfigurableRequirementsInt
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setContext(RequestContext $context)
     {
         $this->context = $context;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getContext(): RequestContext
     {
         return $this->context;
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function setStrictRequirements(?bool $enabled)
     {
         $this->strictRequirements = $enabled;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function isStrictRequirements(): ?bool
     {
         return $this->strictRequirements;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function generate(string $name, array $parameters = [], int $referenceType = self::ABSOLUTE_PATH): string
     {
         $route = null;
@@ -171,7 +163,7 @@ class UrlGenerator implements UrlGeneratorInterface, ConfigurableRequirementsInt
 
         // all params must be given
         if ($diff = array_diff_key($variables, $mergedParams)) {
-            throw new MissingMandatoryParametersException(sprintf('Some mandatory parameters are missing ("%s") to generate a URL for route "%s".', implode('", "', array_keys($diff)), $name));
+            throw new MissingMandatoryParametersException($name, array_keys($diff));
         }
 
         $url = '';
@@ -283,9 +275,7 @@ class UrlGenerator implements UrlGeneratorInterface, ConfigurableRequirementsInt
         }
 
         // add a query string if needed
-        $extra = array_udiff_assoc(array_diff_key($parameters, $variables), $defaults, function ($a, $b) {
-            return $a == $b ? 0 : 1;
-        });
+        $extra = array_udiff_assoc(array_diff_key($parameters, $variables), $defaults, fn ($a, $b) => $a == $b ? 0 : 1);
 
         array_walk_recursive($extra, $caster = static function (&$v) use (&$caster) {
             if (\is_object($v)) {

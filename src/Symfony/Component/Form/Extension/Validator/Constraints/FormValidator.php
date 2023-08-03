@@ -30,7 +30,7 @@ class FormValidator extends ConstraintValidator
     private \SplObjectStorage $resolvedGroups;
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function validate(mixed $form, Constraint $formConstraint)
     {
@@ -113,7 +113,7 @@ class FormValidator extends ConstraintValidator
                 foreach ($constraints as $constraint) {
                     // For the "Valid" constraint, validate the data in all groups
                     if ($constraint instanceof Valid) {
-                        if (\is_object($data)) {
+                        if (\is_object($data) || \is_array($data)) {
                             $validator->atPath('data')->validate($data, $constraint, $groups);
                         }
 
@@ -171,7 +171,7 @@ class FormValidator extends ConstraintValidator
             // child.
             // See also https://github.com/symfony/symfony/issues/4359
             if ($childrenSynchronized) {
-                $clientDataAsString = is_scalar($form->getViewData())
+                $clientDataAsString = \is_scalar($form->getViewData())
                     ? (string) $form->getViewData()
                     : get_debug_type($form->getViewData());
 

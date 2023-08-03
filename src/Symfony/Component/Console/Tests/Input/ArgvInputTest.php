@@ -25,7 +25,6 @@ class ArgvInputTest extends TestCase
         $input = new ArgvInput();
         $r = new \ReflectionObject($input);
         $p = $r->getProperty('tokens');
-        $p->setAccessible(true);
 
         $this->assertEquals(['foo'], $p->getValue($input), '__construct() automatically get its input from the argv server variable');
     }
@@ -61,7 +60,7 @@ class ArgvInputTest extends TestCase
         $this->assertEquals($expectedOptions, $input->getOptions(), $message);
     }
 
-    public function provideOptions()
+    public static function provideOptions()
     {
         return [
             [
@@ -187,7 +186,7 @@ class ArgvInputTest extends TestCase
         ];
     }
 
-    public function provideNegatableOptions()
+    public static function provideNegatableOptions()
     {
         return [
             [
@@ -259,7 +258,7 @@ class ArgvInputTest extends TestCase
         $input->bind($definition);
     }
 
-    public function provideInvalidInput()
+    public static function provideInvalidInput()
     {
         return [
             [
@@ -330,7 +329,7 @@ class ArgvInputTest extends TestCase
         ];
     }
 
-    public function provideInvalidNegatableInput()
+    public static function provideInvalidNegatableInput()
     {
         return [
             [
@@ -516,7 +515,7 @@ class ArgvInputTest extends TestCase
         $this->assertEquals($expected, $input->getParameterOption($key, $default, $onlyParams), '->getParameterOption() returns the expected value');
     }
 
-    public function provideGetParameterOptionValues()
+    public static function provideGetParameterOptionValues()
     {
         return [
             [['app/console', 'foo:bar'], '-e', 'default', false, 'default'],

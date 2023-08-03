@@ -13,24 +13,20 @@ namespace Symfony\Component\Form\Tests\Extension\Core\DataMapper;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Form\Extension\Core\DataAccessor\PropertyPathAccessor;
 use Symfony\Component\Form\Extension\Core\DataMapper\DataMapper;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Form;
 use Symfony\Component\Form\FormConfigBuilder;
+use Symfony\Component\Form\FormFactoryBuilder;
 use Symfony\Component\Form\Tests\Fixtures\TypehintedPropertiesCar;
+use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyPath;
 
 class DataMapperTest extends TestCase
 {
-    /**
-     * @var DataMapper
-     */
-    private $mapper;
-
-    /**
-     * @var EventDispatcherInterface
-     */
-    private $dispatcher;
+    private DataMapper $mapper;
+    private EventDispatcher $dispatcher;
 
     protected function setUp(): void
     {
@@ -330,7 +326,7 @@ class DataMapperTest extends TestCase
         $article['publishedAt'] = $publishedAtValue;
         $propertyPath = new PropertyPath('[publishedAt]');
 
-        $config = new FormConfigBuilder('publishedAt', \get_class($publishedAt), $this->dispatcher);
+        $config = new FormConfigBuilder('publishedAt', $publishedAt::class, $this->dispatcher);
         $config->setByReference(false);
         $config->setPropertyPath($propertyPath);
         $config->setData($publishedAt);
@@ -341,7 +337,7 @@ class DataMapperTest extends TestCase
         self::assertSame($publishedAtValue, $article['publishedAt']);
     }
 
-    public function provideDate(): array
+    public static function provideDate(): array
     {
         return [
             [new \DateTime()],
@@ -355,9 +351,7 @@ class DataMapperTest extends TestCase
         $person = new DummyPerson($initialName);
 
         $config = new FormConfigBuilder('name', null, $this->dispatcher, [
-            'getter' => static function (DummyPerson $person) {
-                return $person->myName();
-            },
+            'getter' => static fn (DummyPerson $person) => $person->myName(),
         ]);
         $form = new Form($config);
 
@@ -382,6 +376,33 @@ class DataMapperTest extends TestCase
 
         self::assertSame('Jane Doe', $person->myName());
     }
+
+    public function testMapFormsToDataMapsDateTimeInstanceToArrayIfNotSetBefore()
+    {
+        $propertyAccessor = PropertyAccess::createPropertyAccessorBuilder()
+            ->enableExceptionOnInvalidIndex()
+            ->getPropertyAccessor();
+        $propertyAccessor = PropertyAccess::createPropertyAccessorBuilder()
+            ->enableExceptionOnInvalidIndex()
+            ->getPropertyAccessor();
+        $form = (new FormFactoryBuilder())->getFormFactory()->createBuilder()
+            ->setDataMapper(new DataMapper(new PropertyPathAccessor($propertyAccessor)))
+            ->add('date', DateType::class, [
+                'auto_initialize' => false,
+                'format' => 'dd/MM/yyyy',
+                'html5' => false,
+                'model_timezone' => 'UTC',
+                'view_timezone' => 'UTC',
+                'widget' => 'single_text',
+            ])
+            ->getForm();
+
+        $form->submit([
+            'date' => '04/08/2022',
+        ]);
+
+        $this->assertEquals(['date' => new \DateTime('2022-08-04', new \DateTimeZone('UTC'))], $form->getData());
+    }
 }
 
 class SubmittedForm extends Form
@@ -402,7 +423,7 @@ class NotSynchronizedForm extends SubmittedForm
 
 class DummyPerson
 {
-    private $name;
+    private string $name;
 
     public function __construct(string $name)
     {

@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\Compiler\DefinitionErrorExceptionPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
+use Symfony\Component\DependencyInjection\Reference;
 
 class DefinitionErrorExceptionPassTest extends TestCase
 {
@@ -44,6 +45,41 @@ class DefinitionErrorExceptionPassTest extends TestCase
             ->setArguments([
                 $def,
             ]);
+
+        $pass = new DefinitionErrorExceptionPass();
+        $pass->process($container);
+        $this->assertSame($def, $container->getDefinition('foo_service_id')->getArgument(0));
+    }
+
+    public function testSkipNestedErrors()
+    {
+        $container = new ContainerBuilder();
+
+        $container->register('nested_error', 'stdClass')
+            ->addError('Things went wrong!');
+
+        $container->register('bar', 'stdClass')
+            ->addArgument(new Reference('nested_error'));
+
+        $container->register('foo', 'stdClass')
+            ->addArgument(new Reference('bar', ContainerBuilder::RUNTIME_EXCEPTION_ON_INVALID_REFERENCE));
+
+        $pass = new DefinitionErrorExceptionPass();
+        $pass->process($container);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Things went wrong!');
+        $container->get('foo');
+    }
+
+    public function testSkipErrorFromTag()
+    {
+        $container = new ContainerBuilder();
+        $def = new Definition();
+        $def->addError('Things went wrong!');
+        $def->addTag('container.error');
+        $container->register('foo_service_id')
+            ->setArguments([$def]);
 
         $pass = new DefinitionErrorExceptionPass();
         $pass->process($container);

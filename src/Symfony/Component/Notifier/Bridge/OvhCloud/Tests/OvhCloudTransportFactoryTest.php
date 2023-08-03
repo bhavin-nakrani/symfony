@@ -21,32 +21,48 @@ final class OvhCloudTransportFactoryTest extends TransportFactoryTestCase
         return new OvhCloudTransportFactory();
     }
 
-    public function createProvider(): iterable
+    public static function createProvider(): iterable
     {
         yield [
-            'ovhcloud://host.test?consumer_key=consumerKey&service_name=serviceName',
+            'ovhcloud://host.test?service_name=serviceName',
             'ovhcloud://key:secret@host.test?consumer_key=consumerKey&service_name=serviceName',
         ];
 
         yield [
-            'ovhcloud://host.test?consumer_key=consumerKey&service_name=serviceName&sender=sender',
+            'ovhcloud://host.test?service_name=serviceName&sender=sender',
             'ovhcloud://key:secret@host.test?consumer_key=consumerKey&service_name=serviceName&sender=sender',
+        ];
+
+        yield [
+            'ovhcloud://host.test?service_name=serviceName',
+            'ovhcloud://key:secret@host.test?consumer_key=consumerKey&service_name=serviceName&no_stop_clause=0',
+        ];
+
+        yield [
+            'ovhcloud://host.test?service_name=serviceName',
+            'ovhcloud://key:secret@host.test?consumer_key=consumerKey&service_name=serviceName&no_stop_clause=1',
+        ];
+
+        yield [
+            'ovhcloud://host.test?service_name=serviceName',
+            'ovhcloud://key:secret@host.test?consumer_key=consumerKey&service_name=serviceName&no_stop_clause=true',
         ];
     }
 
-    public function supportsProvider(): iterable
+    public static function supportsProvider(): iterable
     {
         yield [true, 'ovhcloud://key:secret@default?consumer_key=consumerKey&service_name=serviceName&sender=sender'];
+        yield [true, 'ovhcloud://key:secret@default?consumer_key=consumerKey&service_name=serviceName&no_stop_clause=1'];
         yield [false, 'somethingElse://key:secret@default?consumer_key=consumerKey&service_name=serviceName&sender=sender'];
     }
 
-    public function missingRequiredOptionProvider(): iterable
+    public static function missingRequiredOptionProvider(): iterable
     {
         yield 'missing option: consumer_key' => ['ovhcloud://key:secret@default?service_name=serviceName'];
         yield 'missing option: service_name' => ['ovhcloud://key:secret@default?consumer_key=consumerKey'];
     }
 
-    public function unsupportedSchemeProvider(): iterable
+    public static function unsupportedSchemeProvider(): iterable
     {
         yield ['somethingElse://key:secret@default?consumer_key=consumerKey&service_name=serviceName&sender=sender'];
         yield ['somethingElse://key:secret@default?service_name=serviceName'];

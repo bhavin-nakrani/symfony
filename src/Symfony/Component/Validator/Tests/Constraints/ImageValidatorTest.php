@@ -18,24 +18,21 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 /**
  * @requires extension fileinfo
+ *
+ * @extends ConstraintValidatorTestCase<ImageValidator>
  */
 class ImageValidatorTest extends ConstraintValidatorTestCase
 {
-    protected $context;
+    protected string $path;
+    protected string $image;
+    protected string $imageLandscape;
+    protected string $imagePortrait;
+    protected string $image4By3;
+    protected string $image16By9;
+    protected string $imageCorrupted;
+    protected string $notAnImage;
 
-    /**
-     * @var ImageValidator
-     */
-    protected $validator;
-
-    protected $path;
-    protected $image;
-    protected $imageLandscape;
-    protected $imagePortrait;
-    protected $image4By3;
-    protected $imageCorrupted;
-
-    protected function createValidator()
+    protected function createValidator(): ImageValidator
     {
         return new ImageValidator();
     }
@@ -48,7 +45,9 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
         $this->imageLandscape = __DIR__.'/Fixtures/test_landscape.gif';
         $this->imagePortrait = __DIR__.'/Fixtures/test_portrait.gif';
         $this->image4By3 = __DIR__.'/Fixtures/test_4by3.gif';
+        $this->image16By9 = __DIR__.'/Fixtures/test_16by9.gif';
         $this->imageCorrupted = __DIR__.'/Fixtures/test_corrupted.gif';
+        $this->notAnImage = __DIR__.'/Fixtures/ccc.txt';
     }
 
     public function testNullIsValid()
@@ -87,7 +86,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideConstraintsWithNotFoundMessage(): iterable
+    public static function provideConstraintsWithNotFoundMessage(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'notFoundMessage' => 'myMessage',
@@ -125,7 +124,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMinWidthConstraints(): iterable
+    public static function provideMinWidthConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'minWidth' => 3,
@@ -150,7 +149,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMaxWidthConstraints(): iterable
+    public static function provideMaxWidthConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'maxWidth' => 1,
@@ -175,7 +174,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMinHeightConstraints(): iterable
+    public static function provideMinHeightConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'minHeight' => 3,
@@ -200,7 +199,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMaxHeightConstraints(): iterable
+    public static function provideMaxHeightConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'maxHeight' => 1,
@@ -227,7 +226,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMinPixelsConstraints(): iterable
+    public static function provideMinPixelsConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'minPixels' => 5,
@@ -254,7 +253,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMaxPixelsConstraints(): iterable
+    public static function provideMaxPixelsConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'maxPixels' => 3,
@@ -339,7 +338,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMinRatioConstraints(): iterable
+    public static function provideMinRatioConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'minRatio' => 2,
@@ -364,7 +363,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideMaxRatioConstraints(): iterable
+    public static function provideMaxRatioConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'maxRatio' => 0.5,
@@ -382,6 +381,28 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
         ]);
 
         $this->validator->validate($this->image4By3, $constraint);
+
+        $this->assertNoViolation();
+    }
+
+    public function testMinRatioUsesInputMoreDecimals()
+    {
+        $constraint = new Image([
+            'minRatio' => 4 / 3,
+        ]);
+
+        $this->validator->validate($this->image4By3, $constraint);
+
+        $this->assertNoViolation();
+    }
+
+    public function testMaxRatioUsesInputMoreDecimals()
+    {
+        $constraint = new Image([
+            'maxRatio' => 16 / 9,
+        ]);
+
+        $this->validator->validate($this->image16By9, $constraint);
 
         $this->assertNoViolation();
     }
@@ -420,7 +441,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideAllowSquareConstraints(): iterable
+    public static function provideAllowSquareConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'allowSquare' => false,
@@ -445,7 +466,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideAllowLandscapeConstraints(): iterable
+    public static function provideAllowLandscapeConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'allowLandscape' => false,
@@ -470,7 +491,7 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideAllowPortraitConstraints(): iterable
+    public static function provideAllowPortraitConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'allowPortrait' => false,
@@ -501,7 +522,22 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideDetectCorruptedConstraints(): iterable
+    public function testInvalidMimeType()
+    {
+        $this->validator->validate($this->notAnImage, $constraint = new Image());
+
+        $this->assertSame('image/*', $constraint->mimeTypes);
+
+        $this->buildViolation('This file is not a valid image.')
+            ->setParameter('{{ file }}', sprintf('"%s"', $this->notAnImage))
+            ->setParameter('{{ type }}', '"text/plain"')
+            ->setParameter('{{ types }}', '"image/*"')
+            ->setParameter('{{ name }}', '"ccc.txt"')
+            ->setCode(Image::INVALID_MIME_TYPE_ERROR)
+            ->assertRaised();
+    }
+
+    public static function provideDetectCorruptedConstraints(): iterable
     {
         yield 'Doctrine style' => [new Image([
             'detectCorrupted' => true,
@@ -509,6 +545,38 @@ class ImageValidatorTest extends ConstraintValidatorTestCase
         ])];
         yield 'Named arguments' => [
             new Image(detectCorrupted: true, corruptedMessage: 'myMessage'),
+        ];
+    }
+
+    /**
+     * @dataProvider provideInvalidMimeTypeWithNarrowedSet
+     */
+    public function testInvalidMimeTypeWithNarrowedSet(Image $constraint)
+    {
+        $this->validator->validate($this->image, $constraint);
+
+        $this->buildViolation('The mime type of the file is invalid ({{ type }}). Allowed mime types are {{ types }}.')
+            ->setParameter('{{ file }}', sprintf('"%s"', $this->image))
+            ->setParameter('{{ type }}', '"image/gif"')
+            ->setParameter('{{ types }}', '"image/jpeg", "image/png"')
+            ->setParameter('{{ name }}', '"test.gif"')
+            ->setCode(Image::INVALID_MIME_TYPE_ERROR)
+            ->assertRaised();
+    }
+
+    public static function provideInvalidMimeTypeWithNarrowedSet()
+    {
+        yield 'Doctrine style' => [new Image([
+            'mimeTypes' => [
+                'image/jpeg',
+                'image/png',
+            ],
+        ])];
+        yield 'Named arguments' => [
+            new Image(mimeTypes: [
+                'image/jpeg',
+                'image/png',
+            ]),
         ];
     }
 }

@@ -12,12 +12,14 @@
 namespace Symfony\Component\Messenger\Tests\DependencyInjection;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\Compiler\AttributeAutoconfigurationPass;
 use Symfony\Component\DependencyInjection\Compiler\ResolveChildDefinitionsPass;
 use Symfony\Component\DependencyInjection\Compiler\ResolveClassPass;
 use Symfony\Component\DependencyInjection\Compiler\ResolveInstanceofConditionalsPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -38,8 +40,10 @@ use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Messenger\Middleware\MiddlewareInterface;
 use Symfony\Component\Messenger\Middleware\StackInterface;
+use Symfony\Component\Messenger\Tests\Fixtures\ChildDummyMessage;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyCommand;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyCommandHandler;
+use Symfony\Component\Messenger\Tests\Fixtures\DummyHandlerWithCustomMethods;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyMessage;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyQuery;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyQueryHandler;
@@ -47,10 +51,17 @@ use Symfony\Component\Messenger\Tests\Fixtures\MultipleBusesMessage;
 use Symfony\Component\Messenger\Tests\Fixtures\MultipleBusesMessageHandler;
 use Symfony\Component\Messenger\Tests\Fixtures\SecondMessage;
 use Symfony\Component\Messenger\Tests\Fixtures\TaggedDummyHandler;
+use Symfony\Component\Messenger\Tests\Fixtures\TaggedDummyHandlerWithUnionTypes;
+use Symfony\Component\Messenger\Tests\Fixtures\UnionBuiltinTypeArgumentHandler;
+use Symfony\Component\Messenger\Tests\Fixtures\UnionTypeArgumentHandler;
+use Symfony\Component\Messenger\Tests\Fixtures\UnionTypeOneMessage;
+use Symfony\Component\Messenger\Tests\Fixtures\UnionTypeTwoMessage;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 
 class MessengerPassTest extends TestCase
 {
+    use ExpectDeprecationTrait;
+
     public function testProcess()
     {
         $container = $this->getContainerBuilder($busId = 'message_bus');
@@ -105,13 +116,52 @@ class MessengerPassTest extends TestCase
         $this->assertHandlerDescriptor($container, $handlerDescriptionMapping, DummyMessage::class, [DummyHandler::class], [['from_transport' => 'async']]);
     }
 
+    public function testHandledMessageTypeResolvedWithMethodAndNoHandlesViaTagAttributes()
+    {
+        $container = $this->getContainerBuilder($busId = 'message_bus');
+        $container
+            ->register(DummyHandlerWithCustomMethods::class, DummyHandlerWithCustomMethods::class)
+            ->addTag('messenger.message_handler', [
+                'method' => 'handleDummyMessage',
+            ])
+            ->addTag('messenger.message_handler', [
+                'method' => 'handleSecondMessage',
+            ]);
+
+        (new MessengerPass())->process($container);
+
+        $handlersMapping = $container->getDefinition($busId.'.messenger.handlers_locator')->getArgument(0);
+
+        $this->assertArrayHasKey(DummyMessage::class, $handlersMapping);
+        $this->assertHandlerDescriptor(
+            $container,
+            $handlersMapping,
+            DummyMessage::class,
+            [[DummyHandlerWithCustomMethods::class, 'handleDummyMessage']]
+        );
+
+        $this->assertArrayHasKey(SecondMessage::class, $handlersMapping);
+        $this->assertHandlerDescriptor(
+            $container,
+            $handlersMapping,
+            SecondMessage::class,
+            [[DummyHandlerWithCustomMethods::class, 'handleSecondMessage']]
+        );
+    }
+
     public function testTaggedMessageHandler()
     {
         $container = $this->getContainerBuilder($busId = 'message_bus');
-        $container->registerAttributeForAutoconfiguration(AsMessageHandler::class, static function (ChildDefinition $definition, AsMessageHandler $attribute): void {
+        $container->registerAttributeForAutoconfiguration(AsMessageHandler::class, static function (ChildDefinition $definition, AsMessageHandler $attribute, \ReflectionClass|\ReflectionMethod $reflector): void {
             $tagAttributes = get_object_vars($attribute);
             $tagAttributes['from_transport'] = $tagAttributes['fromTransport'];
             unset($tagAttributes['fromTransport']);
+            if ($reflector instanceof \ReflectionMethod) {
+                if (isset($tagAttributes['method'])) {
+                    throw new LogicException(sprintf('AsMessageHandler attribute cannot declare a method on "%s::%s()".', $reflector->class, $reflector->name));
+                }
+                $tagAttributes['method'] = $reflector->getName();
+            }
 
             $definition->addTag('messenger.message_handler', $tagAttributes);
         });
@@ -128,9 +178,63 @@ class MessengerPassTest extends TestCase
         $this->assertSame(HandlersLocator::class, $handlersLocatorDefinition->getClass());
 
         $handlerDescriptionMapping = $handlersLocatorDefinition->getArgument(0);
-        $this->assertCount(1, $handlerDescriptionMapping);
+        $this->assertCount(2, $handlerDescriptionMapping);
 
         $this->assertHandlerDescriptor($container, $handlerDescriptionMapping, DummyMessage::class, [TaggedDummyHandler::class], [[]]);
+        $this->assertHandlerDescriptor(
+            $container,
+            $handlerDescriptionMapping,
+            SecondMessage::class,
+            [[TaggedDummyHandler::class, 'handleSecondMessage']]
+        );
+    }
+
+    public function testTaggedMessageHandlerWithUnionTypes()
+    {
+        $container = $this->getContainerBuilder($busId = 'message_bus');
+        $container->registerAttributeForAutoconfiguration(AsMessageHandler::class, static function (ChildDefinition $definition, AsMessageHandler $attribute, \ReflectionClass|\ReflectionMethod $reflector): void {
+            $tagAttributes = get_object_vars($attribute);
+            $tagAttributes['from_transport'] = $tagAttributes['fromTransport'];
+            unset($tagAttributes['fromTransport']);
+            if ($reflector instanceof \ReflectionMethod) {
+                if (isset($tagAttributes['method'])) {
+                    throw new LogicException(sprintf('AsMessageHandler attribute cannot declare a method on "%s::%s()".', $reflector->class, $reflector->name));
+                }
+                $tagAttributes['method'] = $reflector->getName();
+            }
+
+            $definition->addTag('messenger.message_handler', $tagAttributes);
+        });
+        $container
+            ->register(TaggedDummyHandlerWithUnionTypes::class, TaggedDummyHandlerWithUnionTypes::class)
+            ->setAutoconfigured(true)
+        ;
+
+        (new AttributeAutoconfigurationPass())->process($container);
+        (new ResolveInstanceofConditionalsPass())->process($container);
+        (new MessengerPass())->process($container);
+
+        $handlersLocatorDefinition = $container->getDefinition($busId.'.messenger.handlers_locator');
+        $this->assertSame(HandlersLocator::class, $handlersLocatorDefinition->getClass());
+
+        $handlerDescriptionMapping = $handlersLocatorDefinition->getArgument(0);
+
+        $this->assertCount(4, $handlerDescriptionMapping);
+
+        $this->assertHandlerDescriptor($container, $handlerDescriptionMapping, DummyMessage::class, [TaggedDummyHandlerWithUnionTypes::class], [[]]);
+        $this->assertHandlerDescriptor($container, $handlerDescriptionMapping, SecondMessage::class, [TaggedDummyHandlerWithUnionTypes::class], [[]]);
+        $this->assertHandlerDescriptor(
+            $container,
+            $handlerDescriptionMapping,
+            UnionTypeOneMessage::class,
+            [[TaggedDummyHandlerWithUnionTypes::class, 'handleUnionTypeMessage']]
+        );
+        $this->assertHandlerDescriptor(
+            $container,
+            $handlerDescriptionMapping,
+            UnionTypeTwoMessage::class,
+            [[TaggedDummyHandlerWithUnionTypes::class, 'handleUnionTypeMessage']]
+        );
     }
 
     public function testProcessHandlersByBus()
@@ -164,13 +268,15 @@ class MessengerPassTest extends TestCase
             $container,
             $commandBusHandlersLocatorDefinition->getArgument(0),
             MultipleBusesMessage::class,
-            [MultipleBusesMessageHandler::class]
+            [MultipleBusesMessageHandler::class],
+            [['bus' => $commandBusId]]
         );
         $this->assertHandlerDescriptor(
             $container,
             $commandBusHandlersLocatorDefinition->getArgument(0),
             DummyCommand::class,
-            [DummyCommandHandler::class]
+            [DummyCommandHandler::class],
+            [['bus' => $commandBusId]]
         );
 
         $queryBusHandlersLocatorDefinition = $container->getDefinition($queryBusId.'.messenger.handlers_locator');
@@ -179,13 +285,15 @@ class MessengerPassTest extends TestCase
             $container,
             $queryBusHandlersLocatorDefinition->getArgument(0),
             DummyQuery::class,
-            [DummyQueryHandler::class]
+            [DummyQueryHandler::class],
+            [['bus' => $queryBusId]]
         );
         $this->assertHandlerDescriptor(
             $container,
             $queryBusHandlersLocatorDefinition->getArgument(0),
             MultipleBusesMessage::class,
-            [MultipleBusesMessageHandler::class]
+            [MultipleBusesMessageHandler::class],
+            [['bus' => $queryBusId]]
         );
     }
 
@@ -201,6 +309,9 @@ class MessengerPassTest extends TestCase
         (new MessengerPass())->process($container);
     }
 
+    /**
+     * @group legacy
+     */
     public function testGetClassesFromTheHandlerSubscriberInterface()
     {
         $container = $this->getContainerBuilder($busId = 'message_bus');
@@ -213,6 +324,7 @@ class MessengerPassTest extends TestCase
             ->addTag('messenger.message_handler')
         ;
 
+        $this->expectDeprecation('Since symfony/messenger 6.2: Implementing "Symfony\Component\Messenger\Handler\MessageSubscriberInterface" is deprecated, use the "Symfony\Component\Messenger\Attribute\AsMessageHandler" attribute instead.');
         (new MessengerPass())->process($container);
 
         $handlersMapping = $container->getDefinition($busId.'.messenger.handlers_locator')->getArgument(0);
@@ -224,6 +336,9 @@ class MessengerPassTest extends TestCase
         $this->assertHandlerDescriptor($container, $handlersMapping, SecondMessage::class, [PrioritizedHandler::class, HandlerWithMultipleMessages::class], [['priority' => 10]]);
     }
 
+    /**
+     * @group legacy
+     */
     public function testGetClassesAndMethodsAndPrioritiesFromTheSubscriber()
     {
         $container = $this->getContainerBuilder($busId = 'message_bus');
@@ -249,7 +364,7 @@ class MessengerPassTest extends TestCase
         $dummyHandlerReference = $dummyHandlerDescriptorDefinition->getArgument(0);
         $dummyHandlerDefinition = $container->getDefinition($dummyHandlerReference);
 
-        $this->assertSame('callable', $dummyHandlerDefinition->getClass());
+        $this->assertSame('Closure', $dummyHandlerDefinition->getClass());
         $this->assertEquals([new Reference(HandlerMappingMethods::class), 'dummyMethod'], $dummyHandlerDefinition->getArgument(0));
         $this->assertSame(['Closure', 'fromCallable'], $dummyHandlerDefinition->getFactory());
 
@@ -303,6 +418,9 @@ class MessengerPassTest extends TestCase
         (new MessengerPass())->process($container);
     }
 
+    /**
+     * @group legacy
+     */
     public function testThrowsExceptionIfTheHandlerMethodDoesNotExist()
     {
         $this->expectException(RuntimeException::class);
@@ -374,6 +492,9 @@ class MessengerPassTest extends TestCase
         $this->assertSame(['amqp', 'dummy'], $container->getDefinition('console.command.messenger_setup_transports')->getArgument(1));
     }
 
+    /**
+     * @group legacy
+     */
     public function testItShouldNotThrowIfGeneratorIsReturnedInsteadOfArray()
     {
         $container = $this->getContainerBuilder($busId = 'message_bus');
@@ -401,6 +522,9 @@ class MessengerPassTest extends TestCase
         );
     }
 
+    /**
+     * @group legacy
+     */
     public function testItRegistersHandlersOnDifferentBuses()
     {
         $container = $this->getContainerBuilder($eventsBusId = 'event_bus');
@@ -433,10 +557,13 @@ class MessengerPassTest extends TestCase
         );
     }
 
+    /**
+     * @group legacy
+     */
     public function testItThrowsAnExceptionOnUnknownBus()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Invalid configuration "returned by method "Symfony\Component\Messenger\Tests\DependencyInjection\HandlerOnUndefinedBus::getHandledMessages()"" for message "Symfony\Component\Messenger\Tests\Fixtures\DummyMessage": bus "some_undefined_bus" does not exist.');
+        $this->expectExceptionMessage('Invalid configuration returned by method "Symfony\Component\Messenger\Tests\DependencyInjection\HandlerOnUndefinedBus::getHandledMessages()" for message "Symfony\Component\Messenger\Tests\Fixtures\DummyMessage": bus "some_undefined_bus" does not exist.');
         $container = $this->getContainerBuilder();
         $container
             ->register(HandlerOnUndefinedBus::class, HandlerOnUndefinedBus::class)
@@ -449,7 +576,7 @@ class MessengerPassTest extends TestCase
     public function testUndefinedMessageClassForHandler()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandler": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" "used as argument type in method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandler::__invoke()"" not found.');
+        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandler": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" used as argument type in method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandler::__invoke()" not found.');
         $container = $this->getContainerBuilder();
         $container
             ->register(UndefinedMessageHandler::class, UndefinedMessageHandler::class)
@@ -459,10 +586,13 @@ class MessengerPassTest extends TestCase
         (new MessengerPass())->process($container);
     }
 
+    /**
+     * @group legacy
+     */
     public function testUndefinedMessageClassForHandlerImplementingMessageHandlerInterface()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaHandlerInterface": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" "used as argument type in method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaHandlerInterface::__invoke()"" not found.');
+        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaHandlerInterface": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" used as argument type in method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaHandlerInterface::__invoke()" not found.');
         $container = $this->getContainerBuilder();
         $container
             ->register(UndefinedMessageHandlerViaHandlerInterface::class, UndefinedMessageHandlerViaHandlerInterface::class)
@@ -472,10 +602,13 @@ class MessengerPassTest extends TestCase
         (new MessengerPass())->process($container);
     }
 
+    /**
+     * @group legacy
+     */
     public function testUndefinedMessageClassForHandlerImplementingMessageSubscriberInterface()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaSubscriberInterface": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" "returned by method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaSubscriberInterface::getHandledMessages()"" not found.');
+        $this->expectExceptionMessage('Invalid handler service "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaSubscriberInterface": class or interface "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessage" returned by method "Symfony\Component\Messenger\Tests\DependencyInjection\UndefinedMessageHandlerViaSubscriberInterface::getHandledMessages()" not found.');
         $container = $this->getContainerBuilder();
         $container
             ->register(UndefinedMessageHandlerViaSubscriberInterface::class, UndefinedMessageHandlerViaSubscriberInterface::class)
@@ -537,6 +670,40 @@ class MessengerPassTest extends TestCase
         (new MessengerPass())->process($container);
     }
 
+    public function testUnionTypeArgumentsTypeHandler()
+    {
+        $container = $this->getContainerBuilder($busId = 'message_bus');
+        $container
+            ->register(UnionTypeArgumentHandler::class, UnionTypeArgumentHandler::class)
+            ->addTag('messenger.message_handler')
+        ;
+
+        (new MessengerPass())->process($container);
+
+        $handlersMapping = $container->getDefinition($busId.'.messenger.handlers_locator')->getArgument(0);
+
+        $this->assertArrayHasKey(ChildDummyMessage::class, $handlersMapping);
+        $this->assertArrayHasKey(DummyMessage::class, $handlersMapping);
+        $this->assertHandlerDescriptor($container, $handlersMapping, ChildDummyMessage::class, [UnionTypeArgumentHandler::class]);
+        $this->assertHandlerDescriptor($container, $handlersMapping, DummyMessage::class, [UnionTypeArgumentHandler::class]);
+    }
+
+    public function testUnionBuiltinArgumentTypeHandler()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage(sprintf('Invalid handler service "%s": type-hint of argument "$message" in method "%s::__invoke()" must be a class , "string|int" given.', UnionBuiltinTypeArgumentHandler::class, UnionBuiltinTypeArgumentHandler::class));
+        $container = $this->getContainerBuilder();
+        $container
+            ->register(UnionBuiltinTypeArgumentHandler::class, UnionBuiltinTypeArgumentHandler::class)
+            ->addTag('messenger.message_handler')
+        ;
+
+        (new MessengerPass())->process($container);
+    }
+
+    /**
+     * @group legacy
+     */
     public function testNeedsToHandleAtLeastOneMessage()
     {
         $this->expectException(RuntimeException::class);
@@ -670,12 +837,12 @@ class MessengerPassTest extends TestCase
 
         $this->assertEquals([
             $commandBusId => [
-                DummyCommand::class => [[DummyCommandHandler::class, []]],
-                MultipleBusesMessage::class => [[MultipleBusesMessageHandler::class, []]],
+                DummyCommand::class => [[DummyCommandHandler::class, ['bus' => $commandBusId]]],
+                MultipleBusesMessage::class => [[MultipleBusesMessageHandler::class, ['bus' => $commandBusId]]],
             ],
             $queryBusId => [
-                DummyQuery::class => [[DummyQueryHandler::class, []]],
-                MultipleBusesMessage::class => [[MultipleBusesMessageHandler::class, []]],
+                DummyQuery::class => [[DummyQueryHandler::class, ['bus' => $queryBusId]]],
+                MultipleBusesMessage::class => [[MultipleBusesMessageHandler::class, ['bus' => $queryBusId]]],
             ],
             $emptyBus => [],
         ], $container->getDefinition('console.command.messenger_debug')->getArgument(0));

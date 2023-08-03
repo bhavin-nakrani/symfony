@@ -45,15 +45,15 @@ class AccessDecisionManagerTest extends TestCase
                 $i = 0;
                 foreach ($results as $result) {
                     switch ($i++) {
-                       case 0:
-                           Assert::assertSame(VoterInterface::ACCESS_DENIED, $result);
+                        case 0:
+                            Assert::assertSame(VoterInterface::ACCESS_DENIED, $result);
 
-                           break;
-                       case 1:
-                           Assert::assertSame(VoterInterface::ACCESS_GRANTED, $result);
+                            break;
+                        case 1:
+                            Assert::assertSame(VoterInterface::ACCESS_GRANTED, $result);
 
-                           return true;
-                   }
+                            return true;
+                    }
                 }
 
                 return false;
@@ -118,8 +118,17 @@ class AccessDecisionManagerTest extends TestCase
         $voter
             ->expects($this->exactly(2))
             ->method('supportsAttribute')
-            ->withConsecutive(['foo'], ['bar'])
-            ->willReturnOnConsecutiveCalls(false, true);
+            ->willReturnCallback(function (...$args) {
+                static $series = [
+                    [['foo'], false],
+                    [['bar'], true],
+                ];
+
+                [$expectedArgs, $return] = array_shift($series);
+                $this->assertSame($expectedArgs, $args);
+
+                return $return;
+            });
         $voter
             ->expects($this->once())
             ->method('supportsType')
@@ -227,30 +236,37 @@ class AccessDecisionManagerTest extends TestCase
         $this->assertTrue($manager->decide($token, ['foo', 1337], 'bar', true));
     }
 
-    protected function getVoters($grants, $denies, $abstains)
+    protected static function getVoters($grants, $denies, $abstains): array
     {
         $voters = [];
         for ($i = 0; $i < $grants; ++$i) {
-            $voters[] = $this->getVoter(VoterInterface::ACCESS_GRANTED);
+            $voters[] = self::getVoter(VoterInterface::ACCESS_GRANTED);
         }
         for ($i = 0; $i < $denies; ++$i) {
-            $voters[] = $this->getVoter(VoterInterface::ACCESS_DENIED);
+            $voters[] = self::getVoter(VoterInterface::ACCESS_DENIED);
         }
         for ($i = 0; $i < $abstains; ++$i) {
-            $voters[] = $this->getVoter(VoterInterface::ACCESS_ABSTAIN);
+            $voters[] = self::getVoter(VoterInterface::ACCESS_ABSTAIN);
         }
 
         return $voters;
     }
 
-    protected function getVoter($vote)
+    protected static function getVoter($vote)
     {
-        $voter = $this->createMock(VoterInterface::class);
-        $voter->expects($this->any())
-              ->method('vote')
-              ->willReturn($vote);
+        return new class($vote) implements VoterInterface {
+            private int $vote;
 
-        return $voter;
+            public function __construct(int $vote)
+            {
+                $this->vote = $vote;
+            }
+
+            public function vote(TokenInterface $token, $subject, array $attributes)
+            {
+                return $this->vote;
+            }
+        };
     }
 
     private function getExpectedVoter(int $vote): VoterInterface

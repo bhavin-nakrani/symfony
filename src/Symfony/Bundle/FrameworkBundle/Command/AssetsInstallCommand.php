@@ -52,10 +52,7 @@ class AssetsInstallCommand extends Command
         $this->projectDir = $projectDir;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function configure()
+    protected function configure(): void
     {
         $this
             ->setDefinition([
@@ -87,15 +84,11 @@ EOT
         ;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         /** @var KernelInterface $kernel */
         $kernel = $this->getApplication()->getKernel();
-        $targetArg = rtrim($input->getArgument('target'), '/');
-
+        $targetArg = rtrim($input->getArgument('target') ?? '', '/');
         if (!$targetArg) {
             $targetArg = $this->getPublicDirectory($kernel->getContainer());
         }
@@ -203,7 +196,7 @@ EOT
         try {
             $this->symlink($originDir, $targetDir, true);
             $method = self::METHOD_RELATIVE_SYMLINK;
-        } catch (IOException $e) {
+        } catch (IOException) {
             $method = $this->absoluteSymlinkWithFallback($originDir, $targetDir);
         }
 
@@ -220,7 +213,7 @@ EOT
         try {
             $this->symlink($originDir, $targetDir);
             $method = self::METHOD_ABSOLUTE_SYMLINK;
-        } catch (IOException $e) {
+        } catch (IOException) {
             // fall back to copy
             $method = $this->hardCopy($originDir, $targetDir);
         }
@@ -233,7 +226,7 @@ EOT
      *
      * @throws IOException if link cannot be created
      */
-    private function symlink(string $originDir, string $targetDir, bool $relative = false)
+    private function symlink(string $originDir, string $targetDir, bool $relative = false): void
     {
         if ($relative) {
             $this->filesystem->mkdir(\dirname($targetDir));

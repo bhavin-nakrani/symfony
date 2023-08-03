@@ -29,10 +29,9 @@ final class ExpoTransport extends AbstractTransport
 {
     protected const HOST = 'exp.host/--/api/v2/push/send';
 
-    /** @var string|null */
-    private $token;
+    private ?string $token;
 
-    public function __construct(string $token = null, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
+    public function __construct(#[\SensitiveParameter] string $token = null, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
     {
         $this->token = $token;
         $this->client = $client;
@@ -50,6 +49,9 @@ final class ExpoTransport extends AbstractTransport
         return $message instanceof PushMessage;
     }
 
+    /**
+     * @see https://docs.expo.dev/push-notifications/sending-notifications/#http2-api
+     */
     protected function doSend(MessageInterface $message): SentMessage
     {
         if (!$message instanceof PushMessage) {
@@ -57,17 +59,16 @@ final class ExpoTransport extends AbstractTransport
         }
 
         $endpoint = sprintf('https://%s', $this->getEndpoint());
-        $options = ($opts = $message->getOptions()) ? $opts->toArray() : [];
-        if (!isset($options['to'])) {
-            $options['to'] = $message->getRecipientId();
-        }
-        if (null === $options['to']) {
+        $options = $message->getOptions()?->toArray() ?? [];
+        $options['to'] ??= $message->getRecipientId();
+
+        if (!$options['to']) {
             throw new InvalidArgumentException(sprintf('The "%s" transport required the "to" option to be set.', __CLASS__));
         }
 
         $options['title'] = $message->getSubject();
         $options['body'] = $message->getContent();
-        $options['data'] = $options['data'] ?? [];
+        $options['data'] ??= [];
 
         $response = $this->client->request('POST', $endpoint, [
             'headers' => [
@@ -83,18 +84,22 @@ final class ExpoTransport extends AbstractTransport
         }
 
         $contentType = $response->getHeaders(false)['content-type'][0] ?? '';
-        $jsonContents = str_starts_with($contentType, 'application/json') ? $response->toArray(false) : null;
+        $result = str_starts_with($contentType, 'application/json') ? $response->toArray(false) : null;
 
         if (200 !== $statusCode) {
-            $errorMessage = $jsonContents['error']['message'] ?? $response->getContent(false);
+            $errorMessage = $result['error']['message'] ?? $response->getContent(false);
 
             throw new TransportException('Unable to post the Expo message: '.$errorMessage, $response);
         }
 
-        $success = $response->toArray(false);
+        $result ??= $response->toArray(false);
+
+        if ('error' === $result['data']['status']) {
+            throw new TransportException(sprintf('Unable to post the Expo message: "%s" (%s)', $result['data']['message'], $result['data']['details']['error']), $response);
+        }
 
         $sentMessage = new SentMessage($message, (string) $this);
-        $sentMessage->setMessageId($success['data']['id']);
+        $sentMessage->setMessageId($result['data']['id']);
 
         return $sentMessage;
     }

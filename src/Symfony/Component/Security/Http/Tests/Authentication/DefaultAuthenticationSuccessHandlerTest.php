@@ -12,6 +12,7 @@
 namespace Symfony\Component\Security\Http\Tests\Authentication;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -37,7 +38,7 @@ class DefaultAuthenticationSuccessHandlerTest extends TestCase
         $this->assertSame('http://localhost'.$redirectedUrl, $handler->onAuthenticationSuccess($request, $token)->getTargetUrl());
     }
 
-    public function getRequestRedirections()
+    public function testRequestRedirectionsWithTargetPathInSessions()
     {
         $session = $this->createMock(SessionInterface::class);
         $session->expects($this->once())->method('get')->with('_security.admin.target_path')->willReturn('/admin/dashboard');
@@ -45,6 +46,18 @@ class DefaultAuthenticationSuccessHandlerTest extends TestCase
         $requestWithSession = Request::create('/');
         $requestWithSession->setSession($session);
 
+        $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
+        $urlGenerator->expects($this->any())->method('generate')->willReturn('http://localhost/login');
+        $httpUtils = new HttpUtils($urlGenerator);
+        $token = $this->createMock(TokenInterface::class);
+        $handler = new DefaultAuthenticationSuccessHandler($httpUtils);
+        $handler->setFirewallName('admin');
+
+        $this->assertSame('http://localhost/admin/dashboard', $handler->onAuthenticationSuccess($requestWithSession, $token)->getTargetUrl());
+    }
+
+    public static function getRequestRedirections()
+    {
         return [
             'default' => [
                 Request::create('/'),
@@ -70,11 +83,6 @@ class DefaultAuthenticationSuccessHandlerTest extends TestCase
                 Request::create('/?_target_path[value]=/dashboard'),
                 ['target_path_parameter' => '_target_path[value]'],
                 '/dashboard',
-            ],
-            'target path in session' => [
-                $requestWithSession,
-                [],
-                '/admin/dashboard',
             ],
             'target path as referer' => [
                 Request::create('/', 'GET', [], [], [], ['HTTP_REFERER' => 'http://localhost/dashboard']),
@@ -112,5 +120,43 @@ class DefaultAuthenticationSuccessHandlerTest extends TestCase
                 '/',
             ],
         ];
+    }
+
+    public function testTargetPathFromRequestWithInvalidUrl()
+    {
+        $httpUtils = $this->createMock(HttpUtils::class);
+        $options = ['target_path_parameter' => '_my_target_path'];
+        $token = $this->createMock(TokenInterface::class);
+
+        $request = $this->createMock(Request::class);
+        $request->expects($this->once())
+            ->method('get')->with('_my_target_path')
+            ->willReturn('some_route_name');
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())
+            ->method('debug')
+            ->with('Ignoring query parameter "_my_target_path": not a valid URL.');
+
+        $handler = new DefaultAuthenticationSuccessHandler($httpUtils, $options, $logger);
+
+        $handler->onAuthenticationSuccess($request, $token);
+    }
+
+    public function testTargetPathWithAbsoluteUrlFromRequest()
+    {
+        $options = ['target_path_parameter' => '_my_target_path'];
+
+        $request = $this->createMock(Request::class);
+        $request->expects($this->once())
+            ->method('get')->with('_my_target_path')
+            ->willReturn('https://localhost/some-path');
+
+        $httpUtils = $this->createMock(HttpUtils::class);
+        $httpUtils->expects($this->once())
+            ->method('createRedirectResponse')->with($request, 'https://localhost/some-path');
+
+        $handler = new DefaultAuthenticationSuccessHandler($httpUtils, $options);
+        $handler->onAuthenticationSuccess($request, $this->createMock(TokenInterface::class));
     }
 }

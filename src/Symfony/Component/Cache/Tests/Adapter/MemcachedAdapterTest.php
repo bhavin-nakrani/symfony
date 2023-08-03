@@ -28,12 +28,12 @@ class MemcachedAdapterTest extends AdapterTestCase
         'testClearPrefix' => 'Memcached cannot clear by prefix',
     ];
 
-    protected static $client;
+    protected static \Memcached $client;
 
     public static function setUpBeforeClass(): void
     {
         if (!MemcachedAdapter::isSupported()) {
-            throw new SkippedTestSuiteError('Extension memcached >=2.2.0 required.');
+            throw new SkippedTestSuiteError('Extension memcached > 3.1.5 required.');
         }
         self::$client = AbstractAdapter::createConnection('memcached://'.getenv('MEMCACHED_HOST'), ['binary_protocol' => false]);
         self::$client->get('foo');
@@ -79,7 +79,7 @@ class MemcachedAdapterTest extends AdapterTestCase
         MemcachedAdapter::createConnection([], [$name => $value]);
     }
 
-    public function provideBadOptions(): array
+    public static function provideBadOptions(): array
     {
         return [
             ['hash', 'zyx'],
@@ -124,13 +124,13 @@ class MemcachedAdapterTest extends AdapterTestCase
             'port' => $port,
         ];
 
-        $f = function ($s) { return ['host' => $s['host'], 'port' => $s['port']]; };
+        $f = fn ($s) => ['host' => $s['host'], 'port' => $s['port']];
         $this->assertSame([$expect], array_map($f, $client1->getServerList()));
         $this->assertSame([$expect], array_map($f, $client2->getServerList()));
         $this->assertSame([$expect], array_map($f, $client3->getServerList()));
     }
 
-    public function provideServersSetting(): iterable
+    public static function provideServersSetting(): iterable
     {
         yield [
             'memcached://127.0.0.1/50',
@@ -142,7 +142,7 @@ class MemcachedAdapterTest extends AdapterTestCase
             'localhost',
             11222,
         ];
-        if (filter_var(ini_get('memcached.use_sasl'), \FILTER_VALIDATE_BOOLEAN)) {
+        if (filter_var(\ini_get('memcached.use_sasl'), \FILTER_VALIDATE_BOOL)) {
             yield [
                 'memcached://user:password@127.0.0.1?weight=50',
                 '127.0.0.1',
@@ -159,7 +159,7 @@ class MemcachedAdapterTest extends AdapterTestCase
             '/var/local/run/memcached.socket',
             0,
         ];
-        if (filter_var(ini_get('memcached.use_sasl'), \FILTER_VALIDATE_BOOLEAN)) {
+        if (filter_var(\ini_get('memcached.use_sasl'), \FILTER_VALIDATE_BOOL)) {
             yield [
                 'memcached://user:password@/var/local/run/memcached.socket?weight=25',
                 '/var/local/run/memcached.socket',
@@ -180,7 +180,7 @@ class MemcachedAdapterTest extends AdapterTestCase
         }
     }
 
-    public function provideDsnWithOptions(): iterable
+    public static function provideDsnWithOptions(): iterable
     {
         if (!class_exists(\Memcached::class)) {
             self::markTestSkipped('Extension memcached required.');

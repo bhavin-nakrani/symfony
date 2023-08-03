@@ -22,7 +22,7 @@ $config = (new HtmlSanitizerConfig())
     // standard. All scripts will be removed but the output may still contain
     // other dangerous behaviors like CSS injection (click-jacking), CSS
     // expressions, ...
-    ->allowAllStaticElements()
+    ->allowStaticElements()
 
     // Allow the "div" element and no attribute can be on it
     ->allowElement('div')
@@ -63,19 +63,19 @@ $config = (new HtmlSanitizerConfig())
     ->forceHttpsUrls()
 
     // Configure which schemes are allowed in links (others will be dropped)
-    ->allowedLinkSchemes(['https', 'http', 'mailto'])
+    ->allowLinkSchemes(['https', 'http', 'mailto'])
 
     // Configure which hosts are allowed in links (by default all are allowed)
-    ->allowedLinkHosts(['symfony.com', 'example.com'])
+    ->allowLinkHosts(['symfony.com', 'example.com'])
 
     // Allow relative URL in links (by default they are dropped)
     ->allowRelativeLinks()
 
     // Configure which schemes are allowed in img/audio/video/iframe (others will be dropped)
-    ->allowedMediaSchemes(['https', 'http'])
+    ->allowMediaSchemes(['https', 'http'])
 
     // Configure which hosts are allowed in img/audio/video/iframe (by default all are allowed)
-    ->allowedMediaHosts(['symfony.com', 'example.com'])
+    ->allowMediaHosts(['symfony.com', 'example.com'])
 
     // Allow relative URL in img/audio/video/iframe (by default they are dropped)
     ->allowRelativeMedias()

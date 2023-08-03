@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Notifier\Bridge\Mobyt\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -16,7 +25,7 @@ final class MobytOptionsTest extends TestCase
     {
         $notification = (new Notification('Foo'))->importance($importance);
 
-        $options = (MobytOptions::fromNotification($notification))->toArray();
+        $options = MobytOptions::fromNotification($notification)->toArray();
 
         $this->assertSame($expectedMessageType, $options['message_type']);
     }
@@ -24,7 +33,7 @@ final class MobytOptionsTest extends TestCase
     /**
      * @return \Generator<array{0: string, 1: string}>
      */
-    public function fromNotificationDataProvider(): \Generator
+    public static function fromNotificationDataProvider(): \Generator
     {
         yield [Notification::IMPORTANCE_URGENT, MobytOptions::MESSAGE_TYPE_QUALITY_HIGH];
         yield [Notification::IMPORTANCE_HIGH, MobytOptions::MESSAGE_TYPE_QUALITY_HIGH];
@@ -36,33 +45,9 @@ final class MobytOptionsTest extends TestCase
     {
         $notification = (new Notification('Foo'))->importance('Bar');
 
-        $options = (MobytOptions::fromNotification($notification))->toArray();
+        $options = MobytOptions::fromNotification($notification)->toArray();
 
         $this->assertSame(MobytOptions::MESSAGE_TYPE_QUALITY_HIGH, $options['message_type']);
-    }
-
-    public function testGetRecipientIdWhenSet()
-    {
-        $mobytOptions = new MobytOptions([
-            'recipient' => 'foo',
-        ]);
-
-        $this->assertSame('foo', $mobytOptions->getRecipientId());
-    }
-
-    public function testGetRecipientIdWhenNotSet()
-    {
-        $this->assertNull((new MobytOptions())->getRecipientId());
-    }
-
-    public function testToArray()
-    {
-        $mobytOptions = new MobytOptions([
-            'message' => 'foo',
-            'recipient' => 'bar',
-        ]);
-
-        $this->assertEmpty($mobytOptions->toArray());
     }
 
     /**
@@ -76,7 +61,7 @@ final class MobytOptionsTest extends TestCase
         $this->assertSame(['message_type' => $type], $mobytOptions->toArray());
     }
 
-    public function validMessageTypes(): iterable
+    public static function validMessageTypes(): iterable
     {
         yield [MobytOptions::MESSAGE_TYPE_QUALITY_HIGH];
         yield [MobytOptions::MESSAGE_TYPE_QUALITY_MEDIUM];

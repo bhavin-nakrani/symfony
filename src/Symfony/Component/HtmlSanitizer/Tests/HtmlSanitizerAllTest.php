@@ -21,7 +21,7 @@ class HtmlSanitizerAllTest extends TestCase
     {
         return new HtmlSanitizer(
             (new HtmlSanitizerConfig())
-                ->allowAllStaticElements()
+                ->allowStaticElements()
                 ->allowLinkHosts(['trusted.com', 'external.com'])
                 ->allowMediaHosts(['trusted.com', 'external.com'])
                 ->allowRelativeLinks()
@@ -38,7 +38,7 @@ class HtmlSanitizerAllTest extends TestCase
         $this->assertSame($expected, $this->createSanitizer()->sanitizeFor('head', $input));
     }
 
-    public function provideSanitizeHead()
+    public static function provideSanitizeHead()
     {
         $cases = [
             // Scripts
@@ -71,7 +71,7 @@ class HtmlSanitizerAllTest extends TestCase
         $this->assertSame($expected, $this->createSanitizer()->sanitize($input));
     }
 
-    public function provideSanitizeBody()
+    public static function provideSanitizeBody()
     {
         $cases = [
             // Text
@@ -237,16 +237,21 @@ class HtmlSanitizerAllTest extends TestCase
             ],
             [
                 '<BODY BACKGROUND="javascript:alert(\'XSS\')">',
-                '<body />',
+                '<body></body>',
             ],
             [
                 '<BGSOUND SRC="javascript:alert(\'XSS\');">',
-                '<bgsound />',
+                '<bgsound></bgsound>',
             ],
             [
                 '<BR SIZE="&{alert(\'XSS\')}">',
                 '<br size="&amp;{alert(&#039;XSS&#039;)}" />',
             ],
+            [
+                '<BR></br>',
+                '<br /><br />',
+            ],
+
             [
                 '<OBJECT TYPE="text/x-scriptlet" DATA="http://xss.rocks/scriptlet.html"></OBJECT>',
                 '',
@@ -445,6 +450,11 @@ class HtmlSanitizerAllTest extends TestCase
                 '<i>Lorem ipsum</i>',
                 '<i>Lorem ipsum</i>',
             ],
+            [
+                '<i></i>',
+                '<i></i>',
+            ],
+
             [
                 '<li>Lorem ipsum</li>',
                 '<li>Lorem ipsum</li>',

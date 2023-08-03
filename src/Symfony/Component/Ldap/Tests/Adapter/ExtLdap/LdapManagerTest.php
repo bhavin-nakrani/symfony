@@ -22,12 +22,12 @@ use Symfony\Component\Ldap\Tests\LdapTestCase;
 
 /**
  * @requires extension ldap
+ *
  * @group integration
  */
 class LdapManagerTest extends LdapTestCase
 {
-    /** @var Adapter */
-    private $adapter;
+    private Adapter $adapter;
 
     protected function setUp(): void
     {

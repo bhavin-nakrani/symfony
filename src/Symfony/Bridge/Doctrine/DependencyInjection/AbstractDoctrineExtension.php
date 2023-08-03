@@ -38,6 +38,8 @@ abstract class AbstractDoctrineExtension extends Extension
     /**
      * @param array $objectManager A configured object manager
      *
+     * @return void
+     *
      * @throws \InvalidArgumentException
      */
     protected function loadMappingInformation(array $objectManager, ContainerBuilder $container)
@@ -105,6 +107,8 @@ abstract class AbstractDoctrineExtension extends Extension
      * Register the alias for this mapping driver.
      *
      * Aliases can be used in the Query languages of all the Doctrine object managers to simplify writing tasks.
+     *
+     * @return void
      */
     protected function setMappingDriverAlias(array $mappingConfig, string $mappingName)
     {
@@ -117,6 +121,8 @@ abstract class AbstractDoctrineExtension extends Extension
 
     /**
      * Register the mapping driver configuration for later use with the object managers metadata driver chain.
+     *
+     * @return void
      *
      * @throws \InvalidArgumentException
      */
@@ -137,10 +143,15 @@ abstract class AbstractDoctrineExtension extends Extension
      */
     protected function getMappingDriverBundleConfigDefaults(array $bundleConfig, \ReflectionClass $bundle, ContainerBuilder $container, string $bundleDir = null): array|false
     {
-        $bundleDir ??= \dirname($bundle->getFileName());
+        $bundleClassDir = \dirname($bundle->getFileName());
+        $bundleDir ??= $bundleClassDir;
 
         if (!$bundleConfig['type']) {
             $bundleConfig['type'] = $this->detectMetadataDriver($bundleDir, $container);
+
+            if (!$bundleConfig['type'] && $bundleDir !== $bundleClassDir) {
+                $bundleConfig['type'] = $this->detectMetadataDriver($bundleClassDir, $container);
+            }
         }
 
         if (!$bundleConfig['type']) {
@@ -150,7 +161,7 @@ abstract class AbstractDoctrineExtension extends Extension
 
         if (!$bundleConfig['dir']) {
             if (\in_array($bundleConfig['type'], ['annotation', 'staticphp', 'attribute'])) {
-                $bundleConfig['dir'] = $bundleDir.'/'.$this->getMappingObjectDefaultName();
+                $bundleConfig['dir'] = $bundleClassDir.'/'.$this->getMappingObjectDefaultName();
             } else {
                 $bundleConfig['dir'] = $bundleDir.'/'.$this->getMappingResourceConfigDirectory($bundleDir);
             }
@@ -167,6 +178,8 @@ abstract class AbstractDoctrineExtension extends Extension
 
     /**
      * Register all the collected mapping information with the object manager by registering the appropriate mapping drivers.
+     *
+     * @return void
      */
     protected function registerMappingDrivers(array $objectManager, ContainerBuilder $container)
     {
@@ -222,6 +235,8 @@ abstract class AbstractDoctrineExtension extends Extension
     /**
      * Assertion if the specified mapping information is valid.
      *
+     * @return void
+     *
      * @throws \InvalidArgumentException
      */
     protected function assertValidMappingConfiguration(array $mappingConfig, string $objectManagerName)
@@ -261,8 +276,8 @@ abstract class AbstractDoctrineExtension extends Extension
             }
             $container->fileExists($resource, false);
 
-            if ($container->fileExists($dir.'/'.$this->getMappingObjectDefaultName(), false)) {
-                return $this->detectMappingType($dir, $container);
+            if ($container->fileExists($discoveryPath = $dir.'/'.$this->getMappingObjectDefaultName(), false)) {
+                return $this->detectMappingType($discoveryPath, $container);
             }
 
             return null;
@@ -289,10 +304,16 @@ abstract class AbstractDoctrineExtension extends Extension
         foreach ($glob as $file) {
             $content = file_get_contents($file);
 
-            if (preg_match('/^#\[.*'.$quotedMappingObjectName.'\b/m', $content)) {
+            if (
+                preg_match('/^#\[.*'.$quotedMappingObjectName.'\b/m', $content)
+                || preg_match('/^#\[.*Embeddable\b/m', $content)
+            ) {
                 break;
             }
-            if (preg_match('/^ \* @.*'.$quotedMappingObjectName.'\b/m', $content)) {
+            if (
+                preg_match('/^(?: \*|\/\*\*) @.*'.$quotedMappingObjectName.'\b/m', $content)
+                || preg_match('/^(?: \*|\/\*\*) @.*Embeddable\b/m', $content)
+            ) {
                 $type = 'annotation';
                 break;
             }
@@ -303,6 +324,8 @@ abstract class AbstractDoctrineExtension extends Extension
 
     /**
      * Loads a configured object manager metadata, query or result cache driver.
+     *
+     * @return void
      *
      * @throws \InvalidArgumentException in case of unknown driver type
      */
@@ -338,7 +361,7 @@ abstract class AbstractDoctrineExtension extends Extension
                 $container->setDefinition($this->getObjectManagerElementName(sprintf('%s_memcached_instance', $objectManagerName)), $memcachedInstance);
                 $cacheDef->addMethodCall('setMemcached', [new Reference($this->getObjectManagerElementName(sprintf('%s_memcached_instance', $objectManagerName)))]);
                 break;
-             case 'redis':
+            case 'redis':
                 $redisClass = !empty($cacheDriver['class']) ? $cacheDriver['class'] : '%'.$this->getObjectManagerElementName('cache.redis.class').'%';
                 $redisInstanceClass = !empty($cacheDriver['instance_class']) ? $cacheDriver['instance_class'] : '%'.$this->getObjectManagerElementName('cache.redis_instance.class').'%';
                 $redisHost = !empty($cacheDriver['host']) ? $cacheDriver['host'] : '%'.$this->getObjectManagerElementName('cache.redis_host').'%';

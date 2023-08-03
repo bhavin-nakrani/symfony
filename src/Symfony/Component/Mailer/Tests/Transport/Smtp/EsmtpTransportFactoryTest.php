@@ -1,7 +1,18 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Mailer\Tests\Transport\Smtp;
 
+use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\Mailer\Test\TransportFactoryTestCase;
 use Symfony\Component\Mailer\Transport\Dsn;
 use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
@@ -13,10 +24,10 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
 {
     public function getFactory(): TransportFactoryInterface
     {
-        return new EsmtpTransportFactory($this->getDispatcher(), $this->getClient(), $this->getLogger());
+        return new EsmtpTransportFactory(null, new MockHttpClient(), new NullLogger());
     }
 
-    public function supportsProvider(): iterable
+    public static function supportsProvider(): iterable
     {
         yield [
             new Dsn('smtp', 'example.com'),
@@ -34,19 +45,18 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
         ];
     }
 
-    public function createProvider(): iterable
+    public static function createProvider(): iterable
     {
-        $eventDispatcher = $this->getDispatcher();
-        $logger = $this->getLogger();
+        $logger = new NullLogger();
 
-        $transport = new EsmtpTransport('localhost', 25, false, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('localhost', 25, false, null, $logger);
 
         yield [
             new Dsn('smtp', 'localhost'),
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 99, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 99, true, null, $logger);
         $transport->setUsername(self::USER);
         $transport->setPassword(self::PASSWORD);
 
@@ -55,21 +65,21 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
 
         yield [
             new Dsn('smtps', 'example.com'),
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
 
         yield [
             new Dsn('smtps', 'example.com', '', '', 465),
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
         /** @var SocketStream $stream */
         $stream = $transport->getStream();
         $streamOptions = $stream->getStreamOptions();
@@ -92,14 +102,14 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
 
         yield [
             Dsn::fromString('smtps://:@example.com?verify_peer='),
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
         $transport->setLocalDomain('example.com');
 
         yield [
@@ -107,7 +117,15 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
+        $transport->setMaxPerSecond(2.0);
+
+        yield [
+            new Dsn('smtps', 'example.com', '', '', 465, ['max_per_second' => '2']),
+            $transport,
+        ];
+
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
         $transport->setRestartThreshold(10, 1);
 
         yield [
@@ -115,7 +133,7 @@ class EsmtpTransportFactoryTest extends TransportFactoryTestCase
             $transport,
         ];
 
-        $transport = new EsmtpTransport('example.com', 465, true, $eventDispatcher, $logger);
+        $transport = new EsmtpTransport('example.com', 465, true, null, $logger);
         $transport->setPingThreshold(10);
 
         yield [

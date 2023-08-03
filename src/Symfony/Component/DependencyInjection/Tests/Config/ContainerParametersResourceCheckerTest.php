@@ -13,21 +13,15 @@ namespace Symfony\Component\DependencyInjection\Tests\Config;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Config\ResourceCheckerInterface;
 use Symfony\Component\DependencyInjection\Config\ContainerParametersResource;
 use Symfony\Component\DependencyInjection\Config\ContainerParametersResourceChecker;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class ContainerParametersResourceCheckerTest extends TestCase
 {
-    /** @var ContainerParametersResource */
-    private $resource;
-
-    /** @var ResourceCheckerInterface */
-    private $resourceChecker;
-
-    /** @var ContainerInterface */
-    private $container;
+    private ContainerParametersResource $resource;
+    private ContainerParametersResourceChecker $resourceChecker;
+    private MockObject&ContainerInterface $container;
 
     protected function setUp(): void
     {
@@ -51,7 +45,7 @@ class ContainerParametersResourceCheckerTest extends TestCase
         $this->assertSame($expected, $this->resourceChecker->isFresh($this->resource, time()));
     }
 
-    public function isFreshProvider()
+    public static function isFreshProvider()
     {
         yield 'not fresh on missing parameter' => [function (MockObject $container) {
             $container->method('hasParameter')->with('locales')->willReturn(false);
@@ -62,16 +56,19 @@ class ContainerParametersResourceCheckerTest extends TestCase
         }, false];
 
         yield 'fresh on every identical parameters' => [function (MockObject $container) {
-            $container->expects($this->exactly(2))->method('hasParameter')->willReturn(true);
-            $container->expects($this->exactly(2))->method('getParameter')
-                ->withConsecutive(
-                    [$this->equalTo('locales')],
-                    [$this->equalTo('default_locale')]
-                )
-                ->willReturnMap([
-                    ['locales', ['fr', 'en']],
-                    ['default_locale', 'fr'],
-                ])
+            $container->expects(self::exactly(2))->method('hasParameter')->willReturn(true);
+            $container->expects(self::exactly(2))->method('getParameter')
+                ->willReturnCallback(function (...$args) {
+                    static $series = [
+                        [['locales'], ['fr', 'en']],
+                        [['default_locale'], 'fr'],
+                    ];
+
+                    [$expectedArgs, $return] = array_shift($series);
+                    self::assertSame($expectedArgs, $args);
+
+                    return $return;
+                })
             ;
         }, true];
     }

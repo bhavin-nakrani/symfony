@@ -61,7 +61,7 @@ class TranslationExtensionTest extends TestCase
         $this->getTemplate("{% trans %}\n{{ 1 + 2 }}{% endtrans %}")->render();
     }
 
-    public function getTransTests()
+    public static function getTransTests()
     {
         return [
             // trans tag
@@ -124,6 +124,7 @@ class TranslationExtensionTest extends TestCase
             ['{{ foo|trans }}', '', ['foo' => null]],
 
             // trans object
+            ['{{ t("")|trans }}', ''],
             ['{{ t("Hello")|trans }}', 'Hello'],
             ['{{ t(name)|trans }}', 'Symfony', ['name' => 'Symfony']],
             ['{{ t(hello, { \'%name%\': \'Symfony\' })|trans }}', 'Hello Symfony', ['hello' => 'Hello %name%']],
@@ -207,9 +208,7 @@ class TranslationExtensionTest extends TestCase
 
     private function getTemplate($template, TranslatorInterface $translator = null): TemplateWrapper
     {
-        if (null === $translator) {
-            $translator = new Translator('en');
-        }
+        $translator ??= new Translator('en');
 
         if (\is_array($template)) {
             $loader = new TwigArrayLoader($template);

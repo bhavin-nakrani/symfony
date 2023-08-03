@@ -43,9 +43,6 @@ class PropertyMetadata extends MemberMetadata
         parent::__construct($class, $name, $name);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getPropertyValue(mixed $object): mixed
     {
         $reflProperty = $this->getReflectionMember($object);
@@ -62,7 +59,7 @@ class PropertyMetadata extends MemberMetadata
 
             try {
                 return $reflProperty->getValue($object);
-            } catch (\Error $e) {
+            } catch (\Error) {
                 return null;
             }
         }
@@ -70,12 +67,9 @@ class PropertyMetadata extends MemberMetadata
         return $reflProperty->getValue($object);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function newReflectionMember(object|string $objectOrClassName): \ReflectionMethod|\ReflectionProperty
     {
-        $originalClass = \is_string($objectOrClassName) ? $objectOrClassName : \get_class($objectOrClassName);
+        $originalClass = \is_string($objectOrClassName) ? $objectOrClassName : $objectOrClassName::class;
 
         while (!property_exists($objectOrClassName, $this->getName())) {
             $objectOrClassName = get_parent_class($objectOrClassName);
@@ -85,9 +79,6 @@ class PropertyMetadata extends MemberMetadata
             }
         }
 
-        $member = new \ReflectionProperty($objectOrClassName, $this->getName());
-        $member->setAccessible(true);
-
-        return $member;
+        return new \ReflectionProperty($objectOrClassName, $this->getName());
     }
 }

@@ -13,7 +13,8 @@ namespace Symfony\Component\Ldap\Security;
 
 use Psr\Container\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Component\Ldap\Exception\ConnectionException;
+use Symfony\Component\Ldap\Exception\InvalidCredentialsException;
+use Symfony\Component\Ldap\Exception\InvalidSearchCredentialsException;
 use Symfony\Component\Ldap\LdapInterface;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Core\Exception\LogicException;
@@ -35,6 +36,9 @@ class CheckLdapCredentialsListener implements EventSubscriberInterface
         $this->ldapLocator = $ldapLocator;
     }
 
+    /**
+     * @return void
+     */
     public function onCheckPassport(CheckPassportEvent $event)
     {
         $passport = $event->getPassport();
@@ -49,7 +53,7 @@ class CheckLdapCredentialsListener implements EventSubscriberInterface
         }
 
         if (!$passport->hasBadge(PasswordCredentials::class)) {
-            throw new \LogicException(sprintf('LDAP authentication requires a passport containing password credentials, authenticator "%s" does not fulfill these requirements.', \get_class($event->getAuthenticator())));
+            throw new \LogicException(sprintf('LDAP authentication requires a passport containing password credentials, authenticator "%s" does not fulfill these requirements.', $event->getAuthenticator()::class));
         }
 
         /** @var PasswordCredentials $passwordCredentials */
@@ -74,25 +78,29 @@ class CheckLdapCredentialsListener implements EventSubscriberInterface
         try {
             if ($ldapBadge->getQueryString()) {
                 if ('' !== $ldapBadge->getSearchDn() && '' !== $ldapBadge->getSearchPassword()) {
-                    $ldap->bind($ldapBadge->getSearchDn(), $ldapBadge->getSearchPassword());
+                    try {
+                        $ldap->bind($ldapBadge->getSearchDn(), $ldapBadge->getSearchPassword());
+                    } catch (InvalidCredentialsException) {
+                        throw new InvalidSearchCredentialsException();
+                    }
                 } else {
                     throw new LogicException('Using the "query_string" config without using a "search_dn" and a "search_password" is not supported.');
                 }
-                $username = $ldap->escape($user->getUserIdentifier(), '', LdapInterface::ESCAPE_FILTER);
-                $query = str_replace('{username}', $username, $ldapBadge->getQueryString());
+                $identifier = $ldap->escape($user->getUserIdentifier(), '', LdapInterface::ESCAPE_FILTER);
+                $query = str_replace('{user_identifier}', $identifier, $ldapBadge->getQueryString());
                 $result = $ldap->query($ldapBadge->getDnString(), $query)->execute();
                 if (1 !== $result->count()) {
-                    throw new BadCredentialsException('The presented username is invalid.');
+                    throw new BadCredentialsException('The presented user identifier is invalid.');
                 }
 
                 $dn = $result[0]->getDn();
             } else {
-                $username = $ldap->escape($user->getUserIdentifier(), '', LdapInterface::ESCAPE_DN);
-                $dn = str_replace('{username}', $username, $ldapBadge->getDnString());
+                $identifier = $ldap->escape($user->getUserIdentifier(), '', LdapInterface::ESCAPE_DN);
+                $dn = str_replace('{user_identifier}', $identifier, $ldapBadge->getDnString());
             }
 
             $ldap->bind($dn, $presentedPassword);
-        } catch (ConnectionException $e) {
+        } catch (InvalidCredentialsException) {
             throw new BadCredentialsException('The presented password is invalid.');
         }
 

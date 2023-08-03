@@ -33,7 +33,7 @@ class ResolveClassPassTest extends TestCase
         $this->assertSame($serviceId, $def->getClass());
     }
 
-    public function provideValidClassId()
+    public static function provideValidClassId()
     {
         yield ['Acme\UnknownClass'];
         yield [CaseSensitiveClass::class];
@@ -52,11 +52,11 @@ class ResolveClassPassTest extends TestCase
         $this->assertNull($def->getClass());
     }
 
-    public function provideInvalidClassId()
+    public static function provideInvalidClassId()
     {
         yield [\stdClass::class];
         yield ['bar'];
-        yield [\DateTime::class];
+        yield [\DateTimeImmutable::class];
     }
 
     public function testNonFqcnChildDefinition()

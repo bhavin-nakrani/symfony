@@ -1,6 +1,28 @@
 CHANGELOG
 =========
 
+6.3
+---
+
+ * Introduce `FromNotificationInterface` for `MessageInterface` implementations
+
+6.2
+---
+
+ * Add PHPUnit constraints
+ * Add `from` property in `SmsMessage`
+
+6.1
+---
+
+ * Use importance level to set flash message type
+
+5.4.21
+------
+
+ * [BC BREAK] The following data providers for `TransportTestCase` are now static: `toStringProvider()`, `supportedMessagesProvider()` and `unsupportedMessagesProvider()`
+ * [BC BREAK] `TransportTestCase::createTransport()` is now static
+
 5.4
 ---
 

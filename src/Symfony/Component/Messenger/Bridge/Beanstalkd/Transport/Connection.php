@@ -23,6 +23,7 @@ use Symfony\Component\Messenger\Exception\TransportException;
  * @author Antonio Pauletich <antonio.pauletich95@gmail.com>
  *
  * @internal
+ *
  * @final
  */
 class Connection
@@ -34,7 +35,7 @@ class Connection
     ];
 
     /**
-     * Available options:
+     * Available options:.
      *
      * * tube_name: name of the tube
      * * timeout: message reservation timeout (in seconds)
@@ -55,10 +56,10 @@ class Connection
         $this->ttr = $this->configuration['ttr'];
     }
 
-    public static function fromDsn(string $dsn, array $options = []): self
+    public static function fromDsn(#[\SensitiveParameter] string $dsn, array $options = []): self
     {
         if (false === $components = parse_url($dsn)) {
-            throw new InvalidArgumentException(sprintf('The given Beanstalkd DSN "%s" is invalid.', $dsn));
+            throw new InvalidArgumentException('The given Beanstalkd DSN is invalid.');
         }
 
         $connectionCredentials = [

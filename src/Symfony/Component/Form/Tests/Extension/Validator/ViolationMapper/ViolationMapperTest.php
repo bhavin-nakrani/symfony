@@ -25,6 +25,8 @@ use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\Tests\Extension\Validator\ViolationMapper\Fixtures\Issue;
+use Symfony\Component\Form\Tests\Fixtures\DummyFormRendererEngine;
+use Symfony\Component\Form\Tests\Fixtures\FixedTranslator;
 use Symfony\Component\PropertyAccess\PropertyPath;
 use Symfony\Component\Validator\Constraints\File;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -41,30 +43,11 @@ class ViolationMapperTest extends TestCase
     private const LEVEL_1B = 2;
     private const LEVEL_2 = 3;
 
-    /**
-     * @var EventDispatcherInterface
-     */
-    private $dispatcher;
-
-    /**
-     * @var ViolationMapper
-     */
-    private $mapper;
-
-    /**
-     * @var string
-     */
-    private $message;
-
-    /**
-     * @var string
-     */
-    private $messageTemplate;
-
-    /**
-     * @var array
-     */
-    private $params;
+    private EventDispatcher $dispatcher;
+    private ViolationMapper $mapper;
+    private string $message;
+    private string $messageTemplate;
+    private array $params;
 
     protected function setUp(): void
     {
@@ -89,8 +72,8 @@ class ViolationMapperTest extends TestCase
 
         if (!$synchronized) {
             $config->addViewTransformer(new CallbackTransformer(
-                function ($normData) { return $normData; },
-                function () { throw new TransformationFailedException(); }
+                static fn ($normData) => $normData,
+                static fn () => throw new TransformationFailedException()
             ));
         }
 
@@ -278,7 +261,7 @@ class ViolationMapperTest extends TestCase
         $this->assertCount(1, $grandChild->getErrors(), $grandChild->getName().' should have one error');
     }
 
-    public function provideDefaultTests()
+    public static function provideDefaultTests()
     {
         // The mapping must be deterministic! If a child has the property path "[street]",
         // "data[street]" should be mapped, but "data.street" should not!
@@ -836,7 +819,7 @@ class ViolationMapperTest extends TestCase
         }
     }
 
-    public function provideCustomDataErrorTests()
+    public static function provideCustomDataErrorTests()
     {
         return [
             // mapping target, error mapping, child name, its property path, grand child name, its property path, violation path
@@ -1310,7 +1293,7 @@ class ViolationMapperTest extends TestCase
         }
     }
 
-    public function provideCustomFormErrorTests()
+    public static function provideCustomFormErrorTests()
     {
         // This case is different than the data errors, because here the
         // left side of the mapping refers to the property path of the actual
@@ -1501,7 +1484,7 @@ class ViolationMapperTest extends TestCase
         }
     }
 
-    public function provideErrorTestsForFormInheritingParentData()
+    public static function provideErrorTestsForFormInheritingParentData()
     {
         return [
             // mapping target, child name, its property path, grand child name, its property path, violation path
@@ -1598,16 +1581,7 @@ class ViolationMapperTest extends TestCase
 
     public function testMessageWithLabel1()
     {
-        $renderer = $this->getMockBuilder(FormRenderer::class)
-            ->setMethods(null)
-            ->disableOriginalConstructor()
-            ->getMock()
-        ;
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())->method('trans')->willReturnMap([
-            ['Name', [], null, null, 'Custom Name'],
-        ]);
-        $this->mapper = new ViolationMapper($renderer, $translator);
+        $this->mapper = new ViolationMapper(new FormRenderer(new DummyFormRendererEngine()), new FixedTranslator(['Name' => 'Custom Name']));
 
         $parent = $this->getForm('parent');
         $child = $this->getForm('name', 'name');
@@ -1630,11 +1604,7 @@ class ViolationMapperTest extends TestCase
 
     public function testMessageWithLabel2()
     {
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())->method('trans')->willReturnMap([
-            ['options_label', [], null, null, 'Translated Label'],
-        ]);
-        $this->mapper = new ViolationMapper(null, $translator);
+        $this->mapper = new ViolationMapper(null, new FixedTranslator(['options_label' => 'Translated Label']));
 
         $parent = $this->getForm('parent');
 
@@ -1668,11 +1638,7 @@ class ViolationMapperTest extends TestCase
 
     public function testMessageWithLabelFormat1()
     {
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())->method('trans')->willReturnMap([
-            ['form.custom', [], null, null, 'Translated 1st Custom Label'],
-        ]);
-        $this->mapper = new ViolationMapper(null, $translator);
+        $this->mapper = new ViolationMapper(null, new FixedTranslator(['form.custom' => 'Translated 1st Custom Label']));
 
         $parent = $this->getForm('parent');
 
@@ -1706,11 +1672,7 @@ class ViolationMapperTest extends TestCase
 
     public function testMessageWithLabelFormat2()
     {
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())->method('trans')->willReturnMap([
-            ['form_custom-id', [], null, null, 'Translated 2nd Custom Label'],
-        ]);
-        $this->mapper = new ViolationMapper(null, $translator);
+        $this->mapper = new ViolationMapper(null, new FixedTranslator(['form_custom-id' => 'Translated 2nd Custom Label']));
 
         $parent = $this->getForm('parent');
 
@@ -1826,14 +1788,9 @@ class ViolationMapperTest extends TestCase
 
     public function testTranslatorNotCalledWithoutLabel()
     {
-        $renderer = $this->getMockBuilder(FormRenderer::class)
-            ->setMethods(null)
-            ->disableOriginalConstructor()
-            ->getMock()
-        ;
         $translator = $this->createMock(TranslatorInterface::class);
         $translator->expects($this->never())->method('trans');
-        $this->mapper = new ViolationMapper($renderer, $translator);
+        $this->mapper = new ViolationMapper(new FormRenderer(new DummyFormRendererEngine()), $translator);
 
         $parent = $this->getForm('parent');
         $child = $this->getForm('name', 'name');

@@ -12,6 +12,7 @@
 namespace Symfony\Component\HttpFoundation\Tests;
 
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\Stream;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
@@ -71,7 +72,7 @@ class BinaryFileResponseTest extends ResponseTestCase
     {
         $response = new BinaryFileResponse(__FILE__);
 
-        $iso88591EncodedFilename = utf8_decode('föö.html');
+        $iso88591EncodedFilename = mb_convert_encoding('föö.html', 'ISO-8859-1', 'UTF-8');
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $iso88591EncodedFilename);
 
         // the parameter filename* is invalid in this case (rawurldecode('f%F6%F6') does not provide a UTF-8 string but an ISO-8859-1 encoded one)
@@ -141,7 +142,7 @@ class BinaryFileResponseTest extends ResponseTestCase
         $this->assertEquals($responseRange, $response->headers->get('Content-Range'));
     }
 
-    public function provideRanges()
+    public static function provideRanges()
     {
         return [
             ['bytes=1-4', 1, 4, 'bytes 1-4/35'],
@@ -195,7 +196,7 @@ class BinaryFileResponseTest extends ResponseTestCase
         $this->assertEquals(200, $response->getStatusCode());
     }
 
-    public function provideFullFileRanges()
+    public static function provideFullFileRanges()
     {
         return [
             ['bytes=0-'],
@@ -261,7 +262,7 @@ class BinaryFileResponseTest extends ResponseTestCase
         $this->assertEquals('bytes */35', $response->headers->get('Content-Range'));
     }
 
-    public function provideInvalidRanges()
+    public static function provideInvalidRanges()
     {
         return [
             ['bytes=-40'],
@@ -287,7 +288,7 @@ class BinaryFileResponseTest extends ResponseTestCase
         $this->assertStringContainsString('README.md', $response->headers->get('X-Sendfile'));
     }
 
-    public function provideXSendfileFiles()
+    public static function provideXSendfileFiles()
     {
         return [
             [__DIR__.'/../README.md'],
@@ -310,7 +311,6 @@ class BinaryFileResponseTest extends ResponseTestCase
         $response = new BinaryFileResponse($file, 200, ['Content-Type' => 'application/octet-stream']);
         $reflection = new \ReflectionObject($response);
         $property = $reflection->getProperty('file');
-        $property->setAccessible(true);
         $property->setValue($response, $file);
 
         $response->prepare($request);
@@ -354,7 +354,7 @@ class BinaryFileResponseTest extends ResponseTestCase
         $this->assertEquals('foo', $response->headers->get('Accept-Ranges'));
     }
 
-    public function getSampleXAccelMappings()
+    public static function getSampleXAccelMappings()
     {
         return [
             ['/var/www/var/www/files/foo.txt', '/var/www/=/files/', '/files/var/www/files/foo.txt'],
@@ -371,6 +371,55 @@ class BinaryFileResponseTest extends ResponseTestCase
         $response->prepare($request);
 
         $this->assertNull($response->headers->get('Content-Length'));
+    }
+
+    public function testPrepareNotAddingContentTypeHeaderIfNoContentResponse()
+    {
+        $request = Request::create('/');
+        $request->headers->set('If-Modified-Since', date('D, d M Y H:i:s').' GMT');
+
+        $response = new BinaryFileResponse(__DIR__.'/File/Fixtures/test.gif', 200, ['Content-Type' => 'application/octet-stream']);
+        $response->setLastModified(new \DateTimeImmutable('-1 day'));
+        $response->isNotModified($request);
+
+        $response->prepare($request);
+
+        $this->assertSame(BinaryFileResponse::HTTP_NOT_MODIFIED, $response->getStatusCode());
+        $this->assertFalse($response->headers->has('Content-Type'));
+    }
+
+    public function testContentTypeIsCorrectlyDetected()
+    {
+        $file = new File(__DIR__.'/File/Fixtures/test.gif');
+
+        try {
+            $file->getMimeType();
+        } catch (\LogicException $e) {
+            $this->markTestSkipped('Guessing the mime type is not possible');
+        }
+
+        $response = new BinaryFileResponse($file);
+
+        $request = Request::create('/');
+        $response->prepare($request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('image/gif', $response->headers->get('Content-Type'));
+    }
+
+    public function testContentTypeIsNotGuessedWhenTheFileWasNotModified()
+    {
+        $response = new BinaryFileResponse(__DIR__.'/File/Fixtures/test.gif');
+        $response->setAutoLastModified();
+
+        $request = Request::create('/');
+        $request->headers->set('If-Modified-Since', $response->getLastModified()->format('D, d M Y H:i:s').' GMT');
+        $isNotModified = $response->isNotModified($request);
+        $this->assertTrue($isNotModified);
+        $response->prepare($request);
+
+        $this->assertSame(304, $response->getStatusCode());
+        $this->assertFalse($response->headers->has('Content-Type'));
     }
 
     protected function provideResponse()

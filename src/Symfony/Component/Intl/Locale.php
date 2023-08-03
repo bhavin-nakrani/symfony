@@ -11,6 +11,10 @@
 
 namespace Symfony\Component\Intl;
 
+if (!class_exists(\Locale::class)) {
+    throw new \LogicException(sprintf('You cannot use the "%s\Locale" class as the "intl" extension is not installed. See https://php.net/intl.', __NAMESPACE__));
+}
+
 /**
  * Provides access to locale-related data.
  *
@@ -30,7 +34,7 @@ final class Locale extends \Locale
      *
      * @see getFallback()
      */
-    public static function setDefaultFallback(?string $locale)
+    public static function setDefaultFallback(?string $locale): void
     {
         self::$defaultFallback = $locale;
     }

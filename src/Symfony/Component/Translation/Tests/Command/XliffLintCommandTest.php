@@ -26,7 +26,7 @@ use Symfony\Component\Translation\Command\XliffLintCommand;
  */
 class XliffLintCommandTest extends TestCase
 {
-    private $files;
+    private array $files;
 
     public function testLintCorrectFile()
     {
@@ -172,7 +172,7 @@ EOF;
     public function testPassingClosureAndCallableToConstructor()
     {
         $command = new XliffLintCommand('translation:xliff:lint',
-            \Closure::fromCallable([$this, 'testPassingClosureAndCallableToConstructor']),
+            $this->testPassingClosureAndCallableToConstructor(...),
             [$this, 'testPassingClosureAndCallableToConstructor']
         );
 
@@ -240,7 +240,7 @@ XLIFF;
         @rmdir(sys_get_temp_dir().'/translation-xliff-lint-test');
     }
 
-    public function provideStrictFilenames()
+    public static function provideStrictFilenames()
     {
         yield [false, 'messages.%locale%.xlf', 'en', false];
         yield [false, 'messages.%locale%.xlf', 'es', true];
@@ -262,7 +262,7 @@ XLIFF;
         $this->assertSame($expectedSuggestions, $tester->complete($input));
     }
 
-    public function provideCompletionSuggestions()
+    public static function provideCompletionSuggestions()
     {
         yield 'option' => [['--format', ''], ['txt', 'json', 'github']];
     }

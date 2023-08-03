@@ -23,6 +23,10 @@ use Symfony\Component\Intl\Intl;
 use Symfony\Component\Intl\Locale;
 use Symfony\Component\Intl\Util\GitRepository;
 
+if ('cli' !== \PHP_SAPI) {
+    throw new Exception('This script must be run from the command line.');
+}
+
 require_once __DIR__.'/common.php';
 require_once __DIR__.'/autoload.php';
 
@@ -73,9 +77,7 @@ if ($argc >= 2) {
     echo "Git clone to {$repoDir} complete.\n";
 }
 
-$gitTag = $git->getLastTag(function ($tag) {
-    return preg_match('#^release-[0-9]{1,}-[0-9]{1}$#', $tag);
-});
+$gitTag = $git->getLastTag(fn ($tag) => preg_match('#^release-[0-9]{1,}-[0-9]{1}$#', $tag));
 $shortIcuVersion = strip_minor_versions(preg_replace('#release-([0-9]{1,})-([0-9]{1,})#', '$1.$2', $gitTag));
 
 echo "Checking out `{$gitTag}` for version `{$shortIcuVersion}`...\n";
@@ -156,7 +158,11 @@ if ($argc >= 3) {
 }
 
 $genrb = $buildDir.'/bin/genrb';
-$genrbEnv = 'LD_LIBRARY_PATH='.$buildDir.'/lib ';
+if (\PHP_OS === 'Darwin') {
+    $genrbEnv = 'DYLD_LIBRARY_PATH='.$buildDir.'/lib ';
+} else {
+    $genrbEnv = 'LD_LIBRARY_PATH='.$buildDir.'/lib ';
+}
 
 echo "Using $genrb.\n";
 

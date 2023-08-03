@@ -25,6 +25,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
+ *
  * @group time-sensitive
  */
 class ChainAdapterTest extends AdapterTestCase
@@ -205,7 +206,6 @@ class ChainAdapterTest extends AdapterTestCase
         $itemValidator = function (CacheItem $item) {
             $refl = new \ReflectionObject($item);
             $propExpiry = $refl->getProperty('expiry');
-            $propExpiry->setAccessible(true);
             $expiry = $propExpiry->getValue($item);
             $this->assertGreaterThan(10, $expiry - time(), 'Item should be saved with the given ttl, not the default for the adapter.');
 
@@ -214,7 +214,7 @@ class ChainAdapterTest extends AdapterTestCase
 
         $adapter1 = $this->getMockBuilder(FilesystemAdapter::class)
             ->setConstructorArgs(['', 2])
-            ->setMethods(['save'])
+            ->onlyMethods(['save'])
             ->getMock();
         $adapter1->expects($this->once())
             ->method('save')
@@ -223,7 +223,7 @@ class ChainAdapterTest extends AdapterTestCase
 
         $adapter2 = $this->getMockBuilder(FilesystemAdapter::class)
             ->setConstructorArgs(['', 4])
-            ->setMethods(['save'])
+            ->onlyMethods(['save'])
             ->getMock();
         $adapter2->expects($this->once())
             ->method('save')

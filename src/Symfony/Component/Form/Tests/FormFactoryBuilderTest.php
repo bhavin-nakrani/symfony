@@ -14,22 +14,19 @@ namespace Symfony\Component\Form\Tests;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Form\FormFactory;
 use Symfony\Component\Form\FormFactoryBuilder;
-use Symfony\Component\Form\FormTypeGuesserInterface;
 use Symfony\Component\Form\Tests\Fixtures\FooType;
+use Symfony\Component\Form\Tests\Fixtures\NullFormTypeGuesser;
 
 class FormFactoryBuilderTest extends TestCase
 {
-    private $registry;
-    private $guesser;
-    private $type;
+    private \ReflectionProperty $registry;
+    private FooType $type;
 
     protected function setUp(): void
     {
         $factory = new \ReflectionClass(FormFactory::class);
         $this->registry = $factory->getProperty('registry');
-        $this->registry->setAccessible(true);
 
-        $this->guesser = $this->createMock(FormTypeGuesserInterface::class);
         $this->type = new FooType();
     }
 
@@ -43,14 +40,14 @@ class FormFactoryBuilderTest extends TestCase
         $extensions = $registry->getExtensions();
 
         $this->assertCount(1, $extensions);
-        $this->assertTrue($extensions[0]->hasType(\get_class($this->type)));
+        $this->assertTrue($extensions[0]->hasType($this->type::class));
         $this->assertNull($extensions[0]->getTypeGuesser());
     }
 
     public function testAddTypeGuesser()
     {
         $factoryBuilder = new FormFactoryBuilder();
-        $factoryBuilder->addTypeGuesser($this->guesser);
+        $factoryBuilder->addTypeGuesser(new NullFormTypeGuesser());
 
         $factory = $factoryBuilder->getFormFactory();
         $registry = $this->registry->getValue($factory);

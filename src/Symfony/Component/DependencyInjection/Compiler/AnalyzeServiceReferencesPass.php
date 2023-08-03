@@ -16,7 +16,9 @@ use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\ExpressionLanguage\Expression;
 
 /**
  * Run this pass before passes that need to know more about the relation of
@@ -30,6 +32,8 @@ use Symfony\Component\DependencyInjection\Reference;
  */
 class AnalyzeServiceReferencesPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private ServiceReferenceGraph $graph;
     private ?Definition $currentDefinition = null;
     private bool $onlyConstructorArguments;
@@ -52,6 +56,8 @@ class AnalyzeServiceReferencesPass extends AbstractRecursivePass
 
     /**
      * Processes a ContainerBuilder object to populate the service reference graph.
+     *
+     * @return void
      */
     public function process(ContainerBuilder $container)
     {
@@ -112,7 +118,7 @@ class AnalyzeServiceReferencesPass extends AbstractRecursivePass
                     $value,
                     $this->lazy || $targetDefinition?->isLazy(),
                     true
-               );
+                );
             }
 
             return $value;
@@ -135,8 +141,16 @@ class AnalyzeServiceReferencesPass extends AbstractRecursivePass
 
         $byFactory = $this->byFactory;
         $this->byFactory = true;
-        $this->processValue($value->getFactory());
+        if (\is_string($factory = $value->getFactory()) && str_starts_with($factory, '@=')) {
+            if (!class_exists(Expression::class)) {
+                throw new LogicException('Expressions cannot be used in service factories without the ExpressionLanguage component. Try running "composer require symfony/expression-language".');
+            }
+
+            $factory = new Expression(substr($factory, 2));
+        }
+        $this->processValue($factory);
         $this->byFactory = $byFactory;
+
         $this->processValue($value->getArguments());
 
         $properties = $value->getProperties();

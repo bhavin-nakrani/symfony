@@ -31,7 +31,7 @@ class NormalizationTest extends TestCase
                     ->node('encoders', 'array')
                         ->useAttributeAsKey('class')
                         ->prototype('array')
-                            ->beforeNormalization()->ifString()->then(function ($v) { return ['algorithm' => $v]; })->end()
+                            ->beforeNormalization()->ifString()->then(fn ($v) => ['algorithm' => $v])->end()
                             ->children()
                                 ->node('algorithm', 'scalar')->end()
                             ->end()
@@ -51,7 +51,7 @@ class NormalizationTest extends TestCase
         $this->assertNormalized($tree, $denormalized, $normalized);
     }
 
-    public function getEncoderTests(): array
+    public static function getEncoderTests(): array
     {
         $configs = [];
 
@@ -88,9 +88,7 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(function ($v) {
-            return [$v];
-        }, $configs);
+        return array_map(fn ($v) => [$v], $configs);
     }
 
     /**
@@ -120,7 +118,7 @@ class NormalizationTest extends TestCase
         $this->assertNormalized($tree, $denormalized, $normalized);
     }
 
-    public function getAnonymousKeysTests(): array
+    public static function getAnonymousKeysTests(): array
     {
         $configs = [];
 
@@ -136,7 +134,7 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(function ($v) { return [$v]; }, $configs);
+        return array_map(fn ($v) => [$v], $configs);
     }
 
     /**
@@ -151,7 +149,7 @@ class NormalizationTest extends TestCase
         $this->assertNormalized($this->getNumericKeysTestTree(), $denormalized, $normalized);
     }
 
-    public function getNumericKeysTests(): array
+    public static function getNumericKeysTests(): array
     {
         $configs = [];
 
@@ -167,7 +165,7 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(function ($v) { return [$v]; }, $configs);
+        return array_map(fn ($v) => [$v], $configs);
     }
 
     public function testNonAssociativeArrayThrowsExceptionIfAttributeNotSet()

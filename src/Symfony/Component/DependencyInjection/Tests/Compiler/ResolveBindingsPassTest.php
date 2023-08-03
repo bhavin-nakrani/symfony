@@ -12,6 +12,7 @@
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\DependencyInjection\Argument\BoundArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
@@ -28,6 +29,7 @@ use Symfony\Component\DependencyInjection\Tests\Fixtures\CaseSensitiveClass;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\FooUnitEnum;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedArgumentsDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedEnumArgumentDummy;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedIterableArgumentDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\ParentNotExists;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\WithTarget;
 use Symfony\Component\DependencyInjection\TypedReference;
@@ -36,6 +38,8 @@ require_once __DIR__.'/../Fixtures/includes/autowiring_classes.php';
 
 class ResolveBindingsPassTest extends TestCase
 {
+    use ExpectDeprecationTrait;
+
     public function testProcess()
     {
         $container = new ContainerBuilder();
@@ -67,9 +71,6 @@ class ResolveBindingsPassTest extends TestCase
         $this->assertEquals([['setSensitiveClass', [new Reference('foo')]]], $definition->getMethodCalls());
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testProcessEnum()
     {
         $container = new ContainerBuilder();
@@ -145,7 +146,25 @@ class ResolveBindingsPassTest extends TestCase
         $this->assertEquals([new Reference('bar')], $container->getDefinition('def3')->getArguments());
     }
 
-    public function testScalarSetter()
+    /**
+     * @group legacy
+     */
+    public function testScalarSetterAnnotation()
+    {
+        $this->expectDeprecation('Since symfony/dependency-injection 6.3: Relying on the "@required" annotation on method "Symfony\Component\DependencyInjection\Tests\Compiler\ScalarSetterAnnotation::setDefaultLocale()" is deprecated, use the "Symfony\Contracts\Service\Attribute\Required" attribute instead.');
+
+        $container = new ContainerBuilder();
+
+        $definition = $container->autowire('foo', ScalarSetterAnnotation::class);
+        $definition->setBindings(['$defaultLocale' => 'fr']);
+
+        (new AutowireRequiredMethodsPass())->process($container);
+        (new ResolveBindingsPass())->process($container);
+
+        $this->assertEquals([['setDefaultLocale', ['fr']]], $definition->getMethodCalls());
+    }
+
+    public function testScalarSetterAttribute()
     {
         $container = new ContainerBuilder();
 
@@ -212,6 +231,28 @@ class ResolveBindingsPassTest extends TestCase
         $pass->process($container);
     }
 
+    public function testIterableBindingTypehint()
+    {
+        $autoloader = static function ($class) {
+            if ('iterable' === $class) {
+                throw new \RuntimeException('We should not search pseudo-type iterable as class');
+            }
+        };
+        spl_autoload_register($autoloader);
+
+        $container = new ContainerBuilder();
+        $definition = $container->register('bar', NamedIterableArgumentDummy::class);
+        $definition->setBindings([
+            'iterable $items' => new TaggedIteratorArgument('foo'),
+        ]);
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $this->assertInstanceOf(TaggedIteratorArgument::class, $container->getDefinition('bar')->getArgument(0));
+
+        spl_autoload_unregister($autoloader);
+    }
+
     public function testBindWithTarget()
     {
         $container = new ContainerBuilder();
@@ -222,5 +263,25 @@ class ResolveBindingsPassTest extends TestCase
         (new ResolveBindingsPass())->process($container);
 
         $this->assertSame('bar', (string) $container->getDefinition('with_target')->getArgument(0));
+    }
+
+    public function testBindWithNamedArgs()
+    {
+        $container = new ContainerBuilder();
+
+        $bindings = [
+            '$apiKey' => new BoundArgument('K'),
+        ];
+
+        $definition = $container->register(NamedArgumentsDummy::class, NamedArgumentsDummy::class);
+        $definition->setArguments(['c' => 'C', 'hostName' => 'H']);
+        $definition->setBindings($bindings);
+
+        $container->register('foo', CaseSensitiveClass::class);
+
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $this->assertEquals(['C', 'K', 'H'], $definition->getArguments());
     }
 }

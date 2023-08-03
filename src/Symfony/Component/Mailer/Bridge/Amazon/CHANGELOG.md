@@ -1,6 +1,12 @@
 CHANGELOG
 =========
 
+6.1
+---
+
+ * Add support for `X-SES-MESSAGE-TAGS`
+ * Add support for custom ses+smtp hosts
+
 6.0
 ---
 

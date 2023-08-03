@@ -15,6 +15,7 @@ use Doctrine\DBAL\Logging\DebugStack;
 use Doctrine\DBAL\Types\ConversionException;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\Persistence\ManagerRegistry;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\DataCollector\DataCollector;
@@ -28,7 +29,6 @@ use Symfony\Component\VarDumper\Cloner\Stub;
  */
 class DoctrineDataCollector extends DataCollector
 {
-    private ManagerRegistry $registry;
     private array $connections;
     private array $managers;
 
@@ -37,41 +37,75 @@ class DoctrineDataCollector extends DataCollector
      */
     private array $loggers = [];
 
-    public function __construct(ManagerRegistry $registry)
-    {
-        $this->registry = $registry;
+    public function __construct(
+        private ManagerRegistry $registry,
+        private ?DebugDataHolder $debugDataHolder = null,
+    ) {
         $this->connections = $registry->getConnectionNames();
         $this->managers = $registry->getManagerNames();
+
+        if (null === $debugDataHolder) {
+            trigger_deprecation('symfony/doctrine-bridge', '6.4', 'Not passing an instance of "%s" as "$debugDataHolder" to "%s()" is deprecated.', DebugDataHolder::class, __METHOD__);
+        }
     }
 
     /**
      * Adds the stack logger for a connection.
+     *
+     * @return void
+     *
+     * @deprecated since Symfony 6.4, use a DebugDataHolder instead.
      */
     public function addLogger(string $name, DebugStack $logger)
     {
+        trigger_deprecation('symfony/doctrine-bridge', '6.4', '"%s()" is deprecated. Pass an instance of "%s" to the constructor instead.', __METHOD__, DebugDataHolder::class);
+
         $this->loggers[$name] = $logger;
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function collect(Request $request, Response $response, \Throwable $exception = null)
     {
-        $queries = [];
-        foreach ($this->loggers as $name => $logger) {
-            $queries[$name] = $this->sanitizeQueries($name, $logger->queries);
-        }
-
         $this->data = [
-            'queries' => $queries,
+            'queries' => $this->collectQueries(),
             'connections' => $this->connections,
             'managers' => $this->managers,
         ];
     }
 
+    private function collectQueries(): array
+    {
+        $queries = [];
+
+        if (null !== $this->debugDataHolder) {
+            foreach ($this->debugDataHolder->getData() as $name => $data) {
+                $queries[$name] = $this->sanitizeQueries($name, $data);
+            }
+
+            return $queries;
+        }
+
+        foreach ($this->loggers as $name => $logger) {
+            $queries[$name] = $this->sanitizeQueries($name, $logger->queries);
+        }
+
+        return $queries;
+    }
+
+    /**
+     * @return void
+     */
     public function reset()
     {
         $this->data = [];
+
+        if (null !== $this->debugDataHolder) {
+            $this->debugDataHolder->reset();
+
+            return;
+        }
 
         foreach ($this->loggers as $logger) {
             $logger->queries = [];
@@ -79,26 +113,41 @@ class DoctrineDataCollector extends DataCollector
         }
     }
 
+    /**
+     * @return array
+     */
     public function getManagers()
     {
         return $this->data['managers'];
     }
 
+    /**
+     * @return array
+     */
     public function getConnections()
     {
         return $this->data['connections'];
     }
 
+    /**
+     * @return int
+     */
     public function getQueryCount()
     {
         return array_sum(array_map('count', $this->data['queries']));
     }
 
+    /**
+     * @return array
+     */
     public function getQueries()
     {
         return $this->data['queries'];
     }
 
+    /**
+     * @return int
+     */
     public function getTime()
     {
         $time = 0;
@@ -111,17 +160,11 @@ class DoctrineDataCollector extends DataCollector
         return $time;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getName(): string
     {
         return 'db';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getCasters(): array
     {
         return parent::getCasters() + [
@@ -164,9 +207,7 @@ class DoctrineDataCollector extends DataCollector
     {
         $query['explainable'] = true;
         $query['runnable'] = true;
-        if (null === $query['params']) {
-            $query['params'] = [];
-        }
+        $query['params'] ??= [];
         if (!\is_array($query['params'])) {
             $query['params'] = [$query['params']];
         }

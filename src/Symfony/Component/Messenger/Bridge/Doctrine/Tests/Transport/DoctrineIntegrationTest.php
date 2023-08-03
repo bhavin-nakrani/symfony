@@ -11,10 +11,12 @@
 
 namespace Symfony\Component\Messenger\Bridge\Doctrine\Tests\Transport;
 
-use Doctrine\DBAL\Driver\Result as DriverResult;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Result;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
+use Doctrine\DBAL\Schema\DefaultSchemaManagerFactory;
+use Doctrine\DBAL\Tools\DsnParser;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Bridge\Doctrine\Tests\Fixtures\DummyMessage;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
@@ -24,27 +26,25 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
  */
 class DoctrineIntegrationTest extends TestCase
 {
-    /** @var \Doctrine\DBAL\Connection */
-    private $driverConnection;
-    /** @var Connection */
-    private $connection;
-    /** @var string */
-    private $sqliteFile;
+    private \Doctrine\DBAL\Connection $driverConnection;
+    private Connection $connection;
 
     protected function setUp(): void
     {
-        $this->sqliteFile = sys_get_temp_dir().'/symfony.messenger.sqlite';
-        $dsn = getenv('MESSENGER_DOCTRINE_DSN') ?: 'sqlite:///'.$this->sqliteFile;
-        $this->driverConnection = DriverManager::getConnection(['url' => $dsn]);
+        $dsn = getenv('MESSENGER_DOCTRINE_DSN') ?: 'pdo-sqlite://:memory:';
+        $params = class_exists(DsnParser::class) ? (new DsnParser())->parse($dsn) : ['url' => $dsn];
+        $config = new Configuration();
+        if (class_exists(DefaultSchemaManagerFactory::class)) {
+            $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
+        }
+
+        $this->driverConnection = DriverManager::getConnection($params, $config);
         $this->connection = new Connection([], $this->driverConnection);
     }
 
     protected function tearDown(): void
     {
         $this->driverConnection->close();
-        if (file_exists($this->sqliteFile)) {
-            @unlink($this->sqliteFile);
-        }
     }
 
     public function testConnectionSendAndGet()
@@ -63,13 +63,16 @@ class DoctrineIntegrationTest extends TestCase
             ->select('m.available_at')
             ->from('messenger_messages', 'm')
             ->where('m.body = :body')
-            ->setParameter('body', '{"message": "Hi i am delayed"}')
-            ->execute();
+            ->setParameter('body', '{"message": "Hi i am delayed"}');
+        if (method_exists($stmt, 'executeQuery')) {
+            $stmt = $stmt->executeQuery();
+        } else {
+            $stmt = $stmt->execute();
+        }
 
-        $available_at = new \DateTime($stmt instanceof Result || $stmt instanceof DriverResult ? $stmt->fetchOne() : $stmt->fetchColumn());
+        $available_at = new \DateTimeImmutable($stmt instanceof Result ? $stmt->fetchOne() : $stmt->fetchColumn());
 
-        $now = new \DateTime();
-        $now->modify('+60 seconds');
+        $now = new \DateTimeImmutable('now + 60 seconds');
         $this->assertGreaterThan($now, $available_at);
     }
 
@@ -82,25 +85,25 @@ class DoctrineIntegrationTest extends TestCase
             'body' => '{"message": "Hi handled"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'delivered_at' => $this->formatDateTime(new \DateTime()),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'delivered_at' => $this->formatDateTime(new \DateTimeImmutable('now', new \DateTimeZone('UTC'))),
         ]);
         // one available later
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi delayed"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 13:00:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 13:00:00', new \DateTimeZone('UTC'))),
         ]);
         // one available
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi available"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:30:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:30:00', new \DateTimeZone('UTC'))),
         ]);
 
         $encoded = $this->connection->get();
@@ -116,33 +119,33 @@ class DoctrineIntegrationTest extends TestCase
             'body' => '{"message": "Hi handled"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'delivered_at' => $this->formatDateTime(new \DateTime()),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'delivered_at' => $this->formatDateTime(new \DateTimeImmutable('now', new \DateTimeZone('UTC'))),
         ]);
         // one available later
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi delayed"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime((new \DateTime())->modify('+1 minute')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('+1 minute', new \DateTimeZone('UTC'))),
         ]);
         // one available
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi available"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:30:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:30:00', new \DateTimeZone('UTC'))),
         ]);
         // another available
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi available"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:30:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:30:00', new \DateTimeZone('UTC'))),
         ]);
 
         $this->assertSame(2, $this->connection->getMessageCount());
@@ -151,22 +154,21 @@ class DoctrineIntegrationTest extends TestCase
     public function testItRetrieveTheMessageThatIsOlderThanRedeliverTimeout()
     {
         $this->connection->setup();
-        $twoHoursAgo = new \DateTime('now');
-        $twoHoursAgo->modify('-2 hours');
+        $twoHoursAgo = new \DateTimeImmutable('now -2 hours');
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi requeued"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
             'delivered_at' => $this->formatDateTime($twoHoursAgo),
         ]);
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi available"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
             'queue_name' => 'default',
-            'created_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:00:00')),
-            'available_at' => $this->formatDateTime(new \DateTime('2019-03-15 12:30:00')),
+            'created_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:00:00', new \DateTimeZone('UTC'))),
+            'available_at' => $this->formatDateTime(new \DateTimeImmutable('2019-03-15 12:30:00', new \DateTimeZone('UTC'))),
         ]);
 
         $next = $this->connection->get();
@@ -176,7 +178,7 @@ class DoctrineIntegrationTest extends TestCase
 
     public function testTheTransportIsSetupOnGet()
     {
-        $this->assertFalse($this->createSchemaManager()->tablesExist('messenger_messages'));
+        $this->assertFalse($this->createSchemaManager()->tablesExist(['messenger_messages']));
         $this->assertNull($this->connection->get());
 
         $this->connection->send('the body', ['my' => 'header']);
@@ -184,7 +186,7 @@ class DoctrineIntegrationTest extends TestCase
         $this->assertEquals('the body', $envelope['body']);
     }
 
-    private function formatDateTime(\DateTime $dateTime)
+    private function formatDateTime(\DateTimeImmutable $dateTime)
     {
         return $dateTime->format($this->driverConnection->getDatabasePlatform()->getDateTimeFormatString());
     }

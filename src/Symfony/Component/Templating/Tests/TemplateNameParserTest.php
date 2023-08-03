@@ -15,18 +15,16 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Templating\TemplateNameParser;
 use Symfony\Component\Templating\TemplateReference;
 
+/**
+ * @group legacy
+ */
 class TemplateNameParserTest extends TestCase
 {
-    protected $parser;
+    protected TemplateNameParser $parser;
 
     protected function setUp(): void
     {
         $this->parser = new TemplateNameParser();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->parser = null;
     }
 
     /**
@@ -40,7 +38,7 @@ class TemplateNameParserTest extends TestCase
         $this->assertEquals($template->getLogicalName(), $name);
     }
 
-    public function getLogicalNameToTemplateProvider()
+    public static function getLogicalNameToTemplateProvider()
     {
         return [
             ['/path/to/section/name.engine', new TemplateReference('/path/to/section/name.engine', 'engine')],

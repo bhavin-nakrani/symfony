@@ -51,10 +51,20 @@ class KernelBrowserTest extends AbstractWebTestCase
         $client->request('GET', '/');
     }
 
+    public function testRequestAfterKernelShutdownAndPerformedRequest()
+    {
+        $this->expectNotToPerformAssertions();
+
+        $client = static::createClient(['test_case' => 'TestServiceContainer']);
+        $client->request('GET', '/');
+        static::ensureKernelShutdown();
+        $client->request('GET', '/');
+    }
+
     private function getKernelMock()
     {
         $mock = $this->getMockBuilder($this->getKernelClass())
-            ->setMethods(['shutdown', 'boot', 'handle'])
+            ->onlyMethods(['shutdown', 'boot', 'handle', 'getContainer'])
             ->disableOriginalConstructor()
             ->getMock();
 

@@ -21,23 +21,28 @@ use Symfony\Component\Lock\Store\PostgreSqlStore;
  * @author Jérémy Derussé <jeremy@derusse.com>
  *
  * @requires extension pdo_pgsql
+ *
  * @group integration
  */
-class PostgreSqlStoreTest extends AbstractStoreTest
+class PostgreSqlStoreTest extends AbstractStoreTestCase
 {
     use BlockingStoreTestTrait;
     use SharedLockStoreTestTrait;
 
-    /**
-     * {@inheritdoc}
-     */
-    public function getStore(): PersistingStoreInterface
+    public function getPostgresHost(): string
     {
-        if (!getenv('POSTGRES_HOST')) {
+        if (!$host = getenv('POSTGRES_HOST')) {
             $this->markTestSkipped('Missing POSTGRES_HOST env variable');
         }
 
-        return new PostgreSqlStore('pgsql:host='.getenv('POSTGRES_HOST'), ['db_username' => 'postgres', 'db_password' => 'password']);
+        return $host;
+    }
+
+    public function getStore(): PersistingStoreInterface
+    {
+        $host = $this->getPostgresHost();
+
+        return new PostgreSqlStore('pgsql:host='.$host, ['db_username' => 'postgres', 'db_password' => 'password']);
     }
 
     /**
@@ -77,5 +82,81 @@ class PostgreSqlStoreTest extends AbstractStoreTest
 
         $store2->save($key);
         $this->assertTrue($store2->exists($key));
+    }
+
+    public function testWaitAndSaveAfterConflictReleasesLockFromInternalStore()
+    {
+        $store1 = $this->getStore();
+        $postgresHost = $this->getPostgresHost();
+        $pdo = new \PDO('pgsql:host='.$postgresHost, 'postgres', 'password');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $store2 = new PostgreSqlStore($pdo);
+
+        $keyId = uniqid(__METHOD__, true);
+        $store1Key = new Key($keyId);
+
+        $store1->save($store1Key);
+
+        // set a low time out then try to wait and save, which will fail
+        // because the key is already set above.
+        $pdo->exec('SET statement_timeout = 1');
+        $waitSaveError = null;
+        try {
+            $store2->waitAndSave(new Key($keyId));
+        } catch (\PDOException $waitSaveError) {
+        }
+        $this->assertInstanceOf(\PDOException::class, $waitSaveError, 'waitAndSave should have thrown');
+        $pdo->exec('SET statement_timeout = 0');
+
+        $store1->delete($store1Key);
+        $this->assertFalse($store1->exists($store1Key));
+
+        $store2Key = new Key($keyId);
+        $lockConflicted = false;
+        try {
+            $store2->waitAndSave($store2Key);
+        } catch (LockConflictedException $lockConflictedException) {
+            $lockConflicted = true;
+        }
+
+        $this->assertFalse($lockConflicted, 'lock should be available now that its been remove from $store1');
+        $this->assertTrue($store2->exists($store2Key));
+    }
+
+    public function testWaitAndSaveReadAfterConflictReleasesLockFromInternalStore()
+    {
+        $store1 = $this->getStore();
+        $postgresHost = $this->getPostgresHost();
+        $pdo = new \PDO('pgsql:host='.$postgresHost, 'postgres', 'password');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $store2 = new PostgreSqlStore($pdo);
+
+        $keyId = uniqid(__METHOD__, true);
+        $store1Key = new Key($keyId);
+
+        $store1->save($store1Key);
+
+        // set a low time out then try to wait and save, which will fail
+        // because the key is already set above.
+        $pdo->exec('SET statement_timeout = 1');
+        $waitSaveError = null;
+        try {
+            $store2->waitAndSaveRead(new Key($keyId));
+        } catch (\PDOException $waitSaveError) {
+        }
+        $this->assertInstanceOf(\PDOException::class, $waitSaveError, 'waitAndSave should have thrown');
+
+        $store1->delete($store1Key);
+        $this->assertFalse($store1->exists($store1Key));
+
+        $store2Key = new Key($keyId);
+        // since the lock is going to be acquired in read mode and is not exclusive
+        // this won't every throw a LockConflictedException as it would from
+        // waitAndSave, but it will hang indefinitely as it waits for postgres
+        // so set a time out of 2 seconds here so the test doesn't just sit forever
+        $pdo->exec('SET statement_timeout = 20000');
+        $store2->waitAndSaveRead($store2Key);
+
+        $this->assertTrue($store2->exists($store2Key));
     }
 }

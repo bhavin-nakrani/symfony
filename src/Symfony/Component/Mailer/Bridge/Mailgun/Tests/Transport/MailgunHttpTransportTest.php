@@ -32,7 +32,7 @@ class MailgunHttpTransportTest extends TestCase
         $this->assertSame($expected, (string) $transport);
     }
 
-    public function getTransportData()
+    public static function getTransportData()
     {
         return [
             [
@@ -128,13 +128,12 @@ class MailgunHttpTransportTest extends TestCase
 
         $transport = new MailgunHttpTransport('key', 'domain');
         $method = new \ReflectionMethod(MailgunHttpTransport::class, 'addMailgunHeaders');
-        $method->setAccessible(true);
         $method->invoke($transport, $email);
 
         $this->assertCount(4, $email->getHeaders()->toArray());
         $this->assertSame('foo: bar', $email->getHeaders()->get('foo')->toString());
-        $this->assertCount(2, $email->getHeaders()->all('X-Mailgun-Tag'));
         $tagHeaders = iterator_to_array($email->getHeaders()->all('X-Mailgun-Tag'));
+        $this->assertCount(2, $tagHeaders);
         $this->assertSame('X-Mailgun-Tag: password-reset', $tagHeaders[0]->toString());
         $this->assertSame('X-Mailgun-Tag: product-name', $tagHeaders[1]->toString());
         $this->assertSame('X-Mailgun-Variables: '.json_encode(['Color' => 'blue', 'Client-ID' => '12345']), $email->getHeaders()->get('X-Mailgun-Variables')->toString());

@@ -28,6 +28,9 @@ class TransformationFailureExtension extends AbstractTypeExtension
         $this->translator = $translator;
     }
 
+    /**
+     * @return void
+     */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         if (!isset($options['constraints'])) {
@@ -35,9 +38,6 @@ class TransformationFailureExtension extends AbstractTypeExtension
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public static function getExtendedTypes(): iterable
     {
         return [FormType::class];

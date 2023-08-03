@@ -13,7 +13,6 @@ namespace Symfony\Component\Validator\Tests\Fixtures\NestedAttribute;
 
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
-use Symfony\Component\Validator\Tests\Fixtures\Attribute\EntityParent;
 use Symfony\Component\Validator\Tests\Fixtures\EntityInterfaceB;
 use Symfony\Component\Validator\Tests\Fixtures\CallbackClass;
 use Symfony\Component\Validator\Tests\Fixtures\ConstraintA;
@@ -78,6 +77,8 @@ class Entity extends EntityParent implements EntityInterfaceB
     private $internal;
     public $data = 'Overridden data';
     public $initialized = false;
+    #[Assert\Type('integer')]
+    protected ?int $other;
 
     public function __construct($internal = null)
     {

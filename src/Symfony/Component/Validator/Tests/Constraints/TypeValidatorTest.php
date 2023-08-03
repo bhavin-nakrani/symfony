@@ -19,7 +19,7 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
 {
     protected static $file;
 
-    protected function createValidator()
+    protected function createValidator(): TypeValidator
     {
         return new TypeValidator();
     }
@@ -70,10 +70,10 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidValues()
+    public static function getValidValues()
     {
         $object = new \stdClass();
-        $file = $this->createFile();
+        $file = self::createFile();
 
         return [
             [true, 'Boolean'],
@@ -88,6 +88,13 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
             ['1.5', 'numeric'],
             [0, 'integer'],
             [1.5, 'float'],
+            [\NAN, 'float'],
+            [\INF, 'float'],
+            [1.5, 'finite-float'],
+            [0, 'number'],
+            [1.5, 'number'],
+            [\INF, 'number'],
+            [1.5, 'finite-number'],
             ['12345', 'string'],
             [[], 'array'],
             [$object, 'object'],
@@ -126,16 +133,26 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getInvalidValues()
+    public static function getInvalidValues()
     {
         $object = new \stdClass();
-        $file = $this->createFile();
+        $file = self::createFile();
 
         return [
             ['foobar', 'numeric', '"foobar"'],
             ['foobar', 'boolean', '"foobar"'],
             ['0', 'integer', '"0"'],
+            [\NAN, 'integer', 'NAN'],
+            [\INF, 'integer', 'INF'],
             ['1.5', 'float', '"1.5"'],
+            ['1.5', 'finite-float', '"1.5"'],
+            [\NAN, 'finite-float', 'NAN'],
+            [\INF, 'finite-float', 'INF'],
+            ['0', 'number', '"0"'],
+            [\NAN, 'number', 'NAN'],
+            ['0', 'finite-number', '"0"'],
+            [\NAN, 'finite-number', 'NAN'],
+            [\INF, 'finite-number', 'INF'],
             [12345, 'string', '12345'],
             [$object, 'boolean', 'object'],
             [$object, 'numeric', 'object'],
@@ -175,7 +192,7 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidValuesMultipleTypes()
+    public static function getValidValuesMultipleTypes()
     {
         return [
             ['12345', ['array', 'string']],
@@ -197,7 +214,7 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function provideConstraintsWithMultipleTypes()
+    public static function provideConstraintsWithMultipleTypes()
     {
         yield 'Doctrine style' => [new Type([
             'type' => ['boolean', 'array'],
@@ -206,20 +223,20 @@ class TypeValidatorTest extends ConstraintValidatorTestCase
         yield 'named arguments' => [new Type(type: ['boolean', 'array'], message: 'myMessage')];
     }
 
-    protected function createFile()
+    protected static function createFile()
     {
-        if (!static::$file) {
-            static::$file = fopen(__FILE__, 'r');
+        if (!self::$file) {
+            self::$file = fopen(__FILE__, 'r');
         }
 
-        return static::$file;
+        return self::$file;
     }
 
     public static function tearDownAfterClass(): void
     {
-        if (static::$file) {
-            fclose(static::$file);
-            static::$file = null;
+        if (self::$file) {
+            fclose(self::$file);
+            self::$file = null;
         }
     }
 }

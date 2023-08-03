@@ -11,10 +11,12 @@
 
 namespace Symfony\Component\DependencyInjection\LazyProxy;
 
+trigger_deprecation('symfony/dependency-injection', '6.2', 'The "%s" class is deprecated, use "%s" instead.', ProxyHelper::class, \Symfony\Component\VarExporter\ProxyHelper::class);
+
 /**
  * @author Nicolas Grekas <p@tchwork.com>
  *
- * @internal
+ * @deprecated since Symfony 6.2, use VarExporter's ProxyHelper instead
  */
 class ProxyHelper
 {
@@ -32,6 +34,11 @@ class ProxyHelper
             return null;
         }
 
+        return self::getTypeHintForType($type, $r, $noBuiltin);
+    }
+
+    private static function getTypeHintForType(\ReflectionType $type, \ReflectionFunctionAbstract $r, bool $noBuiltin): ?string
+    {
         $types = [];
         $glue = '|';
         if ($type instanceof \ReflectionUnionType) {
@@ -46,6 +53,17 @@ class ProxyHelper
         }
 
         foreach ($reflectionTypes as $type) {
+            if ($type instanceof \ReflectionIntersectionType) {
+                $typeHint = self::getTypeHintForType($type, $r, $noBuiltin);
+                if (null === $typeHint) {
+                    return null;
+                }
+
+                $types[] = sprintf('(%s)', $typeHint);
+
+                continue;
+            }
+
             if ($type->isBuiltin()) {
                 if (!$noBuiltin) {
                     $types[] = $type->getName();

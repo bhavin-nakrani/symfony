@@ -21,8 +21,8 @@ use Twig\Node\Node;
 
 class TranslationDefaultDomainNodeVisitorTest extends TestCase
 {
-    private static $message = 'message';
-    private static $domain = 'domain';
+    private static string $message = 'message';
+    private static string $domain = 'domain';
 
     /** @dataProvider getDefaultDomainAssignmentTestData */
     public function testDefaultDomainAssignment(Node $node)
@@ -76,7 +76,7 @@ class TranslationDefaultDomainNodeVisitorTest extends TestCase
         $this->assertEquals([[self::$message, null]], $visitor->getMessages());
     }
 
-    public function getDefaultDomainAssignmentTestData()
+    public static function getDefaultDomainAssignmentTestData()
     {
         return [
             [TwigNodeProvider::getTransFilter(self::$message)],

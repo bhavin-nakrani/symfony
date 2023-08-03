@@ -32,7 +32,7 @@ final class IqsmsTransport extends AbstractTransport
     private string $password;
     private string $from;
 
-    public function __construct(string $login, string $password, string $from, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
+    public function __construct(string $login, #[\SensitiveParameter] string $password, string $from, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
     {
         $this->login = $login;
         $this->password = $password;
@@ -63,7 +63,7 @@ final class IqsmsTransport extends AbstractTransport
                     [
                         'phone' => $message->getPhone(),
                         'text' => $message->getSubject(),
-                        'sender' => $this->from,
+                        'sender' => $message->getFrom() ?: $this->from,
                         'clientId' => uniqid(),
                     ],
                 ],

@@ -40,7 +40,7 @@ class NativeRequestHandler implements RequestHandlerInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      *
      * @throws Exception\UnexpectedTypeException If the $request is not null
      */
@@ -124,9 +124,6 @@ class NativeRequestHandler implements RequestHandlerInterface
         $form->submit($data, 'PATCH' !== $method);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function isFileUpload(mixed $data): bool
     {
         // POST data will always be strings or arrays of strings. Thus, we can be sure
@@ -190,6 +187,8 @@ class NativeRequestHandler implements RequestHandlerInterface
             return $data;
         }
 
+        // Remove extra key added by PHP 8.1.
+        unset($data['full_path']);
         $keys = array_keys($data);
         sort($keys);
 

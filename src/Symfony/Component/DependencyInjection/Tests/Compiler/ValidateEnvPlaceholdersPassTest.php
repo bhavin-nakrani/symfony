@@ -153,17 +153,17 @@ class ValidateEnvPlaceholdersPassTest extends TestCase
         $this->assertSame(['scalar_node' => $expected], $container->resolveEnvPlaceholders($ext->getConfig()));
     }
 
-    public function testEnvIsIncompatibleWithEnumNode()
+    public function testSurroundedEnvInConfig()
     {
-        $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('A dynamic value is not compatible with a "Symfony\Component\Config\Definition\EnumNode" node type at path "env_extension.enum_node".');
         $container = new ContainerBuilder();
-        $container->registerExtension(new EnvExtension());
+        $container->registerExtension($ext = new EnvExtension());
         $container->prependExtensionConfig('env_extension', [
-            'enum_node' => '%env(FOO)%',
+            'scalar_node' => $expected = 'foo%env(BAR)%baz',
         ]);
 
         $this->doProcess($container);
+
+        $this->assertSame(['scalar_node' => $expected], $container->resolveEnvPlaceholders($ext->getConfig()));
     }
 
     public function testEnvIsIncompatibleWithArrayNode()
@@ -304,9 +304,7 @@ class EnvConfiguration implements ConfigurationInterface
                 ->scalarNode('scalar_node_not_empty_validated')
                     ->cannotBeEmpty()
                     ->validate()
-                        ->always(function ($value) {
-                            return $value;
-                        })
+                        ->always(fn ($value) => $value)
                     ->end()
                 ->end()
                 ->integerNode('int_node')->end()
@@ -314,8 +312,8 @@ class EnvConfiguration implements ConfigurationInterface
                 ->booleanNode('bool_node')->end()
                 ->arrayNode('array_node')
                     ->beforeNormalization()
-                        ->ifTrue(function ($value) { return !\is_array($value); })
-                        ->then(function ($value) { return ['child_node' => $value]; })
+                        ->ifTrue(fn ($value) => !\is_array($value))
+                        ->then(fn ($value) => ['child_node' => $value])
                     ->end()
                     ->beforeNormalization()
                         ->ifArray()
@@ -332,7 +330,7 @@ class EnvConfiguration implements ConfigurationInterface
                         ->booleanNode('bool_force_cast')->end()
                         ->integerNode('int_unset_at_zero')
                             ->validate()
-                                ->ifTrue(function ($value) { return 0 === $value; })
+                                ->ifTrue(fn ($value) => 0 === $value)
                                 ->thenUnset()
                             ->end()
                         ->end()
@@ -343,9 +341,7 @@ class EnvConfiguration implements ConfigurationInterface
                 ->variableNode('variable_node')->end()
                 ->scalarNode('string_node')
                     ->validate()
-                        ->ifTrue(function ($value) {
-                            return !\is_string($value) || 'fail' === $value;
-                        })
+                        ->ifTrue(fn ($value) => !\is_string($value) || 'fail' === $value)
                         ->thenInvalid('%s is not a valid string')
                     ->end()
                 ->end()
@@ -375,8 +371,8 @@ class ConfigurationWithArrayNodeRequiringOneElement implements ConfigurationInte
 
 class EnvExtension extends Extension
 {
-    private $configuration;
-    private $config;
+    private ConfigurationInterface $configuration;
+    private array $config;
 
     public function __construct(ConfigurationInterface $configuration = null)
     {
@@ -393,7 +389,7 @@ class EnvExtension extends Extension
         return $this->configuration;
     }
 
-    public function load(array $configs, ContainerBuilder $container)
+    public function load(array $configs, ContainerBuilder $container): void
     {
         if (!array_filter($configs)) {
             return;

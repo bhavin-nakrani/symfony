@@ -23,7 +23,7 @@ use Symfony\Component\Console\Output\StreamOutput;
  */
 class ProgressBarTest extends TestCase
 {
-    private $colSize;
+    private string|false $colSize;
 
     protected function setUp(): void
     {
@@ -63,6 +63,69 @@ class ProgressBarTest extends TestCase
             '    0 [>---------------------------]'.
             $this->generateOutput('    1 [->--------------------------]'),
             stream_get_contents($output->getStream())
+        );
+    }
+
+    public function testResumeNoMax()
+    {
+        $bar = new ProgressBar($output = $this->getOutputStream(), 0, 0);
+        $bar->start(null, 15);
+        $bar->advance();
+
+        rewind($output->getStream());
+
+        $this->assertEquals(
+            '   15 [--------------->------------]'.
+            $this->generateOutput('   16 [---------------->-----------]'),
+            stream_get_contents($output->getStream())
+        );
+    }
+
+    public function testResumeWithMax()
+    {
+        $bar = new ProgressBar($output = $this->getOutputStream(), 5000, 0);
+        $bar->start(null, 1000);
+
+        rewind($output->getStream());
+
+        $this->assertEquals(
+            ' 1000/5000 [=====>----------------------]  20%',
+            stream_get_contents($output->getStream())
+        );
+    }
+
+    public function testRegularTimeEstimation()
+    {
+        $bar = new ProgressBar($output = $this->getOutputStream(), 1_200, 0);
+        $bar->start();
+
+        $bar->advance();
+        $bar->advance();
+
+        sleep(1);
+
+        $this->assertEquals(
+            600.0,
+            $bar->getEstimated()
+        );
+    }
+
+    public function testResumedTimeEstimation()
+    {
+        $bar = new ProgressBar($output = $this->getOutputStream(), 1_200, 0);
+        $bar->start(null, 599);
+        $bar->advance();
+
+        sleep(1);
+
+        $this->assertEquals(
+            1_200.0,
+            $bar->getEstimated()
+        );
+
+        $this->assertEquals(
+            600.0,
+            $bar->getRemaining()
         );
     }
 
@@ -361,8 +424,8 @@ class ProgressBarTest extends TestCase
         rewind($output->getStream());
         $this->assertSame(
             " \033[44;37m 0/50\033[0m [>---------------------------]   0%".\PHP_EOL.
-            "\x1b[1A\x1b[0J"." \033[44;37m 1/50\033[0m [>---------------------------]   2%".\PHP_EOL.
-            "\x1b[1A\x1b[0J"." \033[44;37m 2/50\033[0m [=>--------------------------]   4%".\PHP_EOL,
+            "\x1b[1A\x1b[0J \033[44;37m 1/50\033[0m [>---------------------------]   2%".\PHP_EOL.
+            "\x1b[1A\x1b[0J \033[44;37m 2/50\033[0m [=>--------------------------]   4%".\PHP_EOL,
             stream_get_contents($output->getStream())
         );
         putenv('COLUMNS=120');
@@ -397,6 +460,28 @@ class ProgressBarTest extends TestCase
         );
     }
 
+    public function testOverwritWithNewlinesInMessage()
+    {
+        ProgressBar::setFormatDefinition('test', '%current%/%max% [%bar%] %percent:3s%% %message% Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.');
+
+        $bar = new ProgressBar($output = $this->getOutputStream(), 50, 0);
+        $bar->setFormat('test');
+        $bar->start();
+        $bar->display();
+        $bar->setMessage("Twas brillig, and the slithy toves. Did gyre and gimble in the wabe: All mimsy were the borogoves, And the mome raths outgrabe.\nBeware the Jabberwock, my son! The jaws that bite, the claws that catch! Beware the Jubjub bird, and shun The frumious Bandersnatch!");
+        $bar->advance();
+        $bar->setMessage("He took his vorpal sword in hand; Long time the manxome foe he sought— So rested he by the Tumtum tree And stood awhile in thought.\nAnd, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whiffling through the tulgey wood, And burbled as it came!");
+        $bar->advance();
+
+        rewind($output->getStream());
+        $this->assertEquals(
+            " 0/50 [>]   0% %message% Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.\x1b[1G\x1b[2K 1/50 [>]   2% Twas brillig, and the slithy toves. Did gyre and gimble in the wabe: All mimsy were the borogoves, And the mome raths outgrabe.
+Beware the Jabberwock, my son! The jaws that bite, the claws that catch! Beware the Jubjub bird, and shun The frumious Bandersnatch! Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.\x1b[1G\x1b[2K\x1b[1A\x1b[1G\x1b[2K 2/50 [>]   4% He took his vorpal sword in hand; Long time the manxome foe he sought— So rested he by the Tumtum tree And stood awhile in thought.
+And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whiffling through the tulgey wood, And burbled as it came! Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.",
+            stream_get_contents($output->getStream())
+        );
+    }
+
     public function testOverwriteWithSectionOutputWithNewlinesInMessage()
     {
         $sections = [];
@@ -417,7 +502,7 @@ class ProgressBarTest extends TestCase
         rewind($output->getStream());
         $this->assertEquals(
             ' 0/50 [>]   0% %message% Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.'.\PHP_EOL.
-            "\x1b[6A\x1b[0J 1/50 [>]   2% Twas brillig, and the slithy toves. Did gyre and gimble in the wabe: All mimsy were the borogoves, And the mome raths outgrabe.
+            "\x1b[3A\x1b[0J 1/50 [>]   2% Twas brillig, and the slithy toves. Did gyre and gimble in the wabe: All mimsy were the borogoves, And the mome raths outgrabe.
 Beware the Jabberwock, my son! The jaws that bite, the claws that catch! Beware the Jubjub bird, and shun The frumious Bandersnatch! Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.".\PHP_EOL.
             "\x1b[6A\x1b[0J 2/50 [>]   4% He took his vorpal sword in hand; Long time the manxome foe he sought— So rested he by the Tumtum tree And stood awhile in thought.
 And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whiffling through the tulgey wood, And burbled as it came! Fruitcake marzipan toffee. Cupcake gummi bears tart dessert ice cream chupa chups cupcake chocolate bar sesame snaps. Croissant halvah cookie jujubes powder macaroon. Fruitcake bear claw bonbon jelly beans oat cake pie muffin Fruitcake marzipan toffee.".\PHP_EOL,
@@ -779,11 +864,30 @@ And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whi
 
     public function testAddingPlaceholderFormatter()
     {
-        ProgressBar::setPlaceholderFormatterDefinition('remaining_steps', function (ProgressBar $bar) {
-            return $bar->getMaxSteps() - $bar->getProgress();
-        });
+        ProgressBar::setPlaceholderFormatterDefinition('remaining_steps', fn (ProgressBar $bar) => $bar->getMaxSteps() - $bar->getProgress());
         $bar = new ProgressBar($output = $this->getOutputStream(), 3, 0);
         $bar->setFormat(' %remaining_steps% [%bar%]');
+
+        $bar->start();
+        $bar->advance();
+        $bar->finish();
+
+        rewind($output->getStream());
+        $this->assertEquals(
+            ' 3 [>---------------------------]'.
+            $this->generateOutput(' 2 [=========>------------------]').
+            $this->generateOutput(' 0 [============================]'),
+            stream_get_contents($output->getStream())
+        );
+    }
+
+    public function testAddingInstancePlaceholderFormatter()
+    {
+        $bar = new ProgressBar($output = $this->getOutputStream(), 3, 0);
+        $bar->setFormat(' %countdown% [%bar%]');
+        $bar->setPlaceholderFormatter('countdown', $function = fn (ProgressBar $bar) => $bar->getMaxSteps() - $bar->getProgress());
+
+        $this->assertSame($function, $bar->getPlaceholderFormatter('countdown'));
 
         $bar->start();
         $bar->advance();
@@ -812,8 +916,10 @@ And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whi
         $this->assertEquals(
             ">---------------------------\nfoobar".
             $this->generateOutput("=========>------------------\nfoobar").
-            "\x1B[1G\x1B[2K\x1B[1A\x1B[1G\x1B[2K".
-            $this->generateOutput("============================\nfoobar"),
+            "\x1B[1G\x1B[2K\x1B[1A".
+            $this->generateOutput('').
+            $this->generateOutput('============================').
+            "\nfoobar",
             stream_get_contents($output->getStream())
         );
     }
@@ -930,7 +1036,7 @@ And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whi
     /**
      * Provides each defined format.
      */
-    public function provideFormat(): array
+    public static function provideFormat(): array
     {
         return [
             ['normal'],
@@ -1121,6 +1227,31 @@ And, as in uffish thought he stood, The Jabberwock, with eyes of flame, Came whi
             $this->generateOutput("1/3\nABC\nFoo").
             $this->generateOutput("2/3\nA\nFoo").
             $this->generateOutput("3/3\nA\nFoo"),
+            stream_get_contents($output->getStream())
+        );
+    }
+
+    public function testMultiLineFormatIsFullyCorrectlyWithManuallyCleanup()
+    {
+        ProgressBar::setFormatDefinition('normal_nomax', "[%bar%]\n%message%");
+        $bar = new ProgressBar($output = $this->getOutputStream());
+        $bar->setMessage('Processing "foobar"...');
+        $bar->start();
+        $bar->clear();
+        $output->writeln('Foo!');
+        $bar->display();
+        $bar->finish();
+
+        rewind($output->getStream());
+        $this->assertEquals(
+            "[>---------------------------]\n".
+            'Processing "foobar"...'.
+            "\x1B[1G\x1B[2K\x1B[1A".
+            $this->generateOutput('').
+            'Foo!'.\PHP_EOL.
+            $this->generateOutput('[--->------------------------]').
+            "\nProcessing \"foobar\"...".
+            $this->generateOutput("[----->----------------------]\nProcessing \"foobar\"..."),
             stream_get_contents($output->getStream())
         );
     }

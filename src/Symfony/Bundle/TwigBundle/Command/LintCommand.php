@@ -13,7 +13,6 @@ namespace Symfony\Bundle\TwigBundle\Command;
 
 use Symfony\Bridge\Twig\Command\LintCommand as BaseLintCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Finder\Finder;
 
 /**
  * Command that will validate your template syntax and output encountered errors.
@@ -24,10 +23,7 @@ use Symfony\Component\Finder\Finder;
 #[AsCommand(name: 'lint:twig', description: 'Lint a Twig template and outputs encountered errors')]
 final class LintCommand extends BaseLintCommand
 {
-    /**
-     * {@inheritdoc}
-     */
-    protected function configure()
+    protected function configure(): void
     {
         parent::configure();
 
@@ -47,9 +43,7 @@ EOF
     protected function findFiles(string $filename): iterable
     {
         if (str_starts_with($filename, '@')) {
-            $dir = $this->getApplication()->getKernel()->locateResource($filename);
-
-            return Finder::create()->files()->in($dir)->name('*.twig');
+            $filename = $this->getApplication()->getKernel()->locateResource($filename);
         }
 
         return parent::findFiles($filename);

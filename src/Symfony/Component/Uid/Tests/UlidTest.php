@@ -12,6 +12,7 @@
 namespace Symfony\Component\Uid\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Uid\MaxUlid;
 use Symfony\Component\Uid\NilUlid;
 use Symfony\Component\Uid\Tests\Fixtures\CustomUlid;
 use Symfony\Component\Uid\Ulid;
@@ -26,11 +27,16 @@ class UlidTest extends TestCase
     {
         $a = new Ulid();
         $b = new Ulid();
+        usleep(-10000);
+        $c = new Ulid();
 
         $this->assertSame(0, strncmp($a, $b, 20));
+        $this->assertSame(0, strncmp($a, $c, 20));
         $a = base_convert(strtr(substr($a, -6), 'ABCDEFGHJKMNPQRSTVWXYZ', 'abcdefghijklmnopqrstuv'), 32, 10);
         $b = base_convert(strtr(substr($b, -6), 'ABCDEFGHJKMNPQRSTVWXYZ', 'abcdefghijklmnopqrstuv'), 32, 10);
+        $c = base_convert(strtr(substr($c, -6), 'ABCDEFGHJKMNPQRSTVWXYZ', 'abcdefghijklmnopqrstuv'), 32, 10);
         $this->assertSame(1, $b - $a);
+        $this->assertSame(1, $c - $b);
     }
 
     public function testWithInvalidUlid()
@@ -50,6 +56,12 @@ class UlidTest extends TestCase
         $this->assertSame('7fffffffffffffffffffffffffffffff', bin2hex($ulid->toBinary()));
 
         $this->assertTrue($ulid->equals(Ulid::fromString(hex2bin('7fffffffffffffffffffffffffffffff'))));
+    }
+
+    public function toHex()
+    {
+        $ulid = Ulid::fromString('1BVXue8CnY8ogucrHX3TeF');
+        $this->assertSame('0x0177058f4dacd0b2a990a49af02bc008', $ulid->toHex());
     }
 
     public function testFromUuid()
@@ -144,7 +156,7 @@ class UlidTest extends TestCase
         Ulid::fromBinary($ulid);
     }
 
-    public function provideInvalidBinaryFormat()
+    public static function provideInvalidBinaryFormat()
     {
         return [
             ['01EW2RYKDCT2SAK454KBR2QG08'],
@@ -171,7 +183,7 @@ class UlidTest extends TestCase
         Ulid::fromBase58($ulid);
     }
 
-    public function provideInvalidBase58Format()
+    public static function provideInvalidBase58Format()
     {
         return [
             ["\x01\x77\x05\x8F\x4D\xAC\xD0\xB2\xA9\x90\xA4\x9A\xF0\x2B\xC0\x08"],
@@ -198,7 +210,7 @@ class UlidTest extends TestCase
         Ulid::fromBase32($ulid);
     }
 
-    public function provideInvalidBase32Format()
+    public static function provideInvalidBase32Format()
     {
         return [
             ["\x01\x77\x05\x8F\x4D\xAC\xD0\xB2\xA9\x90\xA4\x9A\xF0\x2B\xC0\x08"],
@@ -225,7 +237,7 @@ class UlidTest extends TestCase
         Ulid::fromRfc4122($ulid);
     }
 
-    public function provideInvalidRfc4122Format()
+    public static function provideInvalidRfc4122Format()
     {
         return [
             ["\x01\x77\x05\x8F\x4D\xAC\xD0\xB2\xA9\x90\xA4\x9A\xF0\x2B\xC0\x08"],
@@ -260,5 +272,22 @@ class UlidTest extends TestCase
     public function testNewNilUlid()
     {
         $this->assertSame('00000000000000000000000000', (string) new NilUlid());
+    }
+
+    /**
+     * @testWith    ["ffffffff-ffff-ffff-ffff-ffffffffffff"]
+     *              ["7zzzzzzzzzzzzzzzzzzzzzzzzz"]
+     */
+    public function testMaxUlid(string $ulid)
+    {
+        $ulid = Ulid::fromString($ulid);
+
+        $this->assertInstanceOf(MaxUlid::class, $ulid);
+        $this->assertSame('7ZZZZZZZZZZZZZZZZZZZZZZZZZ', (string) $ulid);
+    }
+
+    public function testNewMaxUlid()
+    {
+        $this->assertSame('7ZZZZZZZZZZZZZZZZZZZZZZZZZ', (string) new MaxUlid());
     }
 }

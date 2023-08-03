@@ -25,8 +25,7 @@ use Symfony\Component\VarDumper\Dumper\CliDumper;
  */
 class MessengerDataCollectorTest extends TestCase
 {
-    /** @var CliDumper */
-    private $dumper;
+    private CliDumper $dumper;
 
     protected function setUp(): void
     {
@@ -122,7 +121,7 @@ array:6 [
   ]
 ]
 DUMP
-        , $this->getDataAsString($messages[0]));
+            , $this->getDataAsString($messages[0]));
     }
 
     public function testKeepsOrderedDispatchCalls()

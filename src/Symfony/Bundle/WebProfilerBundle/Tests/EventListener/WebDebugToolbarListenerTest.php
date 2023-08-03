@@ -32,7 +32,6 @@ class WebDebugToolbarListenerTest extends TestCase
     {
         $listener = new WebDebugToolbarListener($this->getTwigMock());
         $m = new \ReflectionMethod($listener, 'injectToolbar');
-        $m->setAccessible(true);
 
         $response = new Response($content);
 
@@ -40,7 +39,7 @@ class WebDebugToolbarListenerTest extends TestCase
         $this->assertEquals($expected, $response->getContent());
     }
 
-    public function getInjectToolbarTests()
+    public static function getInjectToolbarTests()
     {
         return [
             ['<html><head></head><body></body></html>', "<html><head></head><body>\nWDT\n</body></html>"],
@@ -134,6 +133,7 @@ class WebDebugToolbarListenerTest extends TestCase
 
     /**
      * @depends testToolbarIsInjected
+     *
      * @dataProvider provideRedirects
      */
     public function testToolbarIsNotInjectedOnRedirection($statusCode)
@@ -148,7 +148,7 @@ class WebDebugToolbarListenerTest extends TestCase
         $this->assertEquals('<html><head></head><body></body></html>', $response->getContent());
     }
 
-    public function provideRedirects()
+    public static function provideRedirects()
     {
         return [
             [301],
@@ -341,6 +341,20 @@ class WebDebugToolbarListenerTest extends TestCase
         $listener->onKernelResponse($event);
 
         $this->assertEquals("<html><head></head><body>\nWDT\n</body></html>", $response->getContent());
+    }
+
+    public function testNullContentTypeWithNoDebugEnv()
+    {
+        $response = new Response('<html><head></head><body></body></html>');
+        $response->headers->set('Content-Type', null);
+        $response->headers->set('X-Debug-Token', 'xxxxxxxx');
+
+        $event = new ResponseEvent($this->createMock(Kernel::class), new Request(), HttpKernelInterface::MAIN_REQUEST, $response);
+
+        $listener = new WebDebugToolbarListener($this->getTwigMock(), false, WebDebugToolbarListener::ENABLED, null);
+        $listener->onKernelResponse($event);
+
+        $this->expectNotToPerformAssertions();
     }
 
     protected function getTwigMock($render = 'WDT')

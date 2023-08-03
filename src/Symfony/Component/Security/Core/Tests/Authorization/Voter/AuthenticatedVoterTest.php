@@ -33,7 +33,7 @@ class AuthenticatedVoterTest extends TestCase
         $this->assertSame($expected, $voter->vote($this->getToken($authenticated), null, $attributes));
     }
 
-    public function getVoteTests()
+    public static function getVoteTests()
     {
         return [
             ['fully', [], VoterInterface::ACCESS_ABSTAIN],
@@ -63,7 +63,7 @@ class AuthenticatedVoterTest extends TestCase
         $this->assertSame($expected, $voter->supportsAttribute($attribute));
     }
 
-    public function provideAttributes()
+    public static function provideAttributes()
     {
         yield [AuthenticatedVoter::IS_AUTHENTICATED_FULLY, true];
         yield [AuthenticatedVoter::IS_AUTHENTICATED_REMEMBERED, true];
@@ -82,7 +82,7 @@ class AuthenticatedVoterTest extends TestCase
 
         $this->assertTrue($voter->supportsType(get_debug_type('foo')));
         $this->assertTrue($voter->supportsType(get_debug_type(null)));
-        $this->assertTrue($voter->supportsType(get_debug_type(new \StdClass())));
+        $this->assertTrue($voter->supportsType(get_debug_type(new \stdClass())));
     }
 
     protected function getToken($authenticated)

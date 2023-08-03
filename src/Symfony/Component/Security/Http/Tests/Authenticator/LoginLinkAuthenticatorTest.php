@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Security\Http\Tests\Authenticator;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -27,11 +28,10 @@ use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
 
 class LoginLinkAuthenticatorTest extends TestCase
 {
-    private $loginLinkHandler;
-    private $successHandler;
-    private $failureHandler;
-    /** @var LoginLinkAuthenticator */
-    private $authenticator;
+    private MockObject&LoginLinkHandlerInterface $loginLinkHandler;
+    private MockObject&AuthenticationSuccessHandlerInterface $successHandler;
+    private MockObject&AuthenticationFailureHandlerInterface $failureHandler;
+    private LoginLinkAuthenticator $authenticator;
 
     protected function setUp(): void
     {
@@ -50,7 +50,7 @@ class LoginLinkAuthenticatorTest extends TestCase
         $this->assertEquals($supported, $this->authenticator->supports($request));
     }
 
-    public function provideSupportData()
+    public static function provideSupportData()
     {
         yield [['check_route' => '/validate_link'], Request::create('/validate_link?hash=abc123'), true];
         yield [['check_route' => '/validate_link'], Request::create('/login?hash=abc123'), false];

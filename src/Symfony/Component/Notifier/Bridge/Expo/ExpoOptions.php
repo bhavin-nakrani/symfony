@@ -20,14 +20,14 @@ use Symfony\Component\Notifier\Message\MessageOptionsInterface;
  */
 final class ExpoOptions implements MessageOptionsInterface
 {
-    private $to;
+    private string $to;
 
     /**
      * @see https://docs.expo.dev/push-notifications/sending-notifications/#message-request-format
      */
-    protected $options;
+    private array $options;
 
-    private $data;
+    private array $data;
 
     public function __construct(string $to, array $options = [], array $data = [])
     {
@@ -38,13 +38,10 @@ final class ExpoOptions implements MessageOptionsInterface
 
     public function toArray(): array
     {
-        return array_merge(
-            $this->options,
-            [
-                'to' => $this->to,
-                'data' => $this->data,
-            ]
-        );
+        return array_merge($this->options, [
+            'to' => $this->to,
+            'data' => $this->data,
+        ]);
     }
 
     public function getRecipientId(): ?string

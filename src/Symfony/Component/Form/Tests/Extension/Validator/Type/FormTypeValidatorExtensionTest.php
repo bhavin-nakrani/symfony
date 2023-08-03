@@ -28,7 +28,7 @@ use Symfony\Component\Validator\Mapping\ClassMetadata;
 use Symfony\Component\Validator\Mapping\Factory\MetadataFactoryInterface;
 use Symfony\Component\Validator\Validation;
 
-class FormTypeValidatorExtensionTest extends BaseValidatorExtensionTest
+class FormTypeValidatorExtensionTest extends BaseValidatorExtensionTestCase
 {
     use ValidatorExtensionTrait;
 
@@ -78,7 +78,7 @@ class FormTypeValidatorExtensionTest extends BaseValidatorExtensionTest
         $form = Forms::createFormFactoryBuilder()
             ->addExtension(new ValidatorExtension(Validation::createValidator(), false))
             ->getFormFactory()
-            ->create(FormTypeTest::TESTED_TYPE, null, (['validation_groups' => new GroupSequence(['First', 'Second'])]))
+            ->create(FormTypeTest::TESTED_TYPE, null, ['validation_groups' => new GroupSequence(['First', 'Second'])])
             ->add('field', TextTypeTest::TESTED_TYPE, [
                 'constraints' => [
                     new Length(['min' => 10, 'groups' => ['First']]),
@@ -113,7 +113,7 @@ class FormTypeValidatorExtensionTest extends BaseValidatorExtensionTest
                     return $formMetadata;
                 }
 
-                return new ClassMetadata(\is_string($classOrObject) ? $classOrObject : \get_class($classOrObject));
+                return new ClassMetadata(\is_string($classOrObject) ? $classOrObject : $classOrObject::class);
             })
         ;
 
@@ -124,7 +124,7 @@ class FormTypeValidatorExtensionTest extends BaseValidatorExtensionTest
         $form = Forms::createFormFactoryBuilder()
             ->addExtension(new ValidatorExtension($validator))
             ->getFormFactory()
-            ->create(FormTypeTest::TESTED_TYPE, new Author(), (['validation_groups' => new GroupSequence(['First', 'Second'])]))
+            ->create(FormTypeTest::TESTED_TYPE, new Author(), ['validation_groups' => new GroupSequence(['First', 'Second'])])
             ->add('firstName', TextTypeTest::TESTED_TYPE)
             ->add('lastName', TextTypeTest::TESTED_TYPE, [
                 'constraints' => [

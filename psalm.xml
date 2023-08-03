@@ -7,6 +7,7 @@
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
     cacheDirectory="./.github/psalm/cache/"
     errorBaseline=".github/psalm/psalm.baseline.xml"
+    findUnusedBaselineEntry="false"
 >
     <projectFiles>
         <directory name="src" />
@@ -14,6 +15,7 @@
             <directory name="src/Symfony/*/*/Tests" />
             <directory name="src/Symfony/*/*/*/Tests" />
             <directory name="src/Symfony/*/*/*/*/Tests" />
+            <directory name="src/Symfony/Component/Intl/Resources/emoji/" />
             <directory name="vendor" />
         </ignoreFiles>
     </projectFiles>
@@ -25,6 +27,8 @@
                 <referencedClass name="BackedEnum"/>
                 <referencedClass name="ReflectionIntersectionType"/>
                 <referencedClass name="UnitEnum"/>
+                <!-- These classes have been added in PHP 8.2 -->
+                <referencedClass name="Random\*"/>
             </errorLevel>
         </UndefinedClass>
         <UndefinedDocblockClass>
@@ -35,5 +39,15 @@
                 <referencedClass name="UnitEnum"/>
             </errorLevel>
         </UndefinedDocblockClass>
+        <UndefinedAttributeClass>
+            <errorLevel type="suppress">
+                <!-- These classes have been added in PHP 8.2 -->
+                <referencedClass name="SensitiveParameter"/>
+            </errorLevel>
+        </UndefinedAttributeClass>
     </issueHandlers>
+
+    <forbiddenFunctions>
+        <function name="empty"/>
+    </forbiddenFunctions>
 </psalm>

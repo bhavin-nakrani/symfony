@@ -13,6 +13,7 @@ namespace Symfony\Component\Mailer\Tests\Transport\Smtp;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\Exception\LogicException;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\Transport\Smtp\SmtpTransport;
 use Symfony\Component\Mailer\Transport\Smtp\Stream\AbstractStream;
@@ -20,6 +21,8 @@ use Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\Exception\InvalidArgumentException;
+use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Mime\Part\File;
 use Symfony\Component\Mime\RawMessage;
 
 /**
@@ -102,7 +105,7 @@ class SmtpTransportTest extends TestCase
         $message = new Email();
         $message->to('recipient@example.org');
         $message->from('sender@example.org');
-        $message->attachFromPath('/does_not_exists');
+        $message->addPart(new DataPart(new File('/does_not_exists')));
 
         try {
             $transport->send($message);
@@ -133,88 +136,45 @@ class SmtpTransportTest extends TestCase
         $this->assertContains("RCPT TO:<recipient@xn--exmple-cua.org>\r\n", $stream->getCommands());
         $this->assertContains("RCPT TO:<recipient2@example.org>\r\n", $stream->getCommands());
     }
-}
 
-class DummyStream extends AbstractStream
-{
-    /**
-     * @var string
-     */
-    private $nextResponse;
-
-    /**
-     * @var string[]
-     */
-    private $commands;
-
-    /**
-     * @var bool
-     */
-    private $closed = true;
-
-    public function initialize(): void
+    public function testAssertResponseCodeNoCodes()
     {
-        $this->closed = false;
-        $this->nextResponse = '220 localhost';
+        $this->expectException(LogicException::class);
+        $this->invokeAssertResponseCode('response', []);
     }
 
-    public function write(string $bytes, $debug = true): void
+    public function testAssertResponseCodeWithEmptyResponse()
     {
-        if ($this->closed) {
-            throw new TransportException('Unable to write bytes on the wire.');
-        }
-
-        $this->commands[] = $bytes;
-
-        if (str_starts_with($bytes, 'DATA')) {
-            $this->nextResponse = '354 Enter message, ending with "." on a line by itself';
-        } elseif (str_starts_with($bytes, 'QUIT')) {
-            $this->nextResponse = '221 Goodbye';
-        } else {
-            $this->nextResponse = '250 OK';
-        }
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Expected response code "220" but got empty code.');
+        $this->invokeAssertResponseCode('', [220]);
     }
 
-    public function readLine(): string
+    public function testAssertResponseCodeWithNotValidCode()
     {
-        return $this->nextResponse;
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Expected response code "220" but got code "550", with message "550 Access Denied".');
+        $this->expectExceptionCode(550);
+        $this->invokeAssertResponseCode('550 Access Denied', [220]);
     }
 
-    public function flush(): void
+    private function invokeAssertResponseCode(string $response, array $codes): void
     {
+        $transport = new SmtpTransport($this->getMockForAbstractClass(AbstractStream::class));
+        $m = new \ReflectionMethod($transport, 'assertResponseCode');
+        $m->invoke($transport, $response, $codes);
     }
 
-    /**
-     * @return string[]
-     */
-    public function getCommands(): array
+    public function testStop()
     {
-        return $this->commands;
-    }
+        $stream = new DummyStream();
+        $envelope = new Envelope(new Address('sender@example.org'), [new Address('recipient@example.org')]);
 
-    public function clearCommands(): void
-    {
-        $this->commands = [];
-    }
+        $transport = new SmtpTransport($stream);
+        $transport->send(new RawMessage('Message 1'), $envelope);
+        $this->assertFalse($stream->isClosed());
 
-    protected function getReadConnectionDescription(): string
-    {
-        return 'null';
-    }
-
-    public function close(): void
-    {
-        $this->closed = true;
-    }
-
-    public function isClosed(): bool
-    {
-        return $this->closed;
-    }
-
-    public function terminate(): void
-    {
-        parent::terminate();
-        $this->closed = true;
+        $transport->stop();
+        $this->assertTrue($stream->isClosed());
     }
 }

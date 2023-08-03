@@ -25,14 +25,20 @@ class Regex extends Constraint
 {
     public const REGEX_FAILED_ERROR = 'de1e3db3-5ed4-4941-aae4-59f3667cc3a3';
 
-    protected static $errorNames = [
+    protected const ERROR_NAMES = [
         self::REGEX_FAILED_ERROR => 'REGEX_FAILED_ERROR',
     ];
+
+    /**
+     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     */
+    protected static $errorNames = self::ERROR_NAMES;
 
     public $message = 'This value is not valid.';
     public $pattern;
     public $htmlPattern;
     public $match = true;
+    /** @var callable|null */
     public $normalizer;
 
     public function __construct(
@@ -63,17 +69,11 @@ class Regex extends Constraint
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getDefaultOption(): ?string
     {
         return 'pattern';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getRequiredOptions(): array
     {
         return ['pattern'];

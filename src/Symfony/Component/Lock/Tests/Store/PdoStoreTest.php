@@ -20,12 +20,14 @@ use Symfony\Component\Lock\Store\PdoStore;
  * @author Jérémy Derussé <jeremy@derusse.com>
  *
  * @requires extension pdo_sqlite
+ *
+ * @group integration
  */
-class PdoStoreTest extends AbstractStoreTest
+class PdoStoreTest extends AbstractStoreTestCase
 {
     use ExpiringStoreTestTrait;
 
-    protected static $dbFile;
+    protected static string $dbFile;
 
     public static function setUpBeforeClass(): void
     {
@@ -40,17 +42,11 @@ class PdoStoreTest extends AbstractStoreTest
         @unlink(self::$dbFile);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getClockDelay()
     {
         return 1000000;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getStore(): PersistingStoreInterface
     {
         return new PdoStore('sqlite:'.self::$dbFile);
@@ -94,7 +90,7 @@ class PdoStoreTest extends AbstractStoreTest
         }
     }
 
-    public function provideDsn()
+    public static function provideDsn()
     {
         $dbFile = tempnam(sys_get_temp_dir(), 'sf_sqlite_cache');
         yield ['sqlite:'.$dbFile.'2', $dbFile.'2'];

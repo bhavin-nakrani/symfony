@@ -27,6 +27,8 @@ use Symfony\Component\DependencyInjection\Exception\ServiceCircularReferenceExce
  */
 class ResolveChildDefinitionsPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private array $currentPath;
 
     protected function processValue(mixed $value, bool $isRoot = false): mixed
@@ -63,7 +65,6 @@ class ResolveChildDefinitionsPass extends AbstractRecursivePass
             throw $e;
         } catch (ExceptionInterface $e) {
             $r = new \ReflectionProperty($e, 'message');
-            $r->setAccessible(true);
             $r->setValue($e, sprintf('Service "%s": %s', $this->currentId, $e->getMessage()));
 
             throw $e;
@@ -114,6 +115,8 @@ class ResolveChildDefinitionsPass extends AbstractRecursivePass
         $def->setChanges($parentDef->getChanges());
 
         $def->setBindings($definition->getBindings() + $parentDef->getBindings());
+
+        $def->setSynthetic($definition->isSynthetic());
 
         // overwrite with values specified in the decorator
         $changes = $definition->getChanges();
@@ -186,6 +189,12 @@ class ResolveChildDefinitionsPass extends AbstractRecursivePass
         // autoconfigure is never taken from parent (on purpose)
         // and it's not legal on an instanceof
         $def->setAutoconfigured($definition->isAutoconfigured());
+
+        if (!$def->hasTag('proxy')) {
+            foreach ($parentDef->getTag('proxy') as $v) {
+                $def->addTag('proxy', $v);
+            }
+        }
 
         return $def;
     }

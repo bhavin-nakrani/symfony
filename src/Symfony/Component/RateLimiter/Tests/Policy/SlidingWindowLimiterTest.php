@@ -23,7 +23,7 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
  */
 class SlidingWindowLimiterTest extends TestCase
 {
-    private $storage;
+    private InMemoryStorage $storage;
 
     protected function setUp(): void
     {
@@ -74,6 +74,19 @@ class SlidingWindowLimiterTest extends TestCase
         $this->expectException(ReserveNotSupportedException::class);
 
         $this->createLimiter()->reserve();
+    }
+
+    public function testPeekConsume()
+    {
+        $limiter = $this->createLimiter();
+
+        $limiter->consume(9);
+
+        for ($i = 0; $i < 2; ++$i) {
+            $rateLimit = $limiter->consume(0);
+            $this->assertTrue($rateLimit->isAccepted());
+            $this->assertSame(10, $rateLimit->getLimit());
+        }
     }
 
     private function createLimiter(): SlidingWindowLimiter

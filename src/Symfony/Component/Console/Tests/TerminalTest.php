@@ -12,13 +12,14 @@
 namespace Symfony\Component\Console\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Output\AnsiColorMode;
 use Symfony\Component\Console\Terminal;
 
 class TerminalTest extends TestCase
 {
-    private $colSize;
-    private $lineSize;
-    private $ansiCon;
+    private string|false $colSize;
+    private string|false $lineSize;
+    private string|false $ansiCon;
 
     protected function setUp(): void
     {
@@ -40,8 +41,7 @@ class TerminalTest extends TestCase
     {
         foreach (['height', 'width', 'stty'] as $name) {
             $property = new \ReflectionProperty(Terminal::class, $name);
-            $property->setAccessible(true);
-            $property->setValue(null);
+            $property->setValue(null, null);
         }
     }
 
@@ -77,8 +77,8 @@ class TerminalTest extends TestCase
             $this->markTestSkipped('Must be on windows');
         }
 
-        $sttyString = exec('(stty -a | grep columns) 2>&1', $output, $exitcode);
-        if (0 !== $exitcode) {
+        $sttyString = shell_exec('(stty -a | grep columns) 2> NUL');
+        if (!$sttyString) {
             $this->markTestSkipped('Must have stty support');
         }
 
@@ -93,5 +93,59 @@ class TerminalTest extends TestCase
 
         $terminal = new Terminal();
         $this->assertSame((int) $matches[1], $terminal->getWidth());
+    }
+
+    /**
+     * @dataProvider provideTerminalColorEnv
+     */
+    public function testGetColorMode(?string $testColorTerm, ?string $testTerm, AnsiColorMode $expected)
+    {
+        $oriColorTerm = getenv('COLORTERM');
+        $oriTerm = getenv('TERM');
+
+        try {
+            putenv($testColorTerm ? "COLORTERM={$testColorTerm}" : 'COLORTERM');
+            putenv($testTerm ? "TERM={$testTerm}" : 'TERM');
+
+            $this->assertSame($expected, Terminal::getColorMode());
+        } finally {
+            (false !== $oriColorTerm) ? putenv('COLORTERM='.$oriColorTerm) : putenv('COLORTERM');
+            (false !== $oriTerm) ? putenv('TERM='.$oriTerm) : putenv('TERM');
+            Terminal::setColorMode(null);
+        }
+    }
+
+    public static function provideTerminalColorEnv(): \Generator
+    {
+        yield ['truecolor', null, AnsiColorMode::Ansi24];
+        yield ['TRUECOLOR', null, AnsiColorMode::Ansi24];
+        yield ['somethingLike256Color', null, AnsiColorMode::Ansi8];
+        yield [null, 'xterm-truecolor', AnsiColorMode::Ansi24];
+        yield [null, 'xterm-TRUECOLOR', AnsiColorMode::Ansi24];
+        yield [null, 'xterm-256color', AnsiColorMode::Ansi8];
+        yield [null, 'xterm-256COLOR', AnsiColorMode::Ansi8];
+        yield [null, null, Terminal::DEFAULT_COLOR_MODE];
+    }
+
+    public function testSetColorMode()
+    {
+        $oriColorTerm = getenv('COLORTERM');
+        $oriTerm = getenv('TERM');
+
+        try {
+            putenv('COLORTERM');
+            putenv('TERM');
+            $this->assertSame(Terminal::DEFAULT_COLOR_MODE, Terminal::getColorMode());
+
+            putenv('COLORTERM=256color');
+            $this->assertSame(Terminal::DEFAULT_COLOR_MODE, Terminal::getColorMode()); // Terminal color mode is cached at first call. Terminal cannot change during execution.
+
+            Terminal::setColorMode(AnsiColorMode::Ansi24); // Force change by user.
+            $this->assertSame(AnsiColorMode::Ansi24, Terminal::getColorMode());
+        } finally {
+            (false !== $oriColorTerm) ? putenv('COLORTERM='.$oriColorTerm) : putenv('COLORTERM');
+            (false !== $oriTerm) ? putenv('TERM='.$oriTerm) : putenv('TERM');
+            Terminal::setColorMode(null);
+        }
     }
 }

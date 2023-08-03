@@ -21,7 +21,7 @@ use Symfony\Component\Translation\Translator;
 
 class TranslatorCacheTest extends TestCase
 {
-    protected $tmpDir;
+    protected string $tmpDir;
 
     protected function setUp(): void
     {
@@ -302,7 +302,7 @@ class TranslatorCacheTest extends TestCase
         return $catalogue;
     }
 
-    public function runForDebugAndProduction()
+    public static function runForDebugAndProduction()
     {
         return [[true], [false]];
     }

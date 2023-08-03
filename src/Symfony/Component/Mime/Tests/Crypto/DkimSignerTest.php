@@ -20,11 +20,12 @@ use Symfony\Component\Mime\Message;
 
 /**
  * @group time-sensitive
+ *
  * @requires extension openssl
  */
 class DkimSignerTest extends TestCase
 {
-    private static $pk = <<<EOF
+    private static string $pk = <<<EOF
 -----BEGIN RSA PRIVATE KEY-----
 MIICXAIBAAKBgQC6lQYNOMaboSOE/c2KNl8Rwk61zoMXrEmXC926an3/jHrtj9wB
 ndP2DY2nUyz0vpmJlcDOjDwTGs8U/C7zn7PDdZ8EuuxlAa7oNo/38YYV+5Oki93m
@@ -68,7 +69,7 @@ EOF;
         $this->assertEquals($header, $signedMessage->getHeaders()->get('DKIM-Signature')->getBody());
     }
 
-    public function getSignData()
+    public static function getSignData()
     {
         yield 'simple/simple' => [
             1591597074, DkimSigner::CANON_SIMPLE, DkimSigner::CANON_SIMPLE,
@@ -132,7 +133,7 @@ EOF;
         $this->assertEquals(\strlen($canonBody), $l);
     }
 
-    public function getCanonicalizeHeaderData()
+    public static function getCanonicalizeHeaderData()
     {
         yield 'simple_empty' => [
             DkimSigner::CANON_SIMPLE, "\r\n", '', \PHP_INT_MAX,

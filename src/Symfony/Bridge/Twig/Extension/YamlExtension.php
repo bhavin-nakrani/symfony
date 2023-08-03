@@ -22,14 +22,11 @@ use Twig\TwigFilter;
  */
 final class YamlExtension extends AbstractExtension
 {
-    /**
-     * {@inheritdoc}
-     */
     public function getFilters(): array
     {
         return [
-            new TwigFilter('yaml_encode', [$this, 'encode']),
-            new TwigFilter('yaml_dump', [$this, 'dump']),
+            new TwigFilter('yaml_encode', $this->encode(...)),
+            new TwigFilter('yaml_dump', $this->dump(...)),
         ];
     }
 
@@ -37,9 +34,7 @@ final class YamlExtension extends AbstractExtension
     {
         static $dumper;
 
-        if (null === $dumper) {
-            $dumper = new YamlDumper();
-        }
+        $dumper ??= new YamlDumper();
 
         if (\defined('Symfony\Component\Yaml\Yaml::DUMP_OBJECT')) {
             return $dumper->dump($input, $inline, 0, $dumpObjects);

@@ -25,7 +25,7 @@ class MoneyType extends AbstractType
     protected static $patterns = [];
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
@@ -43,7 +43,7 @@ class MoneyType extends AbstractType
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildView(FormView $view, FormInterface $form, array $options)
     {
@@ -55,7 +55,7 @@ class MoneyType extends AbstractType
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function configureOptions(OptionsResolver $resolver)
     {
@@ -84,7 +84,7 @@ class MoneyType extends AbstractType
 
         $resolver->setAllowedTypes('html5', 'bool');
 
-        $resolver->setNormalizer('grouping', function (Options $options, $value) {
+        $resolver->setNormalizer('grouping', static function (Options $options, $value) {
             if ($value && $options['html5']) {
                 throw new LogicException('Cannot use the "grouping" option when the "html5" option is enabled.');
             }
@@ -93,9 +93,6 @@ class MoneyType extends AbstractType
         });
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getBlockPrefix(): string
     {
         return 'money';
@@ -106,6 +103,8 @@ class MoneyType extends AbstractType
      *
      * The pattern contains the placeholder "{{ widget }}" where the HTML tag should
      * be inserted
+     *
+     * @return string
      */
     protected static function getPattern(?string $currency)
     {

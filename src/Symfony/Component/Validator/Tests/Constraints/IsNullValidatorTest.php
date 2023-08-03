@@ -17,7 +17,7 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 class IsNullValidatorTest extends ConstraintValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): IsNullValidator
     {
         return new IsNullValidator();
     }
@@ -61,7 +61,7 @@ class IsNullValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getInvalidValues()
+    public static function getInvalidValues()
     {
         return [
             [0, '0'],
@@ -69,7 +69,7 @@ class IsNullValidatorTest extends ConstraintValidatorTestCase
             [true, 'true'],
             ['', '""'],
             ['foo bar', '"foo bar"'],
-            [new \DateTime(), 'object'],
+            [new \DateTimeImmutable(), 'object'],
             [new \stdClass(), 'object'],
             [[], 'array'],
         ];

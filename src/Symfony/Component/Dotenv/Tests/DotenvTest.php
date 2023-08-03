@@ -33,7 +33,7 @@ class DotenvTest extends TestCase
         }
     }
 
-    public function getEnvDataWithFormatErrors()
+    public static function getEnvDataWithFormatErrors()
     {
         $tests = [
             ['FOO=BAR BAZ', "A value containing spaces must be surrounded by quotes in \".env\" at line 1.\n...FOO=BAR BAZ...\n             ^ line 1 offset 11"],
@@ -71,7 +71,7 @@ class DotenvTest extends TestCase
         $this->assertSame($expected, $dotenv->parse($data));
     }
 
-    public function getEnvData()
+    public static function getEnvData()
     {
         putenv('LOCAL=local');
         $_ENV['LOCAL'] = 'local';
@@ -583,6 +583,13 @@ class DotenvTest extends TestCase
         $this->assertSame('EXISTING_VALUE', $_SERVER['EXISTING_KEY']);
 
         $resetContext();
+        (new Dotenv('TEST_APP_ENV', 'TEST_APP_DEBUG'))->bootEnv($path, 'dev', ['test'], true);
+        $this->assertSame('BAR', $_SERVER['FOO']);
+        $this->assertSame('1', $_SERVER['TEST_APP_DEBUG']);
+        $this->assertSame('localphpNEW_VALUE', $_SERVER['EXISTING_KEY']);
+
+        $resetContext();
+        $_SERVER['TEST_APP_ENV'] = 'ccc';
         (new Dotenv('TEST_APP_ENV', 'TEST_APP_DEBUG'))->bootEnv($path, 'dev', ['test'], true);
         $this->assertSame('BAR', $_SERVER['FOO']);
         $this->assertSame('1', $_SERVER['TEST_APP_DEBUG']);

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Translation\Bridge\Crowdin\Tests;
 
 use Symfony\Component\Translation\Bridge\Crowdin\CrowdinProviderFactory;
@@ -8,13 +17,13 @@ use Symfony\Component\Translation\Test\ProviderFactoryTestCase;
 
 class CrowdinProviderFactoryTest extends ProviderFactoryTestCase
 {
-    public function supportsProvider(): iterable
+    public static function supportsProvider(): iterable
     {
         yield [true, 'crowdin://PROJECT_ID:API_TOKEN@default'];
         yield [false, 'somethingElse://PROJECT_ID:API_TOKEN@default'];
     }
 
-    public function createProvider(): iterable
+    public static function createProvider(): iterable
     {
         yield [
             'crowdin://api.crowdin.com',
@@ -27,12 +36,12 @@ class CrowdinProviderFactoryTest extends ProviderFactoryTestCase
         ];
     }
 
-    public function unsupportedSchemeProvider(): iterable
+    public static function unsupportedSchemeProvider(): iterable
     {
         yield ['somethingElse://API_TOKEN@default'];
     }
 
-    public function incompleteDsnProvider(): iterable
+    public static function incompleteDsnProvider(): iterable
     {
         yield ['crowdin://default'];
     }

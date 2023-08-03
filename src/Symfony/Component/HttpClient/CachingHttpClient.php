@@ -52,6 +52,7 @@ class CachingHttpClient implements HttpClientInterface, ResetInterface
         unset($defaultOptions['debug']);
         unset($defaultOptions['default_ttl']);
         unset($defaultOptions['private_headers']);
+        unset($defaultOptions['skip_response_headers']);
         unset($defaultOptions['allow_reload']);
         unset($defaultOptions['allow_revalidate']);
         unset($defaultOptions['stale_while_revalidate']);
@@ -64,9 +65,6 @@ class CachingHttpClient implements HttpClientInterface, ResetInterface
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
         [$url, $options] = $this->prepareRequest($method, $url, $options, $this->defaultOptions, true);
@@ -107,9 +105,6 @@ class CachingHttpClient implements HttpClientInterface, ResetInterface
         return MockResponse::fromRequest($method, $url, $options, $response);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function stream(ResponseInterface|iterable $responses, float $timeout = null): ResponseStreamInterface
     {
         if ($responses instanceof ResponseInterface) {
@@ -141,6 +136,9 @@ class CachingHttpClient implements HttpClientInterface, ResetInterface
         })());
     }
 
+    /**
+     * @return void
+     */
     public function reset()
     {
         if ($this->client instanceof ResetInterface) {

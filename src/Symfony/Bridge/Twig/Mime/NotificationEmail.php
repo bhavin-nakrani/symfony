@@ -14,6 +14,7 @@ namespace Symfony\Bridge\Twig\Mime;
 use Symfony\Component\ErrorHandler\Exception\FlattenException;
 use Symfony\Component\Mime\Header\Headers;
 use Symfony\Component\Mime\Part\AbstractPart;
+use Symfony\Component\Mime\Part\DataPart;
 use Twig\Extra\CssInliner\CssInlinerExtension;
 use Twig\Extra\Inky\InkyExtension;
 use Twig\Extra\Markdown\MarkdownExtension;
@@ -37,14 +38,15 @@ class NotificationEmail extends TemplatedEmail
         'action_url' => null,
         'markdown' => false,
         'raw' => false,
-        'footer_text' => 'Notification e-mail sent by Symfony',
+        'footer_text' => 'Notification email sent by Symfony',
     ];
+    private bool $rendered = false;
 
     public function __construct(Headers $headers = null, AbstractPart $body = null)
     {
         $missingPackages = [];
         if (!class_exists(CssInlinerExtension::class)) {
-            $missingPackages['twig/cssinliner-extra'] = ' CSS Inliner';
+            $missingPackages['twig/cssinliner-extra'] = 'CSS Inliner';
         }
 
         if (!class_exists(InkyExtension::class)) {
@@ -52,7 +54,7 @@ class NotificationEmail extends TemplatedEmail
         }
 
         if ($missingPackages) {
-            throw new \LogicException(sprintf('You cannot use "%s" if the "%s" Twig extension%s not available; try running "%s".', static::class, implode('" and "', $missingPackages), \count($missingPackages) > 1 ? 's are' : ' is', 'composer require '.implode(' ', array_keys($missingPackages))));
+            throw new \LogicException(sprintf('You cannot use "%s" if the "%s" Twig extension%s not available. Try running "%s".', static::class, implode('" and "', $missingPackages), \count($missingPackages) > 1 ? 's are' : ' is', 'composer require '.implode(' ', array_keys($missingPackages))));
         }
 
         parent::__construct($headers, $body);
@@ -86,7 +88,7 @@ class NotificationEmail extends TemplatedEmail
     public function markdown(string $content): static
     {
         if (!class_exists(MarkdownExtension::class)) {
-            throw new \LogicException(sprintf('You cannot use "%s" if the Markdown Twig extension is not available; try running "composer require twig/markdown-extra".', __METHOD__));
+            throw new \LogicException(sprintf('You cannot use "%s" if the Markdown Twig extension is not available. Try running "composer require twig/markdown-extra".', __METHOD__));
         }
 
         $this->context['markdown'] = true;
@@ -134,7 +136,7 @@ class NotificationEmail extends TemplatedEmail
         $exceptionAsString = $this->getExceptionAsString($exception);
 
         $this->context['exception'] = true;
-        $this->attach($exceptionAsString, 'exception.txt', 'text/plain');
+        $this->addPart(new DataPart($exceptionAsString, 'exception.txt', 'text/plain'));
         $this->importance(self::IMPORTANCE_URGENT);
 
         if (!$this->getSubject()) {
@@ -177,6 +179,18 @@ class NotificationEmail extends TemplatedEmail
         return array_merge($this->context, parent::getContext());
     }
 
+    public function isRendered(): bool
+    {
+        return $this->rendered;
+    }
+
+    public function markAsRendered(): void
+    {
+        parent::markAsRendered();
+
+        $this->rendered = true;
+    }
+
     public function getPreparedHeaders(): Headers
     {
         $headers = parent::getPreparedHeaders();
@@ -192,17 +206,12 @@ class NotificationEmail extends TemplatedEmail
 
     private function determinePriority(string $importance): int
     {
-        switch ($importance) {
-            case self::IMPORTANCE_URGENT:
-                return self::PRIORITY_HIGHEST;
-            case self::IMPORTANCE_HIGH:
-                return self::PRIORITY_HIGH;
-            case self::IMPORTANCE_MEDIUM:
-                return self::PRIORITY_NORMAL;
-            case self::IMPORTANCE_LOW:
-            default:
-                return self::PRIORITY_LOW;
-        }
+        return match ($importance) {
+            self::IMPORTANCE_URGENT => self::PRIORITY_HIGHEST,
+            self::IMPORTANCE_HIGH => self::PRIORITY_HIGH,
+            self::IMPORTANCE_MEDIUM => self::PRIORITY_NORMAL,
+            default => self::PRIORITY_LOW,
+        };
     }
 
     private function getExceptionAsString(\Throwable|FlattenException $exception): string
@@ -213,7 +222,7 @@ class NotificationEmail extends TemplatedEmail
             return $exception->getAsString();
         }
 
-        $message = \get_class($exception);
+        $message = $exception::class;
         if ('' !== $exception->getMessage()) {
             $message .= ': '.$exception->getMessage();
         }
@@ -229,7 +238,7 @@ class NotificationEmail extends TemplatedEmail
      */
     public function __serialize(): array
     {
-        return [$this->context, parent::__serialize()];
+        return [$this->context, $this->theme, $this->rendered, parent::__serialize()];
     }
 
     /**
@@ -237,7 +246,14 @@ class NotificationEmail extends TemplatedEmail
      */
     public function __unserialize(array $data): void
     {
-        [$this->context, $parentData] = $data;
+        if (4 === \count($data)) {
+            [$this->context, $this->theme, $this->rendered, $parentData] = $data;
+        } elseif (3 === \count($data)) {
+            [$this->context, $this->theme, $parentData] = $data;
+        } else {
+            // Backwards compatibility for deserializing data structures that were serialized without the theme
+            [$this->context, $parentData] = $data;
+        }
 
         parent::__unserialize($parentData);
     }

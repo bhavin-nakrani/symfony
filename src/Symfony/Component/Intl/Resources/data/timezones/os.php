@@ -125,7 +125,7 @@ return [
         'Europe/Isle_of_Man' => 'Гринвичы рӕстӕмбис рӕстӕг (Isle of Man)',
         'Europe/Jersey' => 'Гринвичы рӕстӕмбис рӕстӕг (Jersey)',
         'Europe/Kaliningrad' => 'Скӕсӕн Европӕйаг рӕстӕг (Kaliningrad)',
-        'Europe/Kiev' => 'Скӕсӕн Европӕйаг рӕстӕг (Kiev)',
+        'Europe/Kiev' => 'Скӕсӕн Европӕйаг рӕстӕг (Kyiv)',
         'Europe/Kirov' => 'Уӕрӕсе рӕстӕг (Kirov)',
         'Europe/Lisbon' => 'Ныгъуылӕн Европӕйаг рӕстӕг (Lisbon)',
         'Europe/Ljubljana' => 'Астӕуккаг Европӕйаг рӕстӕг (Ljubljana)',
@@ -166,6 +166,5 @@ return [
         'Europe/Zurich' => 'Астӕуккаг Европӕйаг рӕстӕг (Zurich)',
         'Pacific/Honolulu' => 'АИШ рӕстӕг (Honolulu)',
     ],
-    'Meta' => [
-    ],
+    'Meta' => [],
 ];

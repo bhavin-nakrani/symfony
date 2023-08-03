@@ -18,6 +18,7 @@ use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Serializer\Annotation\Ignore;
 use Symfony\Component\Serializer\Annotation\MaxDepth;
 use Symfony\Component\Serializer\Annotation\SerializedName;
+use Symfony\Component\Serializer\Annotation\SerializedPath;
 use Symfony\Component\Serializer\Exception\MappingException;
 use Symfony\Component\Serializer\Mapping\AttributeMetadata;
 use Symfony\Component\Serializer\Mapping\AttributeMetadataInterface;
@@ -38,24 +39,24 @@ class AnnotationLoader implements LoaderInterface
         Ignore::class,
         MaxDepth::class,
         SerializedName::class,
+        SerializedPath::class,
         Context::class,
     ];
 
-    private $reader;
-
-    public function __construct(Reader $reader = null)
-    {
-        $this->reader = $reader;
+    public function __construct(
+        private readonly ?Reader $reader = null,
+    ) {
+        if ($reader) {
+            trigger_deprecation('symfony/validator', '6.4', 'Passing a "%s" instance as argument 1 to "%s()" is deprecated, pass null or omit the parameter instead.', get_debug_type($reader), __METHOD__);
+        }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function loadClassMetadata(ClassMetadataInterface $classMetadata): bool
     {
         $reflectionClass = $classMetadata->getReflectionClass();
         $className = $reflectionClass->name;
         $loaded = false;
+        $classGroups = [];
 
         $attributesMetadata = $classMetadata->getAttributesMetadata();
 
@@ -65,6 +66,11 @@ class AnnotationLoader implements LoaderInterface
                     $annotation->getTypeProperty(),
                     $annotation->getMapping()
                 ));
+                continue;
+            }
+
+            if ($annotation instanceof Groups) {
+                $classGroups = $annotation->getGroups();
             }
         }
 
@@ -75,6 +81,10 @@ class AnnotationLoader implements LoaderInterface
             }
 
             if ($property->getDeclaringClass()->name === $className) {
+                foreach ($classGroups as $group) {
+                    $attributesMetadata[$property->name]->addGroup($group);
+                }
+
                 foreach ($this->loadAnnotations($property) as $annotation) {
                     if ($annotation instanceof Groups) {
                         foreach ($annotation->getGroups() as $group) {
@@ -84,6 +94,8 @@ class AnnotationLoader implements LoaderInterface
                         $attributesMetadata[$property->name]->setMaxDepth($annotation->getMaxDepth());
                     } elseif ($annotation instanceof SerializedName) {
                         $attributesMetadata[$property->name]->setSerializedName($annotation->getSerializedName());
+                    } elseif ($annotation instanceof SerializedPath) {
+                        $attributesMetadata[$property->name]->setSerializedPath($annotation->getSerializedPath());
                     } elseif ($annotation instanceof Ignore) {
                         $attributesMetadata[$property->name]->setIgnore(true);
                     } elseif ($annotation instanceof Context) {
@@ -98,6 +110,10 @@ class AnnotationLoader implements LoaderInterface
         foreach ($reflectionClass->getMethods() as $method) {
             if ($method->getDeclaringClass()->name !== $className) {
                 continue;
+            }
+
+            if (0 === stripos($method->name, 'get') && $method->getNumberOfRequiredParameters()) {
+                continue; /*  matches the BC behavior in `Symfony\Component\Serializer\Normalizer\ObjectNormalizer::extractAttributes` */
             }
 
             $accessorOrMutator = preg_match('/^(get|is|has|set)(.+)$/i', $method->name, $matches);
@@ -133,7 +149,17 @@ class AnnotationLoader implements LoaderInterface
                     }
 
                     $attributeMetadata->setSerializedName($annotation->getSerializedName());
+                } elseif ($annotation instanceof SerializedPath) {
+                    if (!$accessorOrMutator) {
+                        throw new MappingException(sprintf('SerializedPath on "%s::%s()" cannot be added. SerializedPath can only be added on methods beginning with "get", "is", "has" or "set".', $className, $method->name));
+                    }
+
+                    $attributeMetadata->setSerializedPath($annotation->getSerializedPath());
                 } elseif ($annotation instanceof Ignore) {
+                    if (!$accessorOrMutator) {
+                        throw new MappingException(sprintf('Ignore on "%s::%s()" cannot be added. Ignore can only be added on methods beginning with "get", "is", "has" or "set".', $className, $method->name));
+                    }
+
                     $attributeMetadata->setIgnore(true);
                 } elseif ($annotation instanceof Context) {
                     if (!$accessorOrMutator) {
@@ -150,14 +176,25 @@ class AnnotationLoader implements LoaderInterface
         return $loaded;
     }
 
-    /**
-     * @param \ReflectionClass|\ReflectionMethod|\ReflectionProperty $reflector
-     */
-    public function loadAnnotations(object $reflector): iterable
+    public function loadAnnotations(\ReflectionMethod|\ReflectionClass|\ReflectionProperty $reflector): iterable
     {
         foreach ($reflector->getAttributes() as $attribute) {
             if ($this->isKnownAttribute($attribute->getName())) {
-                yield $attribute->newInstance();
+                try {
+                    yield $attribute->newInstance();
+                } catch (\Error $e) {
+                    if (\Error::class !== $e::class) {
+                        throw $e;
+                    }
+                    $on = match (true) {
+                        $reflector instanceof \ReflectionClass => ' on class '.$reflector->name,
+                        $reflector instanceof \ReflectionMethod => sprintf(' on "%s::%s()"', $reflector->getDeclaringClass()->name, $reflector->name),
+                        $reflector instanceof \ReflectionProperty => sprintf(' on "%s::$%s"', $reflector->getDeclaringClass()->name, $reflector->name),
+                        default => '',
+                    };
+
+                    throw new MappingException(sprintf('Could not instantiate attribute "%s"%s.', $attribute->getName(), $on), 0, $e);
+                }
             }
         }
 
@@ -166,13 +203,13 @@ class AnnotationLoader implements LoaderInterface
         }
 
         if ($reflector instanceof \ReflectionClass) {
-            yield from $this->reader->getClassAnnotations($reflector);
+            yield from $this->getClassAnnotations($reflector);
         }
         if ($reflector instanceof \ReflectionMethod) {
-            yield from $this->reader->getMethodAnnotations($reflector);
+            yield from $this->getMethodAnnotations($reflector);
         }
         if ($reflector instanceof \ReflectionProperty) {
-            yield from $this->reader->getPropertyAnnotations($reflector);
+            yield from $this->getPropertyAnnotations($reflector);
         }
     }
 
@@ -201,5 +238,50 @@ class AnnotationLoader implements LoaderInterface
         }
 
         return false;
+    }
+
+    /**
+     * @return object[]
+     */
+    private function getClassAnnotations(\ReflectionClass $reflector): array
+    {
+        if ($annotations = array_filter(
+            $this->reader->getClassAnnotations($reflector),
+            fn (object $annotation): bool => $this->isKnownAttribute($annotation::class),
+        )) {
+            trigger_deprecation('symfony/serializer', '6.4', 'Class "%s" uses Doctrine Annotations to configure serialization, which is deprecated. Use PHP attributes instead.', $reflector->getName());
+        }
+
+        return $annotations;
+    }
+
+    /**
+     * @return object[]
+     */
+    private function getMethodAnnotations(\ReflectionMethod $reflector): array
+    {
+        if ($annotations = array_filter(
+            $this->reader->getMethodAnnotations($reflector),
+            fn (object $annotation): bool => $this->isKnownAttribute($annotation::class),
+        )) {
+            trigger_deprecation('symfony/serializer', '6.4', 'Method "%s::%s()" uses Doctrine Annotations to configure serialization, which is deprecated. Use PHP attributes instead.', $reflector->getDeclaringClass()->getName(), $reflector->getName());
+        }
+
+        return $annotations;
+    }
+
+    /**
+     * @return object[]
+     */
+    private function getPropertyAnnotations(\ReflectionProperty $reflector): array
+    {
+        if ($annotations = array_filter(
+            $this->reader->getPropertyAnnotations($reflector),
+            fn (object $annotation): bool => $this->isKnownAttribute($annotation::class),
+        )) {
+            trigger_deprecation('symfony/serializer', '6.4', 'Property "%s::$%s" uses Doctrine Annotations to configure serialization, which is deprecated. Use PHP attributes instead.', $reflector->getDeclaringClass()->getName(), $reflector->getName());
+        }
+
+        return $annotations;
     }
 }

@@ -21,12 +21,12 @@ services:
             - [setBar, ['@bar']]
             - [initialize, {  }]
 
-        factory: [Bar\FooClass, getInstance]
+        constructor: getInstance
         configurator: sc_configure
         public: true
     foo.baz:
         class: '%baz_class%'
-        factory: ['%baz_class%', getInstance]
+        constructor: getInstance
         configurator: ['%baz_class%', configureStatic1]
         public: true
     bar:
@@ -121,7 +121,7 @@ services:
         public: true
     service_from_static_method:
         class: Bar\FooClass
-        factory: [Bar\FooClass, getInstance]
+        constructor: getInstance
         public: true
     factory_simple:
         class: SimpleFactoryClass
@@ -173,9 +173,21 @@ services:
         public: true
     errored_definition:
         class: stdClass
+        tags:
+            - container.error: { message: 'Service "errored_definition" is broken.' }
     preload_sidekick:
         class: stdClass
         tags:
             - container.preload: { class: 'Some\Sidekick1' }
             - container.preload: { class: 'Some\Sidekick2' }
+        public: true
+    a_factory:
+        class: Bar
+    a_service:
+        class: Bar
+        factory: ['@a_factory', 'getBar']
+        public: true
+    b_service:
+        class: Bar
+        factory: ['@a_factory', 'getBar']
         public: true

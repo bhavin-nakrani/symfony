@@ -41,9 +41,7 @@ class MessageBusTest extends TestCase
         $firstMiddleware->expects($this->once())
             ->method('handle')
             ->with($envelope, $this->anything())
-            ->willReturnCallback(function ($envelope, $stack) {
-                return $stack->next()->handle($envelope, $stack);
-            });
+            ->willReturnCallback(fn ($envelope, $stack) => $stack->next()->handle($envelope, $stack));
 
         $secondMiddleware = $this->createMock(MiddlewareInterface::class);
         $secondMiddleware->expects($this->once())
@@ -70,17 +68,13 @@ class MessageBusTest extends TestCase
         $firstMiddleware->expects($this->once())
             ->method('handle')
             ->with($envelope, $this->anything())
-            ->willReturnCallback(function ($envelope, $stack) {
-                return $stack->next()->handle($envelope->with(new AnEnvelopeStamp()), $stack);
-            });
+            ->willReturnCallback(fn ($envelope, $stack) => $stack->next()->handle($envelope->with(new AnEnvelopeStamp()), $stack));
 
         $secondMiddleware = $this->createMock(MiddlewareInterface::class);
         $secondMiddleware->expects($this->once())
             ->method('handle')
             ->with($envelopeWithAnotherStamp, $this->anything())
-            ->willReturnCallback(function ($envelope, $stack) {
-                return $stack->next()->handle($envelope, $stack);
-            });
+            ->willReturnCallback(fn ($envelope, $stack) => $stack->next()->handle($envelope, $stack));
 
         $thirdMiddleware = $this->createMock(MiddlewareInterface::class);
         $thirdMiddleware->expects($this->once())
@@ -110,9 +104,7 @@ class MessageBusTest extends TestCase
         $firstMiddleware->expects($this->once())
             ->method('handle')
             ->with($envelope, $this->anything())
-            ->willReturnCallback(function ($envelope, $stack) use ($expectedEnvelope) {
-                return $stack->next()->handle($expectedEnvelope, $stack);
-            });
+            ->willReturnCallback(fn ($envelope, $stack) => $stack->next()->handle($expectedEnvelope, $stack));
 
         $secondMiddleware = $this->createMock(MiddlewareInterface::class);
         $secondMiddleware->expects($this->once())
@@ -141,7 +133,7 @@ class MessageBusTest extends TestCase
         $this->assertCount(2, $finalEnvelope->all());
     }
 
-    public function provideConstructorDataStucture(): iterable
+    public static function provideConstructorDataStucture(): iterable
     {
         yield 'iterator' => [new \ArrayObject([
             new SimpleMiddleware(),

@@ -69,6 +69,11 @@ return static function (ContainerConfigurator $container) {
 
         ->alias(\SessionHandlerInterface::class, 'session.handler')
 
+        ->set('session.handler.native', StrictSessionHandler::class)
+            ->args([
+                inline_service(\SessionHandler::class),
+            ])
+
         ->set('session.handler.native_file', StrictSessionHandler::class)
             ->args([
                 inline_service(NativeFileSessionHandler::class)
@@ -77,7 +82,7 @@ return static function (ContainerConfigurator $container) {
 
         ->set('session.abstract_handler', AbstractSessionHandler::class)
             ->factory([SessionHandlerFactory::class, 'createHandler'])
-            ->args([abstract_arg('A string or a connection object')])
+            ->args([abstract_arg('A string or a connection object'), []])
 
         ->set('session_listener', SessionListener::class)
             ->args([

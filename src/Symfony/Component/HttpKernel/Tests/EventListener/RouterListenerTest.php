@@ -37,7 +37,7 @@ use Symfony\Component\Routing\RequestContext;
 
 class RouterListenerTest extends TestCase
 {
-    private $requestStack;
+    private RequestStack $requestStack;
 
     protected function setUp(): void
     {
@@ -67,7 +67,7 @@ class RouterListenerTest extends TestCase
         $this->assertEquals(str_starts_with($uri, 'https') ? 'https' : 'http', $context->getScheme());
     }
 
-    public function getPortData()
+    public static function getPortData()
     {
         return [
             [80, 443, 'http://localhost/', 80, 443],
@@ -151,7 +151,7 @@ class RouterListenerTest extends TestCase
         $listener->onKernelRequest(new RequestEvent($kernel, $request, HttpKernelInterface::MAIN_REQUEST));
     }
 
-    public function getLoggingParameterData()
+    public static function getLoggingParameterData()
     {
         return [
             [['_route' => 'foo'], 'Matched route "{route}".', ['route' => 'foo', 'route_parameters' => ['_route' => 'foo'], 'request_uri' => 'http://localhost/', 'method' => 'GET']],
@@ -169,9 +169,7 @@ class RouterListenerTest extends TestCase
         $dispatcher = new EventDispatcher();
         $dispatcher->addSubscriber(new ValidateRequestListener());
         $dispatcher->addSubscriber(new RouterListener($requestMatcher, $requestStack, new RequestContext()));
-        $dispatcher->addSubscriber(new ErrorListener(function () {
-            return new Response('Exception handled', 400);
-        }));
+        $dispatcher->addSubscriber(new ErrorListener(fn () => new Response('Exception handled', 400)));
 
         $kernel = new HttpKernel($dispatcher, new ControllerResolver(), $requestStack, new ArgumentResolver());
 

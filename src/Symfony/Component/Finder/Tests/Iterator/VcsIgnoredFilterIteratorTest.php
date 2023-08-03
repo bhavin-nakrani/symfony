@@ -16,10 +16,7 @@ use Symfony\Component\Finder\Iterator\VcsIgnoredFilterIterator;
 
 class VcsIgnoredFilterIteratorTest extends IteratorTestCase
 {
-    /**
-     * @var string
-     */
-    private $tmpDir;
+    private string $tmpDir;
 
     protected function setUp(): void
     {
@@ -39,13 +36,17 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
      */
     public function testAccept(array $gitIgnoreFiles, array $otherFileNames, array $expectedResult)
     {
-        foreach ($gitIgnoreFiles as $path => $content) {
-            $this->createFile("{$this->tmpDir}/{$path}", $content);
-        }
-
         $otherFileNames = $this->toAbsolute($otherFileNames);
         foreach ($otherFileNames as $path) {
-            $this->createFile($path);
+            if (str_ends_with($path, '/')) {
+                mkdir($path);
+            } else {
+                touch($path);
+            }
+        }
+
+        foreach ($gitIgnoreFiles as $path => $content) {
+            file_put_contents("{$this->tmpDir}/{$path}", $content);
         }
 
         $inner = new InnerNameIterator($otherFileNames);
@@ -55,7 +56,7 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
         $this->assertIterator($this->toAbsolute($expectedResult), $iterator);
     }
 
-    public function getAcceptData(): iterable
+    public static function getAcceptData(): iterable
     {
         yield 'simple file' => [
             [
@@ -64,10 +65,12 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             [
                 'a.txt',
                 'b.txt',
+                'dir/',
                 'dir/a.txt',
             ],
             [
                 'b.txt',
+                'dir',
             ],
         ];
 
@@ -78,20 +81,23 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             [
                 'a.txt',
                 'b.txt',
+                'dir/',
                 'dir/a.txt',
             ],
             [
                 'b.txt',
+                'dir',
                 'dir/a.txt',
             ],
         ];
 
-        yield 'directy' => [
+        yield 'directory' => [
             [
                 '.gitignore' => 'dir/',
             ],
             [
                 'a.txt',
+                'dir/',
                 'dir/a.txt',
                 'dir/b.txt',
             ],
@@ -100,7 +106,7 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             ],
         ];
 
-        yield 'directy matching a file' => [
+        yield 'directory matching a file' => [
             [
                 '.gitignore' => 'dir.txt/',
             ],
@@ -112,15 +118,20 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             ],
         ];
 
-        yield 'directy at root' => [
+        yield 'directory at root' => [
             [
                 '.gitignore' => '/dir/',
             ],
             [
+                'dir/',
                 'dir/a.txt',
+                'other/',
+                'other/dir/',
                 'other/dir/b.txt',
             ],
             [
+                'other',
+                'other/dir',
                 'other/dir/b.txt',
             ],
         ];
@@ -131,11 +142,15 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             ],
             [
                 'a.txt',
+                'nested/',
                 'nested/a.txt',
+                'nested/nested/',
                 'nested/nested/a.txt',
             ],
             [
                 'a.txt',
+                'nested',
+                'nested/nested',
             ],
         ];
 
@@ -145,58 +160,81 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             ],
             [
                 'a.txt',
+                'nested/',
                 'nested/a.txt',
+                'nested/nested/',
                 'nested/nested/a.txt',
             ],
             [
                 'a.txt',
+                'nested',
+                'nested/nested',
                 'nested/nested/a.txt',
             ],
         ];
 
-        yield 'directy in nested .gitignore' => [
+        yield 'directory in nested .gitignore' => [
             [
                 'nested/.gitignore' => 'dir/',
             ],
             [
                 'a.txt',
+                'dir/',
                 'dir/a.txt',
+                'nested/',
+                'nested/dir/',
                 'nested/dir/a.txt',
+                'nested/nested/',
+                'nested/nested/dir/',
                 'nested/nested/dir/a.txt',
             ],
             [
                 'a.txt',
+                'dir',
                 'dir/a.txt',
+                'nested',
+                'nested/nested',
             ],
         ];
 
-        yield 'directy matching a file in nested .gitignore' => [
+        yield 'directory matching a file in nested .gitignore' => [
             [
                 'nested/.gitignore' => 'dir.txt/',
             ],
             [
                 'dir.txt',
+                'nested/',
                 'nested/dir.txt',
             ],
             [
                 'dir.txt',
+                'nested',
                 'nested/dir.txt',
             ],
         ];
 
-        yield 'directy at root of nested .gitignore' => [
+        yield 'directory at root of nested .gitignore' => [
             [
                 'nested/.gitignore' => '/dir/',
             ],
             [
                 'a.txt',
+                'dir/',
                 'dir/a.txt',
+                'nested/',
+                'nested/dir/',
                 'nested/dir/a.txt',
+                'nested/nested/',
+                'nested/nested/dir/',
                 'nested/nested/dir/a.txt',
             ],
             [
                 'a.txt',
+                'dir',
                 'dir/a.txt',
+                'nested',
+                'nested/nested',
+                'nested/nested/dir',
                 'nested/nested/dir/a.txt',
             ],
         ];
@@ -209,12 +247,15 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             [
                 'a.txt',
                 'b.txt',
+                'nested/',
                 'nested/a.txt',
                 'nested/b.txt',
+                'nested/dir/',
                 'nested/dir/a.txt',
                 'nested/dir/b.txt',
             ],
             [
+                'nested',
                 'nested/a.txt',
             ],
         ];
@@ -227,8 +268,10 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
             [
                 'a.txt',
                 'b.txt',
+                'nested/',
                 'nested/a.txt',
                 'nested/b.txt',
+                'nested/dir/',
                 'nested/dir/a.txt',
                 'nested/dir/b.txt',
             ],
@@ -241,10 +284,31 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
                 'a/.gitignore' => '!c/',
             ],
             [
+                'a/',
+                'a/b/',
+                'a/b/c/',
                 'a/b/c/d.txt',
             ],
             [
+                'a',
+                'a/b',
+                'a/b/c',
                 'a/b/c/d.txt',
+            ],
+        ];
+
+        yield 'file included from subdirectory with everything excluded' => [
+            [
+                '.gitignore' => "/a/**\n!/a/b.txt",
+            ],
+            [
+                'a/',
+                'a/a.txt',
+                'a/b.txt',
+                'a/c.txt',
+            ],
+            [
+                'a/b.txt',
             ],
         ];
     }
@@ -265,20 +329,6 @@ class VcsIgnoredFilterIteratorTest extends IteratorTestCase
         }
 
         return $files;
-    }
-
-    private function createFile(string $path, string $content = null): void
-    {
-        $dir = \dirname($path);
-        if (!file_exists($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
-        if (null !== $content) {
-            file_put_contents($path, $content);
-        } else {
-            touch($path);
-        }
     }
 
     private function removeDirectory(string $dir): void

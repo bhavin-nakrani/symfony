@@ -19,15 +19,14 @@ use Symfony\Component\Lock\Strategy\ConsensusStrategy;
  */
 class ConsensusStrategyTest extends TestCase
 {
-    /** @var ConsensusStrategy */
-    private $strategy;
+    private ConsensusStrategy $strategy;
 
     protected function setUp(): void
     {
         $this->strategy = new ConsensusStrategy();
     }
 
-    public function provideMetResults()
+    public static function provideMetResults()
     {
         // success, failure, total, isMet
         yield [3, 0, 3, true];
@@ -49,7 +48,7 @@ class ConsensusStrategyTest extends TestCase
         yield [0, 0, 2, false];
     }
 
-    public function provideIndeterminate()
+    public static function provideIndeterminate()
     {
         // success, failure, total, canBeMet
         yield [3, 0, 3, true];

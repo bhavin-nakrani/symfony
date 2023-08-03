@@ -25,6 +25,7 @@ class PhpArrayAdapterTest extends AdapterTestCase
 {
     protected $skippedTests = [
         'testGet' => 'PhpArrayAdapter is read-only.',
+        'testDontSaveWhenAskedNotTo' => 'PhpArrayAdapter is read-only.',
         'testRecursiveGet' => 'PhpArrayAdapter is read-only.',
         'testBasicUsage' => 'PhpArrayAdapter is read-only.',
         'testBasicUsageWithLongKey' => 'PhpArrayAdapter is read-only.',
@@ -58,7 +59,7 @@ class PhpArrayAdapterTest extends AdapterTestCase
         'testPrune' => 'PhpArrayAdapter just proxies',
     ];
 
-    protected static $file;
+    protected static string $file;
 
     public static function setUpBeforeClass(): void
     {
@@ -147,7 +148,7 @@ class PhpArrayAdapterTest extends AdapterTestCase
 
 class PhpArrayAdapterWrapper extends PhpArrayAdapter
 {
-    protected $data = [];
+    protected array $data = [];
 
     public function save(CacheItemInterface $item): bool
     {

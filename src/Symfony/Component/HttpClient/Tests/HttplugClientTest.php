@@ -203,8 +203,8 @@ class HttplugClientTest extends TestCase
 
                 return $response;
             }, function (\Exception $exception) use (&$failureCallableCalled, $client) {
-                $this->assertSame(NetworkException::class, \get_class($exception));
-                $this->assertSame(TransportException::class, \get_class($exception->getPrevious()));
+                $this->assertSame(NetworkException::class, $exception::class);
+                $this->assertSame(TransportException::class, $exception->getPrevious()::class);
                 $failureCallableCalled = true;
 
                 return $client->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8057'));
@@ -246,16 +246,12 @@ class HttplugClientTest extends TestCase
                     return $response;
                 },
                 function (\Exception $exception) use ($errorMessage, &$failureCallableCalled, $client, $request) {
-                    $this->assertSame(NetworkException::class, \get_class($exception));
+                    $this->assertSame(NetworkException::class, $exception::class);
                     $this->assertSame($errorMessage, $exception->getMessage());
                     $failureCallableCalled = true;
 
                     // Ensure arbitrary levels of promises work.
-                    return (new FulfilledPromise(null))->then(function () use ($client, $request) {
-                        return (new GuzzleFulfilledPromise(null))->then(function () use ($client, $request) {
-                            return $client->sendAsyncRequest($request);
-                        });
-                    });
+                    return (new FulfilledPromise(null))->then(fn () => (new GuzzleFulfilledPromise(null))->then(fn () => $client->sendAsyncRequest($request)));
                 }
             )
         ;
@@ -266,5 +262,23 @@ class HttplugClientTest extends TestCase
         $this->assertTrue($failureCallableCalled);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('OK', (string) $response->getBody());
+    }
+
+    public function testInvalidHeaderResponse()
+    {
+        $responseHeaders = [
+            // space in header name not allowed in RFC 7230
+            ' X-XSS-Protection' => '0',
+            'Cache-Control' => 'no-cache',
+        ];
+        $response = new MockResponse('body', ['response_headers' => $responseHeaders]);
+        $this->assertArrayHasKey(' x-xss-protection', $response->getHeaders());
+
+        $client = new HttplugClient(new MockHttpClient($response));
+        $request = $client->createRequest('POST', 'http://localhost:8057/post')
+            ->withBody($client->createStream('foo=0123456789'));
+
+        $resultResponse = $client->sendRequest($request);
+        $this->assertCount(1, $resultResponse->getHeaders());
     }
 }

@@ -15,8 +15,13 @@ use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\XmlFileLoader;
 
-class XmlCompleteConfigurationTest extends CompleteConfigurationTest
+class XmlCompleteConfigurationTest extends CompleteConfigurationTestCase
 {
+    public function testFirewallPatterns()
+    {
+        $this->markTestSkipped('This features is not supported in XML.');
+    }
+
     protected function getLoader(ContainerBuilder $container)
     {
         return new XmlFileLoader($container, new FileLocator(__DIR__.'/Fixtures/xml'));

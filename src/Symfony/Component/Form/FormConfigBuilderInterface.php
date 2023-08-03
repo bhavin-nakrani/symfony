@@ -100,7 +100,7 @@ interface FormConfigBuilderInterface extends FormConfigInterface
      *
      * @return $this
      */
-    public function setDataMapper(DataMapperInterface $dataMapper = null): static;
+    public function setDataMapper(?DataMapperInterface $dataMapper): static;
 
     /**
      * Sets whether the form is disabled.
@@ -205,6 +205,8 @@ interface FormConfigBuilderInterface extends FormConfigInterface
 
     /**
      * Sets the form factory used for creating new forms.
+     *
+     * @return $this
      */
     public function setFormFactory(FormFactoryInterface $formFactory);
 

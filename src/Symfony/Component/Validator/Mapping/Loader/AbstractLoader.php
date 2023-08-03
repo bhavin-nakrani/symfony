@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Mapping\Loader;
 
+use Symfony\Component\Validator\Attribute\HasNamedArguments;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\MappingException;
 
@@ -35,6 +36,11 @@ abstract class AbstractLoader implements LoaderInterface
     protected $namespaces = [];
 
     /**
+     * @var array<class-string, bool>
+     */
+    private array $namedArgumentsCache = [];
+
+    /**
      * Adds a namespace alias.
      *
      * The namespace alias can be used to reference constraints from specific
@@ -43,6 +49,8 @@ abstract class AbstractLoader implements LoaderInterface
      *     $this->addNamespaceAlias('mynamespace', '\\Acme\\Package\\Constraints\\');
      *
      *     $constraint = $this->newConstraint('mynamespace:NotNull');
+     *
+     * @return void
      */
     protected function addNamespaceAlias(string $alias, string $namespace)
     {
@@ -76,6 +84,10 @@ abstract class AbstractLoader implements LoaderInterface
             $className = $this->namespaces[$prefix].$className;
         } else {
             $className = self::DEFAULT_NAMESPACE.$name;
+        }
+
+        if ($this->namedArgumentsCache[$className] ??= (bool) (new \ReflectionMethod($className, '__construct'))->getAttributes(HasNamedArguments::class)) {
+            return new $className(...$options);
         }
 
         return new $className($options);

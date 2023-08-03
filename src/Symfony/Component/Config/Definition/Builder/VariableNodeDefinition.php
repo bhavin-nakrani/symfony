@@ -29,18 +29,15 @@ class VariableNodeDefinition extends NodeDefinition
         return new VariableNode($this->name, $this->parent, $this->pathSeparator);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function createNode(): NodeInterface
     {
         $node = $this->instantiateNode();
 
-        if (null !== $this->normalization) {
+        if (isset($this->normalization)) {
             $node->setNormalizationClosures($this->normalization->before);
         }
 
-        if (null !== $this->merge) {
+        if (isset($this->merge)) {
             $node->setAllowOverwrite($this->merge->allowOverwrite);
         }
 
@@ -58,7 +55,7 @@ class VariableNodeDefinition extends NodeDefinition
             $node->setDeprecated($this->deprecation['package'], $this->deprecation['version'], $this->deprecation['message']);
         }
 
-        if (null !== $this->validation) {
+        if (isset($this->validation)) {
             $node->setFinalValidationClosures($this->validation->rules);
         }
 

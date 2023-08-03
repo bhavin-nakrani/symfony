@@ -36,41 +36,26 @@ class ResolvedTypeDataCollectorProxy implements ResolvedFormTypeInterface
         $this->dataCollector = $dataCollector;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getBlockPrefix(): string
     {
         return $this->proxiedType->getBlockPrefix();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getParent(): ?ResolvedFormTypeInterface
     {
         return $this->proxiedType->getParent();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getInnerType(): FormTypeInterface
     {
         return $this->proxiedType->getInnerType();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getTypeExtensions(): array
     {
         return $this->proxiedType->getTypeExtensions();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function createBuilder(FormFactoryInterface $factory, string $name, array $options = []): FormBuilderInterface
     {
         $builder = $this->proxiedType->createBuilder($factory, $name, $options);
@@ -81,16 +66,13 @@ class ResolvedTypeDataCollectorProxy implements ResolvedFormTypeInterface
         return $builder;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function createView(FormInterface $form, FormView $parent = null): FormView
     {
         return $this->proxiedType->createView($form, $parent);
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
@@ -98,7 +80,7 @@ class ResolvedTypeDataCollectorProxy implements ResolvedFormTypeInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildView(FormView $view, FormInterface $form, array $options)
     {
@@ -106,7 +88,7 @@ class ResolvedTypeDataCollectorProxy implements ResolvedFormTypeInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function finishView(FormView $view, FormInterface $form, array $options)
     {
@@ -132,9 +114,6 @@ class ResolvedTypeDataCollectorProxy implements ResolvedFormTypeInterface
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getOptionsResolver(): OptionsResolver
     {
         return $this->proxiedType->getOptionsResolver();

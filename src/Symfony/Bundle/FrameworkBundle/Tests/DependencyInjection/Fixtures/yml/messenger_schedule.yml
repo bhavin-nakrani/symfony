@@ -1,0 +1,6 @@
+framework:
+    annotations: false
+    http_method_override: false
+    messenger:
+        transports:
+            schedule: 'schedule://default'

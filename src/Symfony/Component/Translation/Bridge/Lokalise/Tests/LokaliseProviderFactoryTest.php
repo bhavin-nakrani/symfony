@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Translation\Bridge\Lokalise\Tests;
 
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -11,18 +20,18 @@ use Symfony\Component\Translation\Test\ProviderFactoryTestCase;
 
 class LokaliseProviderFactoryTest extends ProviderFactoryTestCase
 {
-    public function supportsProvider(): iterable
+    public static function supportsProvider(): iterable
     {
         yield [true, 'lokalise://PROJECT_ID:API_KEY@default'];
         yield [false, 'somethingElse://PROJECT_ID:API_KEY@default'];
     }
 
-    public function unsupportedSchemeProvider(): iterable
+    public static function unsupportedSchemeProvider(): iterable
     {
         yield ['somethingElse://PROJECT_ID:API_KEY@default'];
     }
 
-    public function createProvider(): iterable
+    public static function createProvider(): iterable
     {
         yield [
             'lokalise://api.lokalise.com',
@@ -30,7 +39,7 @@ class LokaliseProviderFactoryTest extends ProviderFactoryTestCase
         ];
     }
 
-    public function incompleteDsnProvider(): iterable
+    public static function incompleteDsnProvider(): iterable
     {
         yield ['lokalise://default'];
     }

@@ -26,9 +26,6 @@ class ValidationListener implements EventSubscriberInterface
     private ValidatorInterface $validator;
     private ViolationMapperInterface $violationMapper;
 
-    /**
-     * {@inheritdoc}
-     */
     public static function getSubscribedEvents(): array
     {
         return [FormEvents::POST_SUBMIT => 'validateForm'];
@@ -40,6 +37,9 @@ class ValidationListener implements EventSubscriberInterface
         $this->violationMapper = $violationMapper;
     }
 
+    /**
+     * @return void
+     */
     public function validateForm(FormEvent $event)
     {
         $form = $event->getForm();

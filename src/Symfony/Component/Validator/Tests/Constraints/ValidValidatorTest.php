@@ -1,10 +1,18 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Validator\Tests\Constraints;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints as Assert;
-use Symfony\Component\Validator\Constraints\ValidValidator;
 use Symfony\Component\Validator\ValidatorBuilder;
 
 class ValidValidatorTest extends TestCase
@@ -12,7 +20,7 @@ class ValidValidatorTest extends TestCase
     public function testPropertyPathsArePassedToNestedContexts()
     {
         $validatorBuilder = new ValidatorBuilder();
-        $validator = $validatorBuilder->enableAnnotationMapping()->addDefaultDoctrineAnnotationReader()->getValidator();
+        $validator = $validatorBuilder->enableAnnotationMapping()->getValidator();
 
         $violations = $validator->validate(new Foo(), null, ['nested']);
 
@@ -23,7 +31,7 @@ class ValidValidatorTest extends TestCase
     public function testNullValues()
     {
         $validatorBuilder = new ValidatorBuilder();
-        $validator = $validatorBuilder->enableAnnotationMapping()->addDefaultDoctrineAnnotationReader()->getValidator();
+        $validator = $validatorBuilder->enableAnnotationMapping()->getValidator();
 
         $foo = new Foo();
         $foo->fooBar = null;
@@ -31,18 +39,11 @@ class ValidValidatorTest extends TestCase
 
         $this->assertCount(0, $violations);
     }
-
-    protected function createValidator()
-    {
-        return new ValidValidator();
-    }
 }
 
 class Foo
 {
-    /**
-     * @Assert\Valid(groups={"nested"})
-     */
+    #[Assert\Valid(groups: ['nested'])]
     public $fooBar;
 
     public function __construct()
@@ -53,9 +54,7 @@ class Foo
 
 class FooBar
 {
-    /**
-     * @Assert\Valid(groups={"nested"})
-     */
+    #[Assert\Valid(groups: ['nested'])]
     public $fooBarBaz;
 
     public function __construct()
@@ -66,8 +65,6 @@ class FooBar
 
 class FooBarBaz
 {
-    /**
-     * @Assert\NotBlank(groups={"nested"})
-     */
+    #[Assert\NotBlank(groups: ['nested'])]
     public $foo;
 }

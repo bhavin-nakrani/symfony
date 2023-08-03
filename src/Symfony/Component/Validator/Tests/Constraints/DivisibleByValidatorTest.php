@@ -21,12 +21,12 @@ use Symfony\Component\Validator\Exception\UnexpectedValueException;
  */
 class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): DivisibleByValidator
     {
         return new DivisibleByValidator();
     }
 
-    protected function createConstraint(array $options = null): Constraint
+    protected static function createConstraint(array $options = null): Constraint
     {
         return new DivisibleBy($options);
     }
@@ -36,16 +36,25 @@ class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
         return DivisibleBy::NOT_DIVISIBLE_BY;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisons(): array
+    public static function provideValidComparisons(): array
     {
         return [
             [-7, 1],
             [0, 3.1415],
             [42, 42],
             [42, 21],
+            [10.12, 0.01],
+            [10.12, 0.001],
+            [1.133, 0.001],
+            [1.1331, 0.0001],
+            [1.13331, 0.00001],
+            [1.13331, 0.000001],
+            [1, 0.1],
+            [1, 0.01],
+            [1, 0.001],
+            [1, 0.0001],
+            [1, 0.00001],
+            [1, 0.000001],
             [3.25, 0.25],
             ['100', '10'],
             [4.1, 0.1],
@@ -53,20 +62,14 @@ class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideValidComparisonsToPropertyPath(): array
+    public static function provideValidComparisonsToPropertyPath(): array
     {
         return [
             [25],
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function provideInvalidComparisons(): array
+    public static function provideInvalidComparisons(): array
     {
         return [
             [1, '1', 2, '2', 'int'],
@@ -74,6 +77,7 @@ class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
             [10, '10', 0, '0', 'int'],
             [42, '42', \INF, 'INF', 'float'],
             [4.15, '4.15', 0.1, '0.1', 'float'],
+            [10.123, '10.123', 0.01, '0.01', 'float'],
             ['22', '"22"', '10', '"10"', 'string'],
         ];
     }
@@ -91,7 +95,7 @@ class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
         ]));
     }
 
-    public function throwsOnNonNumericValuesProvider()
+    public static function throwsOnNonNumericValuesProvider()
     {
         return [
             [\stdClass::class, 2, new \stdClass()],
@@ -99,8 +103,8 @@ class DivisibleByValidatorTest extends AbstractComparisonValidatorTestCase
         ];
     }
 
-    public function provideComparisonsToNullValueAtPropertyPath()
+    public static function provideComparisonsToNullValueAtPropertyPath()
     {
-        $this->markTestSkipped('DivisibleByValidator rejects null values.');
+        self::markTestSkipped('DivisibleByValidator rejects null values.');
     }
 }

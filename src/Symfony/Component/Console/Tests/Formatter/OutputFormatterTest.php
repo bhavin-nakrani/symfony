@@ -32,7 +32,10 @@ class OutputFormatterTest extends TestCase
         $this->assertEquals('foo << bar \\', $formatter->format('foo << bar \\'));
         $this->assertEquals("foo << \033[32mbar \\ baz\033[39m \\", $formatter->format('foo << <info>bar \\ baz</info> \\'));
         $this->assertEquals('<info>some info</info>', $formatter->format('\\<info>some info\\</info>'));
-        $this->assertEquals('\\<info>some info\\</info>', OutputFormatter::escape('<info>some info</info>'));
+        $this->assertEquals('\\<info\\>some info\\</info\\>', OutputFormatter::escape('<info>some info</info>'));
+        // every < and > gets escaped if not already escaped, but already escaped ones do not get escaped again
+        // and escaped backslashes remain as such, same with backslashes escaping non-special characters
+        $this->assertEquals('foo \\< bar \\< baz \\\\< foo \\> bar \\> baz \\\\> \\x', OutputFormatter::escape('foo < bar \\< baz \\\\< foo > bar \\> baz \\\\> \\x'));
 
         $this->assertEquals(
             "\033[33mSymfony\\Component\\Console does work very well!\033[39m",
@@ -168,7 +171,6 @@ class OutputFormatterTest extends TestCase
         $styleString = substr($tag, 1, -1);
         $formatter = new OutputFormatter(true);
         $method = new \ReflectionMethod($formatter, 'createStyleFromString');
-        $method->setAccessible(true);
         $result = $method->invoke($formatter, $styleString);
         if (null === $expected) {
             $this->assertNull($result);
@@ -182,7 +184,7 @@ class OutputFormatterTest extends TestCase
         }
     }
 
-    public function provideInlineStyleOptionsCases()
+    public static function provideInlineStyleOptionsCases()
     {
         return [
             ['<unknown=_unknown_>'],
@@ -242,8 +244,10 @@ class OutputFormatterTest extends TestCase
     /**
      * @dataProvider provideDecoratedAndNonDecoratedOutput
      */
-    public function testNotDecoratedFormatter(string $input, string $expectedNonDecoratedOutput, string $expectedDecoratedOutput, string $terminalEmulator = 'foo')
+    public function testNotDecoratedFormatterOnJediTermEmulator(string $input, string $expectedNonDecoratedOutput, string $expectedDecoratedOutput, bool $shouldBeJediTerm = false)
     {
+        $terminalEmulator = $shouldBeJediTerm ? 'JetBrains-JediTerm' : 'Unknown';
+
         $prevTerminalEmulator = getenv('TERMINAL_EMULATOR');
         putenv('TERMINAL_EMULATOR='.$terminalEmulator);
 
@@ -255,7 +259,36 @@ class OutputFormatterTest extends TestCase
         }
     }
 
-    public function provideDecoratedAndNonDecoratedOutput()
+    /**
+     * @dataProvider provideDecoratedAndNonDecoratedOutput
+     */
+    public function testNotDecoratedFormatterOnIDEALikeEnvironment(string $input, string $expectedNonDecoratedOutput, string $expectedDecoratedOutput, bool $expectsIDEALikeTerminal = false)
+    {
+        // Backup previous env variable
+        $previousValue = $_SERVER['IDEA_INITIAL_DIRECTORY'] ?? null;
+        $hasPreviousValue = \array_key_exists('IDEA_INITIAL_DIRECTORY', $_SERVER);
+
+        if ($expectsIDEALikeTerminal) {
+            $_SERVER['IDEA_INITIAL_DIRECTORY'] = __DIR__;
+        } elseif ($hasPreviousValue) {
+            // Forcibly remove the variable because the test runner may contain it
+            unset($_SERVER['IDEA_INITIAL_DIRECTORY']);
+        }
+
+        try {
+            $this->assertEquals($expectedDecoratedOutput, (new OutputFormatter(true))->format($input));
+            $this->assertEquals($expectedNonDecoratedOutput, (new OutputFormatter(false))->format($input));
+        } finally {
+            // Rollback previous env state
+            if ($hasPreviousValue) {
+                $_SERVER['IDEA_INITIAL_DIRECTORY'] = $previousValue;
+            } else {
+                unset($_SERVER['IDEA_INITIAL_DIRECTORY']);
+            }
+        }
+    }
+
+    public static function provideDecoratedAndNonDecoratedOutput()
     {
         return [
             ['<error>some error</error>', 'some error', "\033[37;41msome error\033[39;49m"],
@@ -264,7 +297,8 @@ class OutputFormatterTest extends TestCase
             ['<question>some question</question>', 'some question', "\033[30;46msome question\033[39;49m"],
             ['<fg=red>some text with inline style</>', 'some text with inline style', "\033[31msome text with inline style\033[39m"],
             ['<href=idea://open/?file=/path/SomeFile.php&line=12>some URL</>', 'some URL', "\033]8;;idea://open/?file=/path/SomeFile.php&line=12\033\\some URL\033]8;;\033\\"],
-            ['<href=idea://open/?file=/path/SomeFile.php&line=12>some URL</>', 'some URL', 'some URL', 'JetBrains-JediTerm'],
+            ['<href=https://example.com/\<woohoo\>>some URL with \<woohoo\></>', 'some URL with <woohoo>', "\033]8;;https://example.com/<woohoo>\033\\some URL with <woohoo>\033]8;;\033\\"],
+            ['<href=idea://open/?file=/path/SomeFile.php&line=12>some URL</>', 'some URL', 'some URL', true],
         ];
     }
 
@@ -280,7 +314,7 @@ EOF
 <info>
 some text</info>
 EOF
-        ));
+            ));
 
         $this->assertEquals(<<<EOF
 \033[32msome text
@@ -290,7 +324,7 @@ EOF
 <info>some text
 </info>
 EOF
-        ));
+            ));
 
         $this->assertEquals(<<<EOF
 \033[32m
@@ -302,7 +336,7 @@ EOF
 some text
 </info>
 EOF
-        ));
+            ));
 
         $this->assertEquals(<<<EOF
 \033[32m
@@ -316,7 +350,7 @@ some text
 more text
 </info>
 EOF
-        ));
+            ));
     }
 
     public function testFormatAndWrap()
@@ -339,6 +373,7 @@ EOF
         $this->assertSame("pre\nfoo\nbar\nbaz\npos\nt", $formatter->formatAndWrap('pre <error>foo bar baz</error> post', 3));
         $this->assertSame("pre \nfoo \nbar \nbaz \npost", $formatter->formatAndWrap('pre <error>foo bar baz</error> post', 4));
         $this->assertSame("pre f\noo ba\nr baz\npost", $formatter->formatAndWrap('pre <error>foo bar baz</error> post', 5));
+        $this->assertSame('', $formatter->formatAndWrap(null, 5));
     }
 }
 

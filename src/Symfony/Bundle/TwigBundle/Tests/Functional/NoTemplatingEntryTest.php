@@ -59,11 +59,13 @@ class NoTemplatingEntryKernel extends Kernel
         return [new FrameworkBundle(), new TwigBundle()];
     }
 
-    public function registerContainerConfiguration(LoaderInterface $loader)
+    public function registerContainerConfiguration(LoaderInterface $loader): void
     {
         $loader->load(function (ContainerBuilder $container) {
             $container
                 ->loadFromExtension('framework', [
+                    'annotations' => false,
+                    'http_method_override' => false,
                     'secret' => '$ecret',
                     'form' => ['enabled' => false],
                 ])

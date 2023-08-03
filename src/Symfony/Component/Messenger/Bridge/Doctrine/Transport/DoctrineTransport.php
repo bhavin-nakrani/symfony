@@ -37,65 +37,41 @@ class DoctrineTransport implements TransportInterface, SetupableTransportInterfa
         $this->serializer = $serializer;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function get(): iterable
     {
         return $this->getReceiver()->get();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function ack(Envelope $envelope): void
     {
         $this->getReceiver()->ack($envelope);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function reject(Envelope $envelope): void
     {
         $this->getReceiver()->reject($envelope);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getMessageCount(): int
     {
         return $this->getReceiver()->getMessageCount();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function all(int $limit = null): iterable
     {
         return $this->getReceiver()->all($limit);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function find(mixed $id): ?Envelope
     {
         return $this->getReceiver()->find($id);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function send(Envelope $envelope): Envelope
     {
         return $this->getSender()->send($envelope);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function setup(): void
     {
         $this->connection->setup();
@@ -103,10 +79,14 @@ class DoctrineTransport implements TransportInterface, SetupableTransportInterfa
 
     /**
      * Adds the Table to the Schema if this transport uses this connection.
+     *
+     * @param \Closure $isSameDatabase
      */
-    public function configureSchema(Schema $schema, DbalConnection $forConnection): void
+    public function configureSchema(Schema $schema, DbalConnection $forConnection/* , \Closure $isSameDatabase */): void
     {
-        $this->connection->configureSchema($schema, $forConnection);
+        $isSameDatabase = 2 < \func_num_args() ? func_get_arg(2) : static fn () => false;
+
+        $this->connection->configureSchema($schema, $forConnection, $isSameDatabase);
     }
 
     /**
@@ -128,8 +108,4 @@ class DoctrineTransport implements TransportInterface, SetupableTransportInterfa
     {
         return $this->sender ??= new DoctrineSender($this->connection, $this->serializer);
     }
-}
-
-if (!class_exists(\Symfony\Component\Messenger\Transport\Doctrine\DoctrineTransport::class, false)) {
-    class_alias(DoctrineTransport::class, \Symfony\Component\Messenger\Transport\Doctrine\DoctrineTransport::class);
 }

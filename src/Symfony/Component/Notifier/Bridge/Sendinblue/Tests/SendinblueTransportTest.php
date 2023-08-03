@@ -15,33 +15,36 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\Notifier\Bridge\Sendinblue\SendinblueTransport;
 use Symfony\Component\Notifier\Exception\TransportException;
 use Symfony\Component\Notifier\Message\ChatMessage;
-use Symfony\Component\Notifier\Message\MessageInterface;
 use Symfony\Component\Notifier\Message\SmsMessage;
 use Symfony\Component\Notifier\Test\TransportTestCase;
+use Symfony\Component\Notifier\Tests\Transport\DummyMessage;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
+/**
+ * @group legacy
+ */
 final class SendinblueTransportTest extends TransportTestCase
 {
-    public function createTransport(HttpClientInterface $client = null): SendinblueTransport
+    public static function createTransport(HttpClientInterface $client = null): SendinblueTransport
     {
-        return (new SendinblueTransport('api-key', '0611223344', $client ?? $this->createMock(HttpClientInterface::class)))->setHost('host.test');
+        return (new SendinblueTransport('api-key', '0611223344', $client ?? new MockHttpClient()))->setHost('host.test');
     }
 
-    public function toStringProvider(): iterable
+    public static function toStringProvider(): iterable
     {
-        yield ['sendinblue://host.test?sender=0611223344', $this->createTransport()];
+        yield ['sendinblue://host.test?sender=0611223344', self::createTransport()];
     }
 
-    public function supportedMessagesProvider(): iterable
+    public static function supportedMessagesProvider(): iterable
     {
         yield [new SmsMessage('0611223344', 'Hello!')];
     }
 
-    public function unsupportedMessagesProvider(): iterable
+    public static function unsupportedMessagesProvider(): iterable
     {
         yield [new ChatMessage('Hello!')];
-        yield [$this->createMock(MessageInterface::class)];
+        yield [new DummyMessage()];
     }
 
     public function testSendWithErrorResponseThrowsTransportException()
@@ -54,11 +57,9 @@ final class SendinblueTransportTest extends TransportTestCase
             ->method('getContent')
             ->willReturn(json_encode(['code' => 400, 'message' => 'bad request']));
 
-        $client = new MockHttpClient(static function () use ($response): ResponseInterface {
-            return $response;
-        });
+        $client = new MockHttpClient(static fn (): ResponseInterface => $response);
 
-        $transport = $this->createTransport($client);
+        $transport = self::createTransport($client);
 
         $this->expectException(TransportException::class);
         $this->expectExceptionMessage('Unable to send the SMS: bad request');

@@ -18,9 +18,14 @@ use Symfony\Component\DependencyInjection\Exception\ServiceCircularReferenceExce
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Contracts\Service\ServiceSubscriberInterface;
-use Symfony\Contracts\Service\Test\ServiceLocatorTest as BaseServiceLocatorTest;
+use Symfony\Contracts\Service\Test\ServiceLocatorTest as LegacyServiceLocatorTestCase;
+use Symfony\Contracts\Service\Test\ServiceLocatorTestCase;
 
-class ServiceLocatorTest extends BaseServiceLocatorTest
+if (!class_exists(ServiceLocatorTestCase::class)) {
+    class_alias(LegacyServiceLocatorTestCase::class, ServiceLocatorTestCase::class);
+}
+
+class ServiceLocatorTest extends ServiceLocatorTestCase
 {
     public function getServiceLocator(array $factories): ContainerInterface
     {
@@ -32,8 +37,8 @@ class ServiceLocatorTest extends BaseServiceLocatorTest
         $this->expectException(NotFoundExceptionInterface::class);
         $this->expectExceptionMessage('Service "dummy" not found: the container inside "Symfony\Component\DependencyInjection\Tests\ServiceLocatorTest" is a smaller service locator that only knows about the "foo" and "bar" services.');
         $locator = $this->getServiceLocator([
-            'foo' => function () { return 'bar'; },
-            'bar' => function () { return 'baz'; },
+            'foo' => fn () => 'bar',
+            'bar' => fn () => 'baz',
         ]);
 
         $locator->get('dummy');
@@ -74,8 +79,8 @@ class ServiceLocatorTest extends BaseServiceLocatorTest
     public function testInvoke()
     {
         $locator = $this->getServiceLocator([
-            'foo' => function () { return 'bar'; },
-            'bar' => function () { return 'baz'; },
+            'foo' => fn () => 'bar',
+            'bar' => fn () => 'baz',
         ]);
 
         $this->assertSame('bar', $locator('foo'));
@@ -86,9 +91,9 @@ class ServiceLocatorTest extends BaseServiceLocatorTest
     public function testProvidesServicesInformation()
     {
         $locator = new ServiceLocator([
-            'foo' => function () { return 'bar'; },
-            'bar' => function (): string { return 'baz'; },
-            'baz' => function (): ?string { return 'zaz'; },
+            'foo' => fn () => 'bar',
+            'bar' => fn (): string => 'baz',
+            'baz' => fn (): ?string => 'zaz',
         ]);
 
         $this->assertSame($locator->getProvidedServices(), [
@@ -101,7 +106,7 @@ class ServiceLocatorTest extends BaseServiceLocatorTest
 
 class SomeServiceSubscriber implements ServiceSubscriberInterface
 {
-    public $container;
+    public ContainerInterface $container;
 
     public function getFoo()
     {

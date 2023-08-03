@@ -21,7 +21,7 @@ class SplCasterTest extends TestCase
 {
     use VarDumperTestTrait;
 
-    public function getCastFileInfoTests()
+    public static function getCastFileInfoTests()
     {
         return [
             [__FILE__, <<<'EOTXT'
@@ -135,7 +135,7 @@ EOTXT;
         $this->assertDumpMatchesFormat($dump, $var);
     }
 
-    public function provideCastSplDoublyLinkedList()
+    public static function provideCastSplDoublyLinkedList()
     {
         return [
             [\SplDoublyLinkedList::IT_MODE_FIFO, 'IT_MODE_FIFO | IT_MODE_KEEP'],
@@ -159,20 +159,22 @@ EOTXT;
     public function testCastObjectStorageDumpsInfo()
     {
         $var = new \SplObjectStorage();
-        $var->attach(new \stdClass(), new \DateTime());
+        $var->attach(new \stdClass(), new \DateTimeImmutable());
 
-        $this->assertDumpMatchesFormat('%ADateTime%A', $var);
+        $this->assertDumpMatchesFormat('%ADateTimeImmutable%A', $var);
     }
 
     public function testCastArrayObject()
     {
-        $var = new \ArrayObject([123]);
+        $var = new
+            #[\AllowDynamicProperties]
+            class([123]) extends \ArrayObject {};
         $var->foo = 234;
 
         $expected = <<<EOTXT
-ArrayObject {
+ArrayObject@anonymous {
   +"foo": 234
-  -storage: array:1 [
+  storage: array:1 [
     0 => 123
   ]
   flag::STD_PROP_LIST: false
@@ -190,7 +192,7 @@ EOTXT;
         $expected = <<<EOTXT
 Symfony\Component\VarDumper\Tests\Caster\MyArrayIterator {
   -foo: 123
-  -storage: array:1 [
+  storage: array:1 [
     0 => 234
   ]
   flag::STD_PROP_LIST: false
@@ -209,6 +211,26 @@ Symfony\Component\VarDumper\Tests\Caster\BadSplFileInfo {
   ⚠: "The parent constructor was not called: the object is in an invalid state"
 }
 EOTXT;
+        $this->assertDumpEquals($expected, $var);
+    }
+
+    public function testWeakMap()
+    {
+        $var = new \WeakMap();
+        $obj = new \stdClass();
+        $var[$obj] = 123;
+
+        $expected = <<<EOTXT
+            WeakMap {
+              map: array:1 [
+                0 => {
+                  object: {}
+                  data: 123
+                }
+              ]
+            }
+            EOTXT;
+
         $this->assertDumpEquals($expected, $var);
     }
 }

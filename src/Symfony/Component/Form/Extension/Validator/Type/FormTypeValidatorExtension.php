@@ -38,7 +38,7 @@ class FormTypeValidatorExtension extends BaseValidatorExtension
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
@@ -46,16 +46,14 @@ class FormTypeValidatorExtension extends BaseValidatorExtension
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function configureOptions(OptionsResolver $resolver)
     {
         parent::configureOptions($resolver);
 
         // Constraint should always be converted to an array
-        $constraintsNormalizer = function (Options $options, $constraints) {
-            return \is_object($constraints) ? [$constraints] : (array) $constraints;
-        };
+        $constraintsNormalizer = static fn (Options $options, $constraints) => \is_object($constraints) ? [$constraints] : (array) $constraints;
 
         $resolver->setDefaults([
             'error_mapping' => [],
@@ -69,9 +67,6 @@ class FormTypeValidatorExtension extends BaseValidatorExtension
         $resolver->setNormalizer('constraints', $constraintsNormalizer);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public static function getExtendedTypes(): iterable
     {
         return [FormType::class];

@@ -34,7 +34,7 @@ class TransportTest extends TestCase
         $this->assertEquals($transport, $transportFactory->fromString($dsn));
     }
 
-    public function fromStringProvider(): iterable
+    public static function fromStringProvider(): iterable
     {
         $transportA = new DummyTransport('a');
         $transportB = new DummyTransport('b');
@@ -68,7 +68,7 @@ class TransportTest extends TestCase
         $this->assertEquals($transport, Transport::fromDsn($dsn));
     }
 
-    public function fromDsnProvider(): iterable
+    public static function fromDsnProvider(): iterable
     {
         yield 'multiple transports' => [
             'failover(smtp://a smtp://b)',
@@ -88,13 +88,13 @@ class TransportTest extends TestCase
         $transportFactory->fromString($dsn);
     }
 
-    public function fromWrongStringProvider(): iterable
+    public static function fromWrongStringProvider(): iterable
     {
-        yield 'garbage at the end' => ['dummy://a some garbage here', 'The DSN has some garbage at the end: " some garbage here".'];
+        yield 'garbage at the end' => ['dummy://a some garbage here', 'The mailer DSN has some garbage at the end.'];
 
-        yield 'not a valid DSN' => ['something not a dsn', 'The "something" mailer DSN must contain a scheme.'];
+        yield 'not a valid DSN' => ['something not a dsn', 'The mailer DSN must contain a scheme.'];
 
-        yield 'failover not closed' => ['failover(dummy://a', 'The "(dummy://a" mailer DSN must contain a scheme.'];
+        yield 'failover not closed' => ['failover(dummy://a', 'The mailer DSN must contain a scheme.'];
 
         yield 'not a valid keyword' => ['foobar(dummy://a)', 'The "foobar" keyword is not valid (valid ones are "failover", "roundrobin")'];
     }
@@ -102,7 +102,7 @@ class TransportTest extends TestCase
 
 class DummyTransport implements Transport\TransportInterface
 {
-    private $host;
+    private string $host;
 
     public function __construct(string $host)
     {

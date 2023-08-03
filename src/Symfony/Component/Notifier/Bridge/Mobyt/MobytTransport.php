@@ -34,7 +34,7 @@ final class MobytTransport extends AbstractTransport
     private string $from;
     private string $typeQuality;
 
-    public function __construct(string $accountSid, string $authToken, string $from, string $typeQuality = null, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
+    public function __construct(string $accountSid, #[\SensitiveParameter] string $authToken, string $from, string $typeQuality = null, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
     {
         $this->accountSid = $accountSid;
         $this->authToken = $authToken;
@@ -55,7 +55,7 @@ final class MobytTransport extends AbstractTransport
 
     public function supports(MessageInterface $message): bool
     {
-        return $message instanceof SmsMessage;
+        return $message instanceof SmsMessage && (null === $message->getOptions() || $message->getOptions() instanceof MobytOptions);
     }
 
     protected function doSend(MessageInterface $message): SentMessage
@@ -64,23 +64,16 @@ final class MobytTransport extends AbstractTransport
             throw new UnsupportedMessageTypeException(__CLASS__, SmsMessage::class, $message);
         }
 
-        if ($message->getOptions() && !$message->getOptions() instanceof MobytOptions) {
-            throw new LogicException(sprintf('The "%s" transport only supports instances of "%s" for options.', __CLASS__, MobytOptions::class));
-        }
-
-        $options = $message->getOptions() ? $message->getOptions()->toArray() : [];
+        $options = $message->getOptions()?->toArray() ?? [];
         $options['message_type'] ??= $this->typeQuality;
-
-        $options['message'] ??= $message->getSubject();
+        $options['message'] = $message->getSubject();
         $options['recipient'] = [$message->getPhone()];
-
-        $options['sender'] ??= $this->from;
+        $options['sender'] = $message->getFrom() ?: $this->from;
 
         $response = $this->client->request('POST', 'https://'.$this->getEndpoint().'/API/v1.0/REST/sms', [
             'headers' => [
-                'Content-type: application/json',
-                'user_key: '.$this->accountSid,
-                'Access_token: '.$this->authToken,
+                'user_key' => $this->accountSid,
+                'Access_token' => $this->authToken,
             ],
             'json' => array_filter($options),
         ]);

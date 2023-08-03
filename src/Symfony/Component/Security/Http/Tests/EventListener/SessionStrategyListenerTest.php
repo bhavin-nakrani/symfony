@@ -11,10 +11,11 @@
 
 namespace Symfony\Component\Security\Http\Tests\EventListener;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
-use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authentication\Token\NullToken;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Authenticator\AuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
@@ -25,17 +26,17 @@ use Symfony\Component\Security\Http\Session\SessionAuthenticationStrategyInterfa
 
 class SessionStrategyListenerTest extends TestCase
 {
-    private $sessionAuthenticationStrategy;
-    private $listener;
-    private $request;
-    private $token;
+    private MockObject&SessionAuthenticationStrategyInterface $sessionAuthenticationStrategy;
+    private SessionStrategyListener $listener;
+    private Request $request;
+    private NullToken $token;
 
     protected function setUp(): void
     {
         $this->sessionAuthenticationStrategy = $this->createMock(SessionAuthenticationStrategyInterface::class);
         $this->listener = new SessionStrategyListener($this->sessionAuthenticationStrategy);
         $this->request = new Request();
-        $this->token = $this->createMock(TokenInterface::class);
+        $this->token = $this->createMock(NullToken::class);
     }
 
     public function testRequestWithSession()
@@ -62,9 +63,28 @@ class SessionStrategyListenerTest extends TestCase
         $listener->onSuccessfulLogin($this->createEvent('api_firewall'));
     }
 
+    public function testRequestWithSamePreviousUser()
+    {
+        $this->configurePreviousSession();
+        $this->sessionAuthenticationStrategy->expects($this->never())->method('onAuthentication');
+
+        $token = $this->createMock(NullToken::class);
+        $token->expects($this->once())
+            ->method('getUserIdentifier')
+            ->willReturn('test');
+        $previousToken = $this->createMock(NullToken::class);
+        $previousToken->expects($this->once())
+            ->method('getUserIdentifier')
+            ->willReturn('test');
+
+        $event = new LoginSuccessEvent($this->createMock(AuthenticatorInterface::class), new SelfValidatingPassport(new UserBadge('test', function () {})), $token, $this->request, null, 'main_firewall', $previousToken);
+
+        $this->listener->onSuccessfulLogin($event);
+    }
+
     private function createEvent($firewallName)
     {
-        return new LoginSuccessEvent($this->createMock(AuthenticatorInterface::class), new SelfValidatingPassport(new UserBadge('test', function ($username) { return new InMemoryUser($username, null); })), $this->token, $this->request, null, $firewallName);
+        return new LoginSuccessEvent($this->createMock(AuthenticatorInterface::class), new SelfValidatingPassport(new UserBadge('test', fn ($username) => new InMemoryUser($username, null))), $this->token, $this->request, null, $firewallName);
     }
 
     private function configurePreviousSession()

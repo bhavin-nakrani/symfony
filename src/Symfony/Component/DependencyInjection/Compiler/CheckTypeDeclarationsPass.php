@@ -41,6 +41,8 @@ use Symfony\Component\ExpressionLanguage\Expression;
  */
 final class CheckTypeDeclarationsPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private const SCALAR_TYPES = [
         'int' => true,
         'float' => true,
@@ -75,9 +77,6 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         $this->skippedIds = $skippedIds;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function processValue(mixed $value, bool $isRoot = false): mixed
     {
         if (isset($this->skippedIds[$this->currentId])) {
@@ -139,11 +138,17 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         $envPlaceholderUniquePrefix = $this->container->getParameterBag() instanceof EnvPlaceholderParameterBag ? $this->container->getParameterBag()->getEnvPlaceholderUniquePrefix() : null;
 
         for ($i = 0; $i < $checksCount; ++$i) {
-            if (!$reflectionParameters[$i]->hasType() || $reflectionParameters[$i]->isVariadic()) {
+            $p = $reflectionParameters[$i];
+            if (!$p->hasType() || $p->isVariadic()) {
+                continue;
+            }
+            if (\array_key_exists($p->name, $values)) {
+                $i = $p->name;
+            } elseif (!\array_key_exists($i, $values)) {
                 continue;
             }
 
-            $this->checkType($checkedDefinition, $values[$i], $reflectionParameters[$i], $envPlaceholderUniquePrefix);
+            $this->checkType($checkedDefinition, $values[$i], $p, $envPlaceholderUniquePrefix);
         }
 
         if ($reflectionFunction->isVariadic() && ($lastParameter = end($reflectionParameters))->hasType()) {
@@ -210,6 +215,10 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         $class = null;
 
         if ($value instanceof Definition) {
+            if ($value->hasErrors() || $value->getFactory()) {
+                return;
+            }
+
             $class = $value->getClass();
 
             if ($class && isset(self::BUILTIN_TYPES[strtolower($class)])) {
@@ -222,7 +231,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         } elseif ($value instanceof Expression) {
             try {
                 $value = $this->getExpressionLanguage()->evaluate($value, ['container' => $this->container]);
-            } catch (\Exception $e) {
+            } catch (\Exception) {
                 // If a service from the expression cannot be fetched from the container, we skip the validation.
                 return;
             }
@@ -237,7 +246,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
                 if ('' === preg_replace('/'.$envPlaceholderUniquePrefix.'_\w+_[a-f0-9]{32}/U', '', $value, -1, $c) && 1 === $c) {
                     try {
                         $value = $this->container->resolveEnvPlaceholders($value, true);
-                    } catch (\Exception $e) {
+                    } catch (\Exception) {
                         // If an env placeholder cannot be resolved, we skip the validation.
                         return;
                     }
@@ -257,7 +266,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
             } elseif ($value instanceof ServiceLocatorArgument) {
                 $class = ServiceLocator::class;
             } elseif (\is_object($value)) {
-                $class = \get_class($value);
+                $class = $value::class;
             } else {
                 $class = \gettype($value);
                 $class = ['integer' => 'int', 'double' => 'float', 'boolean' => 'bool'][$class] ?? $class;
@@ -302,6 +311,10 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
 
         if ('false' === $type) {
             if (false === $value) {
+                return;
+            }
+        } elseif ('true' === $type) {
+            if (true === $value) {
                 return;
             }
         } elseif ($reflectionType->isBuiltin()) {

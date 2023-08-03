@@ -23,6 +23,8 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
  */
 class ResolveParameterPlaceHoldersPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = false;
+
     private ParameterBagInterface $bag;
 
     public function __construct(
@@ -32,7 +34,7 @@ class ResolveParameterPlaceHoldersPass extends AbstractRecursivePass
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      *
      * @throws ParameterNotFoundException
      */
@@ -83,6 +85,11 @@ class ResolveParameterPlaceHoldersPass extends AbstractRecursivePass
             }
             if (isset($changes['file'])) {
                 $value->setFile($this->bag->resolveValue($value->getFile()));
+            }
+            $tags = $value->getTags();
+            if (isset($tags['proxy'])) {
+                $tags['proxy'] = $this->bag->resolveValue($tags['proxy']);
+                $value->setTags($tags);
             }
         }
 

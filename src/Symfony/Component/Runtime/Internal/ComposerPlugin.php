@@ -27,17 +27,10 @@ use Symfony\Component\Runtime\SymfonyRuntime;
  */
 class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 {
-    /**
-     * @var Composer
-     */
-    private $composer;
+    private Composer $composer;
+    private IOInterface $io;
 
-    /**
-     * @var IOInterface
-     */
-    private $io;
-
-    private static $activated = false;
+    private static bool $activated = false;
 
     public function activate(Composer $composer, IOInterface $io): void
     {
@@ -58,7 +51,7 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 
     public function updateAutoloadFile(): void
     {
-        $vendorDir = $this->composer->getConfig()->get('vendor-dir');
+        $vendorDir = realpath($this->composer->getConfig()->get('vendor-dir'));
 
         if (!is_file($autoloadFile = $vendorDir.'/autoload.php')
             || false === $extra = $this->composer->getPackage()->getExtra()['runtime'] ?? []
@@ -105,7 +98,12 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
             '%runtime_options%' => '['.substr(var_export($extra, true), 7, -1)."  'project_dir' => {$projectDir},\n]",
         ]);
 
-        file_put_contents(substr_replace($autoloadFile, '_runtime', -4, 0), $code);
+        // could use Composer\Util\Filesystem::filePutContentsIfModified once Composer 1.x support is dropped for this plugin
+        $path = substr_replace($autoloadFile, '_runtime', -4, 0);
+        $currentContent = @file_exists($path) ? @file_get_contents($path) : false;
+        if (false === $currentContent || $currentContent !== $code) {
+            file_put_contents($path, $code);
+        }
     }
 
     public static function getSubscribedEvents(): array

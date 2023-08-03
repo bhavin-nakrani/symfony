@@ -4,10 +4,12 @@ return [
     'Names' => [
         'Africa/Cairo' => 'hora de Europa del Este (El Cairo)',
         'Africa/Casablanca' => 'hora de Europa del Oeste (Casablanca)',
+        'Africa/Conakry' => 'hora del meridiano de Greenwich (Conakry)',
         'Africa/El_Aaiun' => 'hora de Europa del Oeste (El Aaiún)',
         'Africa/Tripoli' => 'hora de Europa del Este (Trípoli)',
         'America/Boise' => 'hora de la montaña (Boise)',
         'America/Cambridge_Bay' => 'hora de la montaña (Cambridge Bay)',
+        'America/Ciudad_Juarez' => 'hora de la montaña (Ciudad Juárez)',
         'America/Creston' => 'hora de la montaña (Creston)',
         'America/Dawson_Creek' => 'hora de la montaña (Dawson Creek)',
         'America/Denver' => 'hora de la montaña (Denver)',
@@ -15,7 +17,6 @@ return [
         'America/Fort_Nelson' => 'hora de la montaña (Fuerte Nelson)',
         'America/Inuvik' => 'hora de la montaña (Inuvik)',
         'America/Nassau' => 'hora oriental (Nasáu)',
-        'America/Ojinaga' => 'hora de la montaña (Ojinaga)',
         'America/Phoenix' => 'hora de la montaña (Phoenix)',
         'America/Santiago' => 'hora de Chile (Santiago)',
         'America/St_Thomas' => 'hora del Atlántico (Santo Tomás)',
@@ -28,6 +29,7 @@ return [
         'Asia/Famagusta' => 'hora de Europa del Este (Famagusta)',
         'Asia/Gaza' => 'hora de Europa del Este (Gaza)',
         'Asia/Hebron' => 'hora de Europa del Este (Hebrón)',
+        'Asia/Khandyga' => 'hora de Yakutsk (Khandyga)',
         'Asia/Nicosia' => 'hora de Europa del Este (Nicosia)',
         'Asia/Rangoon' => 'hora de Myanmar (Birmania) (Yangón (Rangún))',
         'Atlantic/Canary' => 'hora de Europa del Oeste (Islas Canarias)',
@@ -63,6 +65,5 @@ return [
         'Pacific/Tarawa' => 'hora de Islas Gilbert (Tarawa)',
         'Pacific/Wake' => 'hora de Isla Wake',
     ],
-    'Meta' => [
-    ],
+    'Meta' => [],
 ];

@@ -23,7 +23,6 @@ use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Cookie as HttpFoundationCookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\Test\Constraint\ResponseFormatSame;
 
 class WebTestCaseTest extends TestCase
 {
@@ -78,10 +77,6 @@ class WebTestCaseTest extends TestCase
 
     public function testAssertResponseFormat()
     {
-        if (!class_exists(ResponseFormatSame::class)) {
-            $this->markTestSkipped('Too old version of HttpFoundation.');
-        }
-
         $this->getResponseTester(new Response('', 200, ['Content-Type' => 'application/vnd.myformat']))->assertResponseFormatSame('custom');
         $this->getResponseTester(new Response('', 200, ['Content-Type' => 'application/ld+json']))->assertResponseFormatSame('jsonld');
         $this->getResponseTester(new Response())->assertResponseFormatSame(null);
@@ -195,6 +190,16 @@ class WebTestCaseTest extends TestCase
         $this->getCrawlerTester(new Crawler('<html><body><h1>'))->assertSelectorNotExists('body > h1');
     }
 
+    public function testAssertSelectorCount()
+    {
+        $this->getCrawlerTester(new Crawler('<html><body><p>Hello</p></body></html>'))->assertSelectorCount(1, 'p');
+        $this->getCrawlerTester(new Crawler('<html><body><p>Hello</p><p>Foo</p></body></html>'))->assertSelectorCount(2, 'p');
+        $this->getCrawlerTester(new Crawler('<html><body><h1>This is not a paragraph.</h1></body></html>'))->assertSelectorCount(0, 'p');
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('Failed asserting that the Crawler selector "p" was expected to be found 0 time(s) but was found 1 time(s).');
+        $this->getCrawlerTester(new Crawler('<html><body><p>Hello</p></body></html>'))->assertSelectorCount(0, 'p');
+    }
+
     public function testAssertSelectorTextNotContains()
     {
         $this->getCrawlerTester(new Crawler('<html><body><h1>Foo'))->assertSelectorTextNotContains('body > h1', 'Bar');
@@ -238,16 +243,18 @@ class WebTestCaseTest extends TestCase
     public function testAssertCheckboxChecked()
     {
         $this->getCrawlerTester(new Crawler('<html><body><form><input type="checkbox" name="rememberMe" checked>'))->assertCheckboxChecked('rememberMe');
+        $this->getCrawlerTester(new Crawler('<!DOCTYPE html><body><form><input type="checkbox" name="rememberMe" checked>'))->assertCheckboxChecked('rememberMe');
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('matches selector "input[name="rememberMe"]" and has a node matching selector "input[name="rememberMe"]" with attribute "checked" of value "checked".');
+        $this->expectExceptionMessage('matches selector "input[name="rememberMe"]:checked".');
         $this->getCrawlerTester(new Crawler('<html><body><form><input type="checkbox" name="rememberMe">'))->assertCheckboxChecked('rememberMe');
     }
 
     public function testAssertCheckboxNotChecked()
     {
         $this->getCrawlerTester(new Crawler('<html><body><form><input type="checkbox" name="rememberMe">'))->assertCheckboxNotChecked('rememberMe');
+        $this->getCrawlerTester(new Crawler('<!DOCTYPE html><body><form><input type="checkbox" name="rememberMe">'))->assertCheckboxNotChecked('rememberMe');
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('matches selector "input[name="rememberMe"]" and does not have a node matching selector "input[name="rememberMe"]" with attribute "checked" of value "checked".');
+        $this->expectExceptionMessage('does not match selector "input[name="rememberMe"]:checked".');
         $this->getCrawlerTester(new Crawler('<html><body><form><input type="checkbox" name="rememberMe" checked>'))->assertCheckboxNotChecked('rememberMe');
     }
 

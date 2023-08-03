@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\HttpFoundation\Tests\Session\Storage\Proxy;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Session\Storage\Proxy\AbstractProxy;
 use Symfony\Component\HttpFoundation\Session\Storage\Proxy\SessionHandlerProxy;
@@ -22,19 +23,11 @@ use Symfony\Component\HttpFoundation\Session\Storage\Proxy\SessionHandlerProxy;
  */
 class AbstractProxyTest extends TestCase
 {
-    /**
-     * @var AbstractProxy
-     */
-    protected $proxy;
+    protected MockObject&AbstractProxy $proxy;
 
     protected function setUp(): void
     {
         $this->proxy = $this->getMockForAbstractClass(AbstractProxy::class);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->proxy = null;
     }
 
     public function testGetSaveHandlerName()
@@ -56,6 +49,7 @@ class AbstractProxyTest extends TestCase
 
     /**
      * @runInSeparateProcess
+     *
      * @preserveGlobalState disabled
      */
     public function testIsActive()
@@ -67,6 +61,7 @@ class AbstractProxyTest extends TestCase
 
     /**
      * @runInSeparateProcess
+     *
      * @preserveGlobalState disabled
      */
     public function testName()
@@ -79,6 +74,7 @@ class AbstractProxyTest extends TestCase
 
     /**
      * @runInSeparateProcess
+     *
      * @preserveGlobalState disabled
      */
     public function testNameException()
@@ -90,6 +86,7 @@ class AbstractProxyTest extends TestCase
 
     /**
      * @runInSeparateProcess
+     *
      * @preserveGlobalState disabled
      */
     public function testId()
@@ -102,6 +99,7 @@ class AbstractProxyTest extends TestCase
 
     /**
      * @runInSeparateProcess
+     *
      * @preserveGlobalState disabled
      */
     public function testIdException()

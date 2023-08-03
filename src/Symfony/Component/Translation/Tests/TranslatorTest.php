@@ -15,6 +15,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Translation\Exception\InvalidArgumentException;
 use Symfony\Component\Translation\Exception\NotFoundResourceException;
 use Symfony\Component\Translation\Exception\RuntimeException;
+use Symfony\Component\Translation\Formatter\IntlFormatterInterface;
+use Symfony\Component\Translation\Formatter\MessageFormatter;
 use Symfony\Component\Translation\Loader\ArrayLoader;
 use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\TranslatableMessage;
@@ -22,7 +24,7 @@ use Symfony\Component\Translation\Translator;
 
 class TranslatorTest extends TestCase
 {
-    private $defaultLocale;
+    private string $defaultLocale;
 
     protected function setUp(): void
     {
@@ -298,7 +300,7 @@ class TranslatorTest extends TestCase
         $this->assertEquals('foobar', $translator->trans('bar'));
     }
 
-    public function getFallbackLocales()
+    public static function getFallbackLocales()
     {
         $locales = [
             ['en', 'en_US'],
@@ -453,7 +455,7 @@ class TranslatorTest extends TestCase
         }, $this, Translator::class))();
     }
 
-    public function getTransFileTests()
+    public static function getTransFileTests()
     {
         return [
             ['csv', 'CsvFileLoader'],
@@ -468,7 +470,7 @@ class TranslatorTest extends TestCase
         ];
     }
 
-    public function getTransTests(): iterable
+    public static function getTransTests(): iterable
     {
         $param = new TranslatableMessage('Symfony is %what%!', ['%what%' => 'awesome'], '');
 
@@ -481,7 +483,7 @@ class TranslatorTest extends TestCase
         ];
     }
 
-    public function getTransICUTests()
+    public static function getTransICUTests()
     {
         $id = '{apples, plural, =0 {There are no apples} one {There is one apple} other {There are # apples}}';
 
@@ -492,7 +494,7 @@ class TranslatorTest extends TestCase
         ];
     }
 
-    public function getFlattenedTransTests()
+    public static function getFlattenedTransTests()
     {
         $messages = [
             'symfony' => [
@@ -515,7 +517,7 @@ class TranslatorTest extends TestCase
         ];
     }
 
-    public function getInvalidLocalesTests()
+    public static function getInvalidLocalesTests()
     {
         return [
             ['fr FR'],
@@ -532,7 +534,7 @@ class TranslatorTest extends TestCase
         ];
     }
 
-    public function getValidLocalesTests()
+    public static function getValidLocalesTests()
     {
         return [
             [''],
@@ -563,6 +565,26 @@ class TranslatorTest extends TestCase
         $this->assertSame('Hi Bob', $translator->trans('some_message', ['%name%' => 'Bob']));
     }
 
+    public function testIntlDomainOverlapseWithIntlResourceBefore()
+    {
+        $intlFormatterMock = $this->createMock(IntlFormatterInterface::class);
+        $intlFormatterMock->expects($this->once())->method('formatIntl')->with('hello intl', 'en', [])->willReturn('hello intl');
+
+        $messageFormatter = new MessageFormatter(null, $intlFormatterMock);
+
+        $translator = new Translator('en', $messageFormatter);
+        $translator->addLoader('array', new ArrayLoader());
+
+        $translator->addResource('array', ['some_message' => 'hello intl'], 'en', 'messages+intl-icu');
+        $translator->addResource('array', ['some_message' => 'hello'], 'en', 'messages');
+
+        $this->assertSame('hello', $translator->trans('some_message', [], 'messages'));
+
+        $translator->addResource('array', ['some_message' => 'hello intl'], 'en', 'messages+intl-icu');
+
+        $this->assertSame('hello intl', $translator->trans('some_message', [], 'messages'));
+    }
+
     public function testMissingLoaderForResourceError()
     {
         $this->expectException(RuntimeException::class);
@@ -576,11 +598,9 @@ class TranslatorTest extends TestCase
 
 class StringClass
 {
-    protected $str;
-
-    public function __construct($str)
-    {
-        $this->str = $str;
+    public function __construct(
+        protected string $str,
+    ) {
     }
 
     public function __toString(): string

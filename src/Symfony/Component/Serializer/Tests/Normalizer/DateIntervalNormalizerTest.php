@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Serializer\Tests\Normalizer;
 
 use PHPUnit\Framework\TestCase;
@@ -12,17 +21,14 @@ use Symfony\Component\Serializer\Normalizer\DateIntervalNormalizer;
  */
 class DateIntervalNormalizerTest extends TestCase
 {
-    /**
-     * @var DateIntervalNormalizer
-     */
-    private $normalizer;
+    private DateIntervalNormalizer $normalizer;
 
     protected function setUp(): void
     {
         $this->normalizer = new DateIntervalNormalizer();
     }
 
-    public function dataProviderISO()
+    public static function dataProviderISO()
     {
         $data = [
             ['P%YY%MM%DDT%HH%IM%SS', 'P00Y00M00DT00H00M00S', 'PT0S'],

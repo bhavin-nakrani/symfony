@@ -21,18 +21,15 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
-class FormExtensionBootstrap3HorizontalLayoutTest extends AbstractBootstrap3HorizontalLayoutTest
+class FormExtensionBootstrap3HorizontalLayoutTest extends AbstractBootstrap3HorizontalLayoutTestCase
 {
     use RuntimeLoaderProvider;
 
-    protected $testableFeatures = [
+    protected array $testableFeatures = [
         'choice_attr',
     ];
 
-    /**
-     * @var FormRenderer
-     */
-    private $renderer;
+    private FormRenderer $renderer;
 
     protected function setUp(): void
     {

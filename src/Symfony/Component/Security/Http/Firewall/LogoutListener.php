@@ -54,9 +54,6 @@ class LogoutListener extends AbstractListener
         $this->eventDispatcher = $eventDispatcher;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function supports(Request $request): ?bool
     {
         return $this->requiresLogout($request);
@@ -71,7 +68,7 @@ class LogoutListener extends AbstractListener
      * @throws LogoutException   if the CSRF token is invalid
      * @throws \RuntimeException if the LogoutSuccessHandlerInterface instance does not return a response
      */
-    public function authenticate(RequestEvent $event)
+    public function authenticate(RequestEvent $event): void
     {
         $request = $event->getRequest();
 
@@ -86,8 +83,7 @@ class LogoutListener extends AbstractListener
         $logoutEvent = new LogoutEvent($request, $this->tokenStorage->getToken());
         $this->eventDispatcher->dispatch($logoutEvent);
 
-        $response = $logoutEvent->getResponse();
-        if (!$response instanceof Response) {
+        if (!$response = $logoutEvent->getResponse()) {
             throw new \RuntimeException('No logout listener set the Response, make sure at least the DefaultLogoutListener is registered.');
         }
 

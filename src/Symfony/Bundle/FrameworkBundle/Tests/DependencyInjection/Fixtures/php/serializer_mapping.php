@@ -1,7 +1,8 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => ['enabled' => true],
+    'http_method_override' => false,
+    'annotations' => false,
     'serializer' => [
         'enable_annotations' => true,
         'mapping' => [

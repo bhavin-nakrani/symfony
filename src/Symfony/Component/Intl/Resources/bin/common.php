@@ -9,6 +9,10 @@
  * file that was distributed with this source code.
  */
 
+if ('cli' !== \PHP_SAPI) {
+    throw new Exception('This script must be run from the command line.');
+}
+
 define('LINE_WIDTH', 75);
 
 define('LINE', str_repeat('-', LINE_WIDTH)."\n");
@@ -20,6 +24,9 @@ function bailout(string $message)
     exit(1);
 }
 
+/**
+ * @return string
+ */
 function strip_minor_versions(string $version)
 {
     preg_match('/^(?P<version>[0-9]\.[0-9]|[0-9]{2,})/', $version, $matches);
@@ -27,6 +34,9 @@ function strip_minor_versions(string $version)
     return $matches['version'];
 }
 
+/**
+ * @return string
+ */
 function centered(string $text)
 {
     $padding = (int) ((LINE_WIDTH - strlen($text)) / 2);
@@ -34,14 +44,14 @@ function centered(string $text)
     return str_repeat(' ', $padding).$text;
 }
 
-function cd(string $dir)
+function cd(string $dir): void
 {
     if (false === chdir($dir)) {
         bailout("Could not switch to directory $dir.");
     }
 }
 
-function run(string $command)
+function run(string $command): void
 {
     exec($command, $output, $status);
 
@@ -53,6 +63,9 @@ function run(string $command)
     }
 }
 
+/**
+ * @return string|null
+ */
 function get_icu_version_from_genrb(string $genrb)
 {
     exec($genrb.' --version - 2>&1', $output, $status);
@@ -85,7 +98,7 @@ set_exception_handler(function (Throwable $exception) {
             echo "Caused by\n";
         }
 
-        echo get_class($cause).': '.$cause->getMessage()."\n";
+        echo $cause::class.': '.$cause->getMessage()."\n";
         echo "\n";
         echo $cause->getFile().':'.$cause->getLine()."\n";
         echo $cause->getTraceAsString()."\n";

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Mailer\Tests\Transport;
 
 use PHPUnit\Framework\TestCase;
@@ -13,7 +22,7 @@ use Symfony\Component\Mailer\Transport\TransportInterface;
 
 final class NativeTransportFactoryTest extends TestCase
 {
-    public static $fakeConfiguration = [];
+    public static array $fakeConfiguration = [];
 
     public static function setUpBeforeClass(): void
     {
@@ -38,7 +47,7 @@ EOT;
     public function testCreateWithNotSupportedScheme()
     {
         $this->expectException(UnsupportedSchemeException::class);
-        $this->expectErrorMessageMatches('#The ".*" scheme is not supported#');
+        $this->expectExceptionMessage('The "sendmail" scheme is not supported');
 
         $sut = new NativeTransportFactory();
         $sut->create(Dsn::fromString('sendmail://default'));
@@ -57,7 +66,7 @@ EOT;
         $sut->create(Dsn::fromString('native://default'));
     }
 
-    public function provideCreateSendmailWithNoHostOrNoPort(): \Generator
+    public static function provideCreateSendmailWithNoHostOrNoPort(): \Generator
     {
         yield ['native://default', '', '', ''];
         yield ['native://default', '', 'localhost', ''];
@@ -86,7 +95,7 @@ EOT;
         $sut->create(Dsn::fromString($dsn));
     }
 
-    public function provideCreate(): \Generator
+    public static function provideCreate(): \Generator
     {
         yield ['native://default', '/usr/sbin/sendmail -t -i', '', '', new SendmailTransport('/usr/sbin/sendmail -t -i')];
 

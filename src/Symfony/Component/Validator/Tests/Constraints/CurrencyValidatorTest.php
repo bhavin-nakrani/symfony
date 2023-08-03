@@ -19,7 +19,7 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 class CurrencyValidatorTest extends ConstraintValidatorTestCase
 {
-    private $defaultLocale;
+    private string $defaultLocale;
 
     protected function setUp(): void
     {
@@ -35,7 +35,7 @@ class CurrencyValidatorTest extends ConstraintValidatorTestCase
         \Locale::setDefault($this->defaultLocale);
     }
 
-    protected function createValidator()
+    protected function createValidator(): CurrencyValidator
     {
         return new CurrencyValidator();
     }
@@ -84,7 +84,7 @@ class CurrencyValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidCurrencies()
+    public static function getValidCurrencies()
     {
         return [
             ['EUR'],
@@ -127,7 +127,7 @@ class CurrencyValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getInvalidCurrencies()
+    public static function getInvalidCurrencies()
     {
         return [
             ['EN'],

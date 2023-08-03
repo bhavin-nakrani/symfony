@@ -14,6 +14,7 @@ namespace Symfony\Bundle\SecurityBundle\DependencyInjection\Compiler;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\Security\Csrf\TokenStorage\ClearableTokenStorageInterface;
 use Symfony\Component\Security\Http\EventListener\CsrfProtectionListener;
 use Symfony\Component\Security\Http\EventListener\CsrfTokenClearingLogoutListener;
 
@@ -25,13 +26,13 @@ use Symfony\Component\Security\Http\EventListener\CsrfTokenClearingLogoutListene
  */
 class RegisterCsrfFeaturesPass implements CompilerPassInterface
 {
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         $this->registerCsrfProtectionListener($container);
         $this->registerLogoutHandler($container);
     }
 
-    private function registerCsrfProtectionListener(ContainerBuilder $container)
+    private function registerCsrfProtectionListener(ContainerBuilder $container): void
     {
         if (!$container->has('security.authenticator.manager') || !$container->has('security.csrf.token_manager')) {
             return;
@@ -43,7 +44,7 @@ class RegisterCsrfFeaturesPass implements CompilerPassInterface
             ->setPublic(false);
     }
 
-    protected function registerLogoutHandler(ContainerBuilder $container)
+    protected function registerLogoutHandler(ContainerBuilder $container): void
     {
         if (!$container->has('security.logout_listener') || !$container->has('security.csrf.token_storage')) {
             return;
@@ -52,7 +53,7 @@ class RegisterCsrfFeaturesPass implements CompilerPassInterface
         $csrfTokenStorage = $container->findDefinition('security.csrf.token_storage');
         $csrfTokenStorageClass = $container->getParameterBag()->resolveValue($csrfTokenStorage->getClass());
 
-        if (!is_subclass_of($csrfTokenStorageClass, 'Symfony\Component\Security\Csrf\TokenStorage\ClearableTokenStorageInterface')) {
+        if (!is_subclass_of($csrfTokenStorageClass, ClearableTokenStorageInterface::class)) {
             return;
         }
 

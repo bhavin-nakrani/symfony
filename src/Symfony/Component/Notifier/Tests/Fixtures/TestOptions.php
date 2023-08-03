@@ -11,12 +11,11 @@
 
 namespace Symfony\Component\Notifier\Tests\Fixtures;
 
-use Symfony\Component\Notifier\Message\MessageInterface;
 use Symfony\Component\Notifier\Message\MessageOptionsInterface;
 
 final class TestOptions implements MessageOptionsInterface
 {
-    private $options;
+    private array $options;
 
     public function __construct(array $options = [])
     {

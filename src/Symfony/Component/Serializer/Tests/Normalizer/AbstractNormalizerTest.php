@@ -1,22 +1,33 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Serializer\Tests\Normalizer;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\PropertyInfo\Extractor\PhpDocExtractor;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Exception\MissingConstructorArgumentsException;
 use Symfony\Component\Serializer\Mapping\AttributeMetadata;
 use Symfony\Component\Serializer\Mapping\ClassMetadata;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactory;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactoryInterface;
 use Symfony\Component\Serializer\Mapping\Loader\LoaderChain;
+use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Normalizer\PropertyNormalizer;
 use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\Tests\Fixtures\AbstractNormalizerDummy;
-use Symfony\Component\Serializer\Tests\Fixtures\Annotations\IgnoreDummy;
+use Symfony\Component\Serializer\Tests\Fixtures\Attributes\IgnoreDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\Dummy;
 use Symfony\Component\Serializer\Tests\Fixtures\NullableConstructorArgumentDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\NullableOptionalConstructorArgumentDummy;
@@ -31,15 +42,8 @@ use Symfony\Component\Serializer\Tests\Fixtures\VariadicConstructorTypedArgsDumm
  */
 class AbstractNormalizerTest extends TestCase
 {
-    /**
-     * @var AbstractNormalizerDummy
-     */
-    private $normalizer;
-
-    /**
-     * @var MockObject&ClassMetadataFactoryInterface
-     */
-    private $classMetadata;
+    private AbstractNormalizerDummy $normalizer;
+    private MockObject&ClassMetadataFactoryInterface $classMetadata;
 
     protected function setUp(): void
     {
@@ -157,8 +161,18 @@ class AbstractNormalizerTest extends TestCase
         $this->assertNull($dummy->getFoo());
     }
 
+    public function testObjectWithNullableNonOptionalConstructorArgumentWithoutInputAndRequireAllProperties()
+    {
+        $normalizer = new ObjectNormalizer();
+
+        $this->expectException(MissingConstructorArgumentsException::class);
+
+        $normalizer->denormalize([], NullableConstructorArgumentDummy::class, null, [AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true]);
+    }
+
     /**
      * @dataProvider getNormalizer
+     * @dataProvider getNormalizerWithCustomNameConverter
      */
     public function testObjectWithVariadicConstructorTypedArguments(AbstractNormalizer $normalizer)
     {
@@ -192,7 +206,37 @@ class AbstractNormalizerTest extends TestCase
         }
     }
 
-    public function getNormalizer()
+    /**
+     * @dataProvider getNormalizer
+     */
+    public function testVariadicSerializationWithPreservingKeys(AbstractNormalizer $normalizer)
+    {
+        $d1 = new Dummy();
+        $d1->foo = 'Foo';
+        $d1->bar = 'Bar';
+        $d1->baz = 'Baz';
+        $d1->qux = 'Quz';
+        $d2 = new Dummy();
+        $d2->foo = 'FOO';
+        $d2->bar = 'BAR';
+        $d2->baz = 'BAZ';
+        $d2->qux = 'QUZ';
+        $arr = ['d1' => $d1, 'd2' => $d2];
+        $obj = new VariadicConstructorTypedArgsDummy(...$arr);
+
+        $serializer = new Serializer([$normalizer], [new JsonEncoder()]);
+        $normalizer->setSerializer($serializer);
+        $this->assertEquals(
+            '{"foo":{"d1":{"foo":"Foo","bar":"Bar","baz":"Baz","qux":"Quz"},"d2":{"foo":"FOO","bar":"BAR","baz":"BAZ","qux":"QUZ"}}}',
+            $data = $serializer->serialize($obj, 'json')
+        );
+
+        $dummy = $normalizer->denormalize(json_decode($data, true), VariadicConstructorTypedArgsDummy::class);
+        $this->assertInstanceOf(VariadicConstructorTypedArgsDummy::class, $dummy);
+        $this->assertEquals($arr, $dummy->getFoo());
+    }
+
+    public static function getNormalizer()
     {
         $extractor = new PhpDocExtractor();
 
@@ -200,6 +244,25 @@ class AbstractNormalizerTest extends TestCase
         yield [new PropertyNormalizer(null, null, $extractor)];
         yield [new ObjectNormalizer()];
         yield [new ObjectNormalizer(null, null, null, $extractor)];
+    }
+
+    public static function getNormalizerWithCustomNameConverter()
+    {
+        $extractor = new PhpDocExtractor();
+        $nameConverter = new class() implements NameConverterInterface {
+            public function normalize(string $propertyName): string
+            {
+                return ucfirst($propertyName);
+            }
+
+            public function denormalize(string $propertyName): string
+            {
+                return lcfirst($propertyName);
+            }
+        };
+
+        yield [new PropertyNormalizer(null, $nameConverter, $extractor)];
+        yield [new ObjectNormalizer(null, $nameConverter, null, $extractor)];
     }
 
     public function testIgnore()

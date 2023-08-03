@@ -17,24 +17,11 @@ use Symfony\Component\DependencyInjection\Reference;
 
 final class AliasDeprecatedPublicServicesPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private array $aliases = [];
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function processValue(mixed $value, bool $isRoot = false): mixed
-    {
-        if ($value instanceof Reference && isset($this->aliases[$id = (string) $value])) {
-            return new Reference($this->aliases[$id], $value->getInvalidBehavior());
-        }
-
-        return parent::processValue($value, $isRoot);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         foreach ($container->findTaggedServiceIds('container.private') as $id => $tags) {
             if (null === $package = $tags[0]['package'] ?? null) {
@@ -61,5 +48,14 @@ final class AliasDeprecatedPublicServicesPass extends AbstractRecursivePass
         }
 
         parent::process($container);
+    }
+
+    protected function processValue(mixed $value, bool $isRoot = false): mixed
+    {
+        if ($value instanceof Reference && isset($this->aliases[$id = (string) $value])) {
+            return new Reference($this->aliases[$id], $value->getInvalidBehavior());
+        }
+
+        return parent::processValue($value, $isRoot);
     }
 }

@@ -24,9 +24,6 @@ class LogoutTest extends AbstractWebTestCase
     {
         $client = $this->createClient(['test_case' => 'LogoutWithoutSessionInvalidation', 'root_config' => 'config.yml']);
         $client->disableReboot();
-        $this->callInRequestContext($client, function () {
-            static::getContainer()->get('security.csrf.token_storage')->setToken('foo', 'bar');
-        });
 
         $client->request('POST', '/login', [
             '_username' => 'johannes',
@@ -34,8 +31,7 @@ class LogoutTest extends AbstractWebTestCase
         ]);
 
         $this->callInRequestContext($client, function () {
-            $this->assertTrue(static::getContainer()->get('security.csrf.token_storage')->hasToken('foo'));
-            $this->assertSame('bar', static::getContainer()->get('security.csrf.token_storage')->getToken('foo'));
+            static::getContainer()->get('security.csrf.token_storage')->setToken('foo', 'bar');
         });
 
         $client->request('GET', '/logout');
@@ -67,6 +63,19 @@ class LogoutTest extends AbstractWebTestCase
 
         $this->assertRedirect($client->getResponse(), '/');
         $this->assertNull($cookieJar->get('flavor'));
+    }
+
+    public function testEnabledCsrf()
+    {
+        $client = $this->createClient(['test_case' => 'Logout', 'root_config' => 'config_csrf_enabled.yml']);
+
+        $cookieJar = $client->getCookieJar();
+        $cookieJar->set(new Cookie('flavor', 'chocolate', strtotime('+1 day'), null, 'somedomain'));
+
+        $client->request('POST', '/login', ['_username' => 'johannes', '_password' => 'test']);
+        $client->request('GET', '/logout');
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
     }
 
     private function callInRequestContext(KernelBrowser $client, callable $callable): void

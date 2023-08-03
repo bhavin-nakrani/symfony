@@ -11,10 +11,12 @@
 
 namespace Symfony\Component\Messenger\Tests\Transport\Serialization;
 
+use PHPUnit\Framework\Constraint\Constraint;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Stamp\NonSendableStampInterface;
+use Symfony\Component\Messenger\Stamp\SerializedMessageStamp;
 use Symfony\Component\Messenger\Stamp\SerializerStamp;
 use Symfony\Component\Messenger\Stamp\ValidationStamp;
 use Symfony\Component\Messenger\Tests\Fixtures\DummyMessage;
@@ -29,9 +31,10 @@ class SerializerTest extends TestCase
     {
         $serializer = new Serializer();
 
-        $envelope = new Envelope(new DummyMessage('Hello'));
+        $decodedEnvelope = $serializer->decode($serializer->encode(new Envelope(new DummyMessage('Hello'))));
 
-        $this->assertEquals($envelope, $serializer->decode($serializer->encode($envelope)));
+        $this->assertEquals(new DummyMessage('Hello'), $decodedEnvelope->getMessage());
+        $this->assertEquals(new SerializedMessageStamp('{"message":"Hello"}'), $decodedEnvelope->last(SerializedMessageStamp::class));
     }
 
     public function testEncodedWithStampsIsDecodable()
@@ -41,9 +44,21 @@ class SerializerTest extends TestCase
         $envelope = (new Envelope(new DummyMessage('Hello')))
             ->with(new SerializerStamp([ObjectNormalizer::GROUPS => ['foo']]))
             ->with(new ValidationStamp(['foo', 'bar']))
+            ->with(new SerializedMessageStamp('{"message":"Hello"}'))
         ;
 
         $this->assertEquals($envelope, $serializer->decode($serializer->encode($envelope)));
+    }
+
+    public function testSerializedMessageStampIsUsedForEncoding()
+    {
+        $serializer = new Serializer();
+
+        $encoded = $serializer->encode(
+            new Envelope(new DummyMessage(''), [new SerializedMessageStamp('{"message":"Hello"}')])
+        );
+
+        $this->assertSame('{"message":"Hello"}', $encoded['body'] ?? null);
     }
 
     public function testEncodedIsHavingTheBodyAndTypeHeader()
@@ -83,20 +98,32 @@ class SerializerTest extends TestCase
         );
 
         $envelope = (new Envelope($message = new DummyMessage('test')))
-            ->with($serializerStamp = new SerializerStamp([ObjectNormalizer::GROUPS => ['foo']]))
-            ->with($validationStamp = new ValidationStamp(['foo', 'bar']));
+            ->with(new SerializerStamp([ObjectNormalizer::GROUPS => ['foo']]))
+            ->with(new ValidationStamp(['foo', 'bar']));
+
+        $series = [
+            [$this->anything()],
+            [$this->anything()],
+            [$message, 'json', [
+                ObjectNormalizer::GROUPS => ['foo'],
+                Serializer::MESSENGER_SERIALIZATION_CONTEXT => true,
+            ]],
+        ];
 
         $symfonySerializer
             ->expects($this->exactly(3))
             ->method('serialize')
-            ->withConsecutive(
-                [$this->anything()],
-                [$this->anything()],
-                [$message, 'json', [
-                    ObjectNormalizer::GROUPS => ['foo'],
-                    Serializer::MESSENGER_SERIALIZATION_CONTEXT => true,
-                ]]
-            )
+            ->willReturnCallback(function (...$args) use (&$series) {
+                $expectedArgs = array_shift($series);
+
+                if ($expectedArgs[0] instanceof Constraint) {
+                    $expectedArgs[0]->evaluate($args);
+                } else {
+                    $this->assertSame($expectedArgs, $args);
+                }
+
+                return '{}';
+            })
         ;
 
         $encoded = $serializer->encode($envelope);
@@ -114,20 +141,26 @@ class SerializerTest extends TestCase
             $symfonySerializer = $this->createMock(SerializerComponentInterface::class)
         );
 
+        $series = [
+            [
+                ['[{"context":{"groups":["foo"]}}]', SerializerStamp::class.'[]', 'json', [Serializer::MESSENGER_SERIALIZATION_CONTEXT => true]],
+                [new SerializerStamp(['groups' => ['foo']])],
+            ],
+            [
+                ['{}', DummyMessage::class, 'json', [ObjectNormalizer::GROUPS => ['foo'], Serializer::MESSENGER_SERIALIZATION_CONTEXT => true]],
+                new DummyMessage('test'),
+            ],
+        ];
+
         $symfonySerializer
             ->expects($this->exactly(2))
             ->method('deserialize')
-            ->withConsecutive(
-                ['[{"context":{"groups":["foo"]}}]', SerializerStamp::class.'[]', 'json', [Serializer::MESSENGER_SERIALIZATION_CONTEXT => true]],
-                ['{}', DummyMessage::class, 'json', [
-                    ObjectNormalizer::GROUPS => ['foo'],
-                    Serializer::MESSENGER_SERIALIZATION_CONTEXT => true,
-                ]]
-            )
-            ->willReturnOnConsecutiveCalls(
-                [new SerializerStamp(['groups' => ['foo']])],
-                new DummyMessage('test')
-            )
+            ->willReturnCallback(function (...$args) use (&$series) {
+                [$expectedArgs, $return] = array_shift($series);
+                $this->assertSame($expectedArgs, $args);
+
+                return $return;
+            })
         ;
 
         $serializer->decode([
@@ -164,7 +197,7 @@ class SerializerTest extends TestCase
         $serializer->decode($data);
     }
 
-    public function getMissingKeyTests(): iterable
+    public static function getMissingKeyTests(): iterable
     {
         yield 'no_body' => [
             ['headers' => ['type' => 'bar']],

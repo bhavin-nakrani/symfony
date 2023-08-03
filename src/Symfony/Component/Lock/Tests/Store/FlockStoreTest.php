@@ -19,15 +19,12 @@ use Symfony\Component\Lock\Store\FlockStore;
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
  */
-class FlockStoreTest extends AbstractStoreTest
+class FlockStoreTest extends AbstractStoreTestCase
 {
     use BlockingStoreTestTrait;
     use SharedLockStoreTestTrait;
     use UnserializableTestTrait;
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getStore(): PersistingStoreInterface
     {
         return new FlockStore();

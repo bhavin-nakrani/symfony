@@ -42,9 +42,7 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
         $this->generator = $generator ?? new UriSafeTokenGenerator();
         $this->storage = $storage ?? new NativeSessionTokenStorage();
 
-        $superGlobalNamespaceGenerator = function () {
-            return !empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']) ? 'https-' : '';
-        };
+        $superGlobalNamespaceGenerator = fn () => !empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']) ? 'https-' : '';
 
         if (null === $namespace) {
             $this->namespace = $superGlobalNamespaceGenerator;
@@ -59,15 +57,12 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
         } elseif ($namespace instanceof \Closure || \is_string($namespace)) {
             $this->namespace = $namespace;
         } elseif (\is_callable($namespace)) {
-            $this->namespace = \Closure::fromCallable($namespace);
+            $this->namespace = $namespace(...);
         } else {
             throw new InvalidArgumentException(sprintf('$namespace must be a string, a callable returning a string, null or an instance of "RequestStack". "%s" given.', get_debug_type($namespace)));
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getToken(string $tokenId): CsrfToken
     {
         $namespacedId = $this->getNamespace().$tokenId;
@@ -82,9 +77,6 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
         return new CsrfToken($tokenId, $this->randomize($value));
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function refreshToken(string $tokenId): CsrfToken
     {
         $namespacedId = $this->getNamespace().$tokenId;
@@ -95,17 +87,11 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
         return new CsrfToken($tokenId, $this->randomize($value));
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function removeToken(string $tokenId): ?string
     {
         return $this->storage->removeToken($this->getNamespace().$tokenId);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function isTokenValid(CsrfToken $token): bool
     {
         $namespacedId = $this->getNamespace().$token->getId();
@@ -126,7 +112,7 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
         $key = random_bytes(32);
         $value = $this->xor($value, $key);
 
-        return sprintf('%s.%s.%s', substr(md5($key), 0, 1 + (\ord($key[0]) % 32)), rtrim(strtr(base64_encode($key), '+/', '-_'), '='), rtrim(strtr(base64_encode($value), '+/', '-_'), '='));
+        return sprintf('%s.%s.%s', substr(hash('xxh128', $key), 0, 1 + (\ord($key[0]) % 32)), rtrim(strtr(base64_encode($key), '+/', '-_'), '='), rtrim(strtr(base64_encode($value), '+/', '-_'), '='));
     }
 
     private function derandomize(string $value): string
@@ -136,6 +122,9 @@ class CsrfTokenManager implements CsrfTokenManagerInterface
             return $value;
         }
         $key = base64_decode(strtr($parts[1], '-_', '+/'));
+        if ('' === $key || false === $key) {
+            return $value;
+        }
         $value = base64_decode(strtr($parts[2], '-_', '+/'));
 
         return $this->xor($value, $key);

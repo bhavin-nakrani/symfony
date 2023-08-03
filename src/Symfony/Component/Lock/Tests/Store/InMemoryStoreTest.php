@@ -17,13 +17,10 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
  */
-class InMemoryStoreTest extends AbstractStoreTest
+class InMemoryStoreTest extends AbstractStoreTestCase
 {
     use SharedLockStoreTestTrait;
 
-    /**
-     * {@inheritdoc}
-     */
     public function getStore(): PersistingStoreInterface
     {
         return new InMemoryStore();

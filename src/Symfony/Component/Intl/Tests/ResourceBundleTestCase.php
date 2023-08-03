@@ -95,6 +95,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'ce_RU',
         'cs',
         'cs_CZ',
+        'cv',
+        'cv_RU',
         'cy',
         'cy_GB',
         'da',
@@ -178,6 +180,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_MS',
         'en_MT',
         'en_MU',
+        'en_MV',
         'en_MW',
         'en_MY',
         'en_NA',
@@ -367,6 +370,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'he_IL',
         'hi',
         'hi_IN',
+        'hi_Latn',
+        'hi_Latn_IN',
         'hr',
         'hr_BA',
         'hr_HR',
@@ -416,6 +421,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'ks',
         'ks_Arab',
         'ks_Arab_IN',
+        'ks_Deva',
+        'ks_Deva_IN',
         'ks_IN',
         'ku',
         'ku_TR',
@@ -545,6 +552,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'sd_Arab_PK',
         'sd_Deva',
         'sd_Deva_IN',
+        'sd_IN',
         'sd_PK',
         'se',
         'se_FI',
@@ -698,6 +706,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'no_NO_NY' => 'nn_NO',
         'pa_IN' => 'pa_Guru_IN',
         'pa_PK' => 'pa_Arab_PK',
+        'sd_IN' => 'sd_Deva_IN',
         'sd_PK' => 'sd_Arab_PK',
         'sh' => 'sr_Latn',
         'sh_BA' => 'sr_Latn_BA',
@@ -725,8 +734,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'zh_TW' => 'zh_Hant_TW',
     ];
 
-    private static $rootLocales;
-    private $defaultLocale;
+    private static ?array $rootLocales = null;
+    private string $defaultLocale;
 
     protected function setUp(): void
     {
@@ -743,7 +752,7 @@ abstract class ResourceBundleTestCase extends TestCase
     public function provideLocales()
     {
         return array_map(
-            function ($locale) { return [$locale]; },
+            fn ($locale) => [$locale],
             $this->getLocales()
         );
     }
@@ -751,7 +760,7 @@ abstract class ResourceBundleTestCase extends TestCase
     public function provideLocaleAliases()
     {
         return array_map(
-            function ($alias, $ofLocale) { return [$alias, $ofLocale]; },
+            fn ($alias, $ofLocale) => [$alias, $ofLocale],
             array_keys($this->getLocaleAliases()),
             $this->getLocaleAliases()
         );
@@ -760,7 +769,7 @@ abstract class ResourceBundleTestCase extends TestCase
     public function provideRootLocales()
     {
         return array_map(
-            function ($locale) { return [$locale]; },
+            fn ($locale) => [$locale],
             $this->getRootLocales()
         );
     }
@@ -778,10 +787,8 @@ abstract class ResourceBundleTestCase extends TestCase
     protected function getRootLocales()
     {
         if (null === self::$rootLocales) {
-            self::$rootLocales = array_filter($this->getLocales(), function ($locale) {
-                // no locales for which fallback is possible (e.g "en_GB")
-                return !str_contains($locale, '_');
-            });
+            self::$rootLocales = array_filter($this->getLocales(), fn ($locale) => // no locales for which fallback is possible (e.g "en_GB")
+!str_contains($locale, '_'));
         }
 
         return self::$rootLocales;

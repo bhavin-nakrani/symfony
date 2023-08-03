@@ -15,6 +15,9 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Translation\Extractor\PhpExtractor;
 use Symfony\Component\Translation\MessageCatalogue;
 
+/**
+ * @group legacy
+ */
 class PhpExtractorTest extends TestCase
 {
     /**
@@ -148,7 +151,7 @@ EOF;
         $this->assertEquals($expectedCatalogue, $catalogue->all());
     }
 
-    public function resourcesProvider()
+    public static function resourcesProvider()
     {
         $directory = __DIR__.'/../fixtures/extractor/';
         $phpFiles = [];

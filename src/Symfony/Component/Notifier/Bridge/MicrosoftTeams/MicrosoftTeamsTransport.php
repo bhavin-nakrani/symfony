@@ -46,7 +46,7 @@ final class MicrosoftTeamsTransport extends AbstractTransport
 
     public function supports(MessageInterface $message): bool
     {
-        return $message instanceof ChatMessage;
+        return $message instanceof ChatMessage && (null === $message->getOptions() || $message->getOptions() instanceof MicrosoftTeamsOptions);
     }
 
     /**
@@ -58,13 +58,8 @@ final class MicrosoftTeamsTransport extends AbstractTransport
             throw new UnsupportedMessageTypeException(__CLASS__, ChatMessage::class, $message);
         }
 
-        if ($message->getOptions() && !$message->getOptions() instanceof MicrosoftTeamsOptions) {
-            throw new LogicException(sprintf('The "%s" transport only supports instances of "%s" for options.', __CLASS__, MicrosoftTeamsOptions::class));
-        }
-
-        $options = ($opts = $message->getOptions()) ? $opts->toArray() : [];
-
-        $options['text'] = $options['text'] ?? $message->getSubject();
+        $options = $message->getOptions()?->toArray() ?? [];
+        $options['text'] ??= $message->getSubject();
 
         $path = $message->getRecipientId() ?? $this->path;
         $endpoint = sprintf('https://%s%s', $this->getEndpoint(), $path);

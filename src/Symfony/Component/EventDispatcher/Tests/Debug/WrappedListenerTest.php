@@ -15,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\Debug\WrappedListener;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Stopwatch\Stopwatch;
+use Symfony\Component\Stopwatch\StopwatchEvent;
 
 class WrappedListenerTest extends TestCase
 {
@@ -28,7 +29,7 @@ class WrappedListenerTest extends TestCase
         $this->assertStringMatchesFormat($expected, $wrappedListener->getPretty());
     }
 
-    public function provideListenersToDescribe()
+    public static function provideListenersToDescribe()
     {
         return [
             [new FooListener(), 'Symfony\Component\EventDispatcher\Tests\Debug\FooListener::__invoke'],
@@ -40,7 +41,27 @@ class WrappedListenerTest extends TestCase
             [\Closure::fromCallable([new FooListener(), 'listen']), 'Symfony\Component\EventDispatcher\Tests\Debug\FooListener::listen'],
             [\Closure::fromCallable(['Symfony\Component\EventDispatcher\Tests\Debug\FooListener', 'listenStatic']), 'Symfony\Component\EventDispatcher\Tests\Debug\FooListener::listenStatic'],
             [\Closure::fromCallable(function () {}), 'closure'],
+            [[#[\Closure(name: FooListener::class)] static fn () => new FooListener(), 'listen'], 'Symfony\Component\EventDispatcher\Tests\Debug\FooListener::listen'],
         ];
+    }
+
+    public function testStopwatchEventIsStoppedWhenListenerThrows()
+    {
+        $stopwatchEvent = $this->createMock(StopwatchEvent::class);
+        $stopwatchEvent->expects(self::once())->method('isStarted')->willReturn(true);
+        $stopwatchEvent->expects(self::once())->method('stop');
+
+        $stopwatch = $this->createStub(Stopwatch::class);
+        $stopwatch->method('start')->willReturn($stopwatchEvent);
+
+        $dispatcher = $this->createStub(EventDispatcherInterface::class);
+
+        $wrappedListener = new WrappedListener(static fn () => throw new \Exception(), null, $stopwatch, $dispatcher);
+
+        try {
+            $wrappedListener(new \stdClass(), 'foo', $dispatcher);
+        } catch (\Exception $ex) {
+        }
     }
 }
 

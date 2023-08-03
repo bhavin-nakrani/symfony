@@ -18,21 +18,15 @@ use Symfony\Bridge\Twig\Tests\Extension\Fixtures\StubTranslator;
 use Symfony\Component\Form\ChoiceList\View\ChoiceView;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\FormView;
-use Symfony\Component\Form\Tests\AbstractDivLayoutTest;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
-class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
+class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
 {
     use RuntimeLoaderProvider;
 
-    /**
-     * @var FormRenderer
-     */
-    private $renderer;
-
-    protected static $supportedFeatureSetVersion = 404;
+    private FormRenderer $renderer;
 
     protected function setUp(): void
     {
@@ -102,7 +96,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         );
     }
 
-    public function isSelectedChoiceProvider()
+    public static function isSelectedChoiceProvider()
     {
         return [
             [true, '0', '0'],
@@ -152,7 +146,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         $this->assertSame('<form name="form" method="get" action="0">', $html);
     }
 
-    public function isRootFormProvider()
+    public static function isRootFormProvider()
     {
         return [
             [true, new FormView()],
@@ -190,7 +184,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
             ->createView()
         ;
 
-        $this->assertSame('&euro; <input type="text" id="name" name="name" required="required" />', $this->renderWidget($view));
+        $this->assertSame('&euro; <input type="text" id="name" name="name" required="required">', $this->renderWidget($view));
     }
 
     public function testHelpAttr()
@@ -205,7 +199,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="class-test help-text"]
     [.="[trans]Help text test![/trans]"]
@@ -223,7 +217,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -231,7 +225,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b
@@ -251,7 +245,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -259,7 +253,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b
@@ -279,7 +273,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -287,7 +281,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b

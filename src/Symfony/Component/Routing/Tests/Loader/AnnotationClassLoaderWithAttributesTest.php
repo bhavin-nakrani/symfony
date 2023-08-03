@@ -1,19 +1,23 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Routing\Tests\Loader;
 
-use Symfony\Component\Routing\Loader\AnnotationClassLoader;
-use Symfony\Component\Routing\Route;
+use Symfony\Component\Routing\Tests\Fixtures\TraceableAnnotationClassLoader;
 
-class AnnotationClassLoaderWithAttributesTest extends AnnotationClassLoaderTest
+class AnnotationClassLoaderWithAttributesTest extends AnnotationClassLoaderTestCase
 {
     protected function setUp(string $env = null): void
     {
-        $this->loader = new class(null, $env) extends AnnotationClassLoader {
-            protected function configureRoute(Route $route, \ReflectionClass $class, \ReflectionMethod $method, object $annot): void
-            {
-            }
-        };
+        $this->loader = new TraceableAnnotationClassLoader($env);
     }
 
     public function testDefaultRouteName()

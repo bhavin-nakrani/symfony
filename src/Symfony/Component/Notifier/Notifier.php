@@ -65,11 +65,14 @@ final class Notifier implements NotifierInterface
         return $this->adminRecipients;
     }
 
+    /**
+     * @return iterable<ChannelInterface, string|null>
+     */
     private function getChannels(Notification $notification, RecipientInterface $recipient): iterable
     {
         $channels = $notification->getChannels($recipient);
         if (!$channels) {
-            $errorPrefix = sprintf('Unable to determine which channels to use to send the "%s" notification', \get_class($notification));
+            $errorPrefix = sprintf('Unable to determine which channels to use to send the "%s" notification', $notification::class);
             $error = 'you should either pass channels in the constructor, override its "getChannels()" method';
             if (null === $this->policy) {
                 throw new LogicException(sprintf('%s; %s, or configure a "%s".', $errorPrefix, $error, ChannelPolicy::class));

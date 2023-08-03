@@ -22,9 +22,9 @@ use Symfony\Component\HttpKernel\Kernel;
  */
 class AppKernel extends Kernel
 {
-    private $varDir;
-    private $testCase;
-    private $rootConfig;
+    private string $varDir;
+    private string $testCase;
+    private array $rootConfig;
 
     public function __construct($varDir, $testCase, $rootConfig, $environment, $debug)
     {
@@ -46,9 +46,6 @@ class AppKernel extends Kernel
         parent::__construct($environment, $debug);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getContainerClass(): string
     {
         return parent::getContainerClass().substr(md5(implode('', $this->rootConfig)), -16);
@@ -78,7 +75,7 @@ class AppKernel extends Kernel
         return sys_get_temp_dir().'/'.$this->varDir.'/'.$this->testCase.'/logs';
     }
 
-    public function registerContainerConfiguration(LoaderInterface $loader)
+    public function registerContainerConfiguration(LoaderInterface $loader): void
     {
         foreach ($this->rootConfig as $config) {
             $loader->load($config);

@@ -36,12 +36,12 @@ class HttpFoundationRequestHandler implements RequestHandlerInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function handleRequest(FormInterface $form, mixed $request = null)
     {
         if (!$request instanceof Request) {
-            throw new UnexpectedTypeException($request, 'Symfony\Component\HttpFoundation\Request');
+            throw new UnexpectedTypeException($request, Request::class);
         }
 
         $name = $form->getName();
@@ -109,9 +109,6 @@ class HttpFoundationRequestHandler implements RequestHandlerInterface
         $form->submit($data, 'PATCH' !== $method);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function isFileUpload(mixed $data): bool
     {
         return $data instanceof File;

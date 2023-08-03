@@ -17,21 +17,15 @@ use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Bridge\Twig\Tests\Extension\Fixtures\StubTranslator;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\FormView;
-use Symfony\Component\Form\Tests\AbstractTableLayoutTest;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
-class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
+class FormExtensionTableLayoutTest extends AbstractTableLayoutTestCase
 {
     use RuntimeLoaderProvider;
 
-    /**
-     * @var FormRenderer
-     */
-    private $renderer;
-
-    protected static $supportedFeatureSetVersion = 404;
+    private FormRenderer $renderer;
 
     protected function setUp(): void
     {
@@ -91,7 +85,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="class-test help-text"]
     [.="[trans]Help text test![/trans]"]
@@ -109,7 +103,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -117,7 +111,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b
@@ -137,7 +131,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -145,7 +139,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b
@@ -165,7 +159,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         $html = $this->renderHelp($view);
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     [.="[trans]Help <b>text</b> test![/trans]"]
@@ -173,7 +167,7 @@ class FormExtensionTableLayoutTest extends AbstractTableLayoutTest
         );
 
         $this->assertMatchesXpath($html,
-            '/p
+            '/div
     [@id="name_help"]
     [@class="help-text"]
     /b

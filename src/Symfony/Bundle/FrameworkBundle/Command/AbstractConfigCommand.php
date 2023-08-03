@@ -28,6 +28,9 @@ use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
  */
 abstract class AbstractConfigCommand extends ContainerDebugCommand
 {
+    /**
+     * @return void
+     */
     protected function listBundles(OutputInterface|StyleInterface $output)
     {
         $title = 'Available registered bundles with their extension alias if available';
@@ -35,13 +38,49 @@ abstract class AbstractConfigCommand extends ContainerDebugCommand
         $rows = [];
 
         $bundles = $this->getApplication()->getKernel()->getBundles();
-        usort($bundles, function ($bundleA, $bundleB) {
-            return strcmp($bundleA->getName(), $bundleB->getName());
-        });
+        usort($bundles, fn ($bundleA, $bundleB) => strcmp($bundleA->getName(), $bundleB->getName()));
 
         foreach ($bundles as $bundle) {
             $extension = $bundle->getContainerExtension();
             $rows[] = [$bundle->getName(), $extension ? $extension->getAlias() : ''];
+        }
+
+        if ($output instanceof StyleInterface) {
+            $output->title($title);
+            $output->table($headers, $rows);
+        } else {
+            $output->writeln($title);
+            $table = new Table($output);
+            $table->setHeaders($headers)->setRows($rows)->render();
+        }
+    }
+
+    protected function listNonBundleExtensions(OutputInterface|StyleInterface $output): void
+    {
+        $title = 'Available registered non-bundle extension aliases';
+        $headers = ['Extension alias'];
+        $rows = [];
+
+        $kernel = $this->getApplication()->getKernel();
+
+        $bundleExtensions = [];
+        foreach ($kernel->getBundles() as $bundle) {
+            if ($extension = $bundle->getContainerExtension()) {
+                $bundleExtensions[$extension::class] = true;
+            }
+        }
+
+        $extensions = $this->getContainerBuilder($kernel)->getExtensions();
+
+        foreach ($extensions as $alias => $extension) {
+            if (isset($bundleExtensions[$extension::class])) {
+                continue;
+            }
+            $rows[] = [$alias];
+        }
+
+        if (!$rows) {
+            return;
         }
 
         if ($output instanceof StyleInterface) {
@@ -90,20 +129,20 @@ abstract class AbstractConfigCommand extends ContainerDebugCommand
                 $guess = $bundle->getName();
                 $minScore = $distance;
             }
+        }
 
-            $extension = $bundle->getContainerExtension();
+        $container = $this->getContainerBuilder($kernel);
 
-            if ($extension) {
-                if ($name === $extension->getAlias()) {
-                    return $extension;
-                }
+        if ($container->hasExtension($name)) {
+            return $container->getExtension($name);
+        }
 
-                $distance = levenshtein($name, $extension->getAlias());
+        foreach ($container->getExtensions() as $extension) {
+            $distance = levenshtein($name, $extension->getAlias());
 
-                if ($distance < $minScore) {
-                    $guess = $extension->getAlias();
-                    $minScore = $distance;
-                }
+            if ($distance < $minScore) {
+                $guess = $extension->getAlias();
+                $minScore = $distance;
             }
         }
 
@@ -120,6 +159,9 @@ abstract class AbstractConfigCommand extends ContainerDebugCommand
         throw new LogicException($message);
     }
 
+    /**
+     * @return void
+     */
     public function validateConfiguration(ExtensionInterface $extension, mixed $configuration)
     {
         if (!$configuration) {
@@ -131,7 +173,7 @@ abstract class AbstractConfigCommand extends ContainerDebugCommand
         }
     }
 
-    private function initializeBundles()
+    private function initializeBundles(): array
     {
         // Re-build bundle manually to initialize DI extensions that can be extended by other bundles in their build() method
         // as this method is not called when the container is loaded from the cache.

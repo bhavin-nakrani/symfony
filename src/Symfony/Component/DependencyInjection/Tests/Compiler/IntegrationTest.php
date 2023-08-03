@@ -12,6 +12,7 @@
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
@@ -46,6 +47,7 @@ use Symfony\Component\DependencyInjection\Tests\Fixtures\LocatorConsumerWithDefa
 use Symfony\Component\DependencyInjection\Tests\Fixtures\LocatorConsumerWithDefaultIndexMethodAndWithDefaultPriorityMethod;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\LocatorConsumerWithDefaultPriorityMethod;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\LocatorConsumerWithoutIndex;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\StaticMethodTag;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\TaggedConsumerWithExclude;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\TaggedService1;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\TaggedService2;
@@ -152,7 +154,7 @@ class IntegrationTest extends TestCase
         $this->assertFalse($container->hasDefinition('c'), 'Service C was not inlined.');
     }
 
-    public function testCanDecorateServiceSubscriber()
+    public function testCanDecorateServiceSubscriberUsingBinding()
     {
         $container = new ContainerBuilder();
         $container->register(ServiceSubscriberStub::class)
@@ -160,11 +162,33 @@ class IntegrationTest extends TestCase
             ->setPublic(true);
 
         $container->register(DecoratedServiceSubscriber::class)
+            ->setProperty('inner', new Reference(DecoratedServiceSubscriber::class.'.inner'))
             ->setDecoratedService(ServiceSubscriberStub::class);
 
         $container->compile();
 
         $this->assertInstanceOf(DecoratedServiceSubscriber::class, $container->get(ServiceSubscriberStub::class));
+        $this->assertInstanceOf(ServiceSubscriberStub::class, $container->get(ServiceSubscriberStub::class)->inner);
+        $this->assertInstanceOf(ServiceLocator::class, $container->get(ServiceSubscriberStub::class)->inner->container);
+    }
+
+    public function testCanDecorateServiceSubscriberReplacingArgument()
+    {
+        $container = new ContainerBuilder();
+        $container->register(ServiceSubscriberStub::class)
+            ->setArguments([new Reference(ContainerInterface::class)])
+            ->addTag('container.service_subscriber')
+            ->setPublic(true);
+
+        $container->register(DecoratedServiceSubscriber::class)
+            ->setProperty('inner', new Reference(DecoratedServiceSubscriber::class.'.inner'))
+            ->setDecoratedService(ServiceSubscriberStub::class);
+
+        $container->compile();
+
+        $this->assertInstanceOf(DecoratedServiceSubscriber::class, $container->get(ServiceSubscriberStub::class));
+        $this->assertInstanceOf(ServiceSubscriberStub::class, $container->get(ServiceSubscriberStub::class)->inner);
+        $this->assertInstanceOf(ServiceLocator::class, $container->get(ServiceSubscriberStub::class)->inner->container);
     }
 
     public function testCanDecorateServiceLocator()
@@ -245,7 +269,7 @@ class IntegrationTest extends TestCase
         $this->assertEquals($expectedService, $actualService);
     }
 
-    public function getYamlCompileTests()
+    public static function getYamlCompileTests()
     {
         $container = new ContainerBuilder();
         $container->registerForAutoconfiguration(IntegrationTestStub::class);
@@ -563,7 +587,6 @@ class IntegrationTest extends TestCase
 
         // We need to check priority of instances in the factories
         $factories = (new \ReflectionClass($locator))->getProperty('factories');
-        $factories->setAccessible(true);
 
         self::assertSame([FooTagClass::class, BarTagClass::class], array_keys($factories->getValue($locator)));
     }
@@ -593,7 +616,6 @@ class IntegrationTest extends TestCase
 
         // We need to check priority of instances in the factories
         $factories = (new \ReflectionClass($locator))->getProperty('factories');
-        $factories->setAccessible(true);
 
         self::assertSame(['foo_tag_class', 'bar_tag_class'], array_keys($factories->getValue($locator)));
         self::assertSame($container->get(BarTagClass::class), $locator->get('bar_tag_class'));
@@ -1004,6 +1026,28 @@ class IntegrationTest extends TestCase
         self::assertTrue($service->hasBeenConfigured);
     }
 
+    public function testAttributeAutoconfigurationOnStaticMethod()
+    {
+        $container = new ContainerBuilder();
+        $container->registerAttributeForAutoconfiguration(
+            CustomMethodAttribute::class,
+            static function (ChildDefinition $d, CustomMethodAttribute $a, \ReflectionMethod $_r) {
+                $d->addTag('custom_tag', ['attribute' => $a->someAttribute]);
+            }
+        );
+
+        $container->register('service', StaticMethodTag::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
+        $container->compile();
+
+        $definition = $container->getDefinition('service');
+        self::assertEquals([['attribute' => 'static']], $definition->getTag('custom_tag'));
+
+        $container->get('service');
+    }
+
     public function testTaggedIteratorAndLocatorWithExclude()
     {
         $container = new ContainerBuilder();
@@ -1045,6 +1089,13 @@ class IntegrationTest extends TestCase
 
 class ServiceSubscriberStub implements ServiceSubscriberInterface
 {
+    public ContainerInterface $container;
+
+    public function __construct(ContainerInterface $container)
+    {
+        $this->container = $container;
+    }
+
     public static function getSubscribedServices(): array
     {
         return [];
@@ -1053,14 +1104,12 @@ class ServiceSubscriberStub implements ServiceSubscriberInterface
 
 class DecoratedServiceSubscriber
 {
+    public $inner;
 }
 
 class DecoratedServiceLocator implements ServiceProviderInterface
 {
-    /**
-     * @var ServiceLocator
-     */
-    private $locator;
+    private ServiceLocator $locator;
 
     public function __construct(ServiceLocator $locator)
     {
@@ -1101,7 +1150,7 @@ class IntegrationTestStubParent
 
 final class TagCollector implements CompilerPassInterface
 {
-    public $collectedTags;
+    public array $collectedTags;
 
     public function process(ContainerBuilder $container): void
     {

@@ -12,6 +12,7 @@
 namespace Symfony\Component\DependencyInjection\Tests\Loader;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\Config\Exception\FileLocatorFileNotFoundException;
 use Symfony\Component\Config\Exception\LoaderLoadException;
 use Symfony\Component\Config\FileLocator;
@@ -31,6 +32,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
+use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Loader\IniFileLoader;
 use Symfony\Component\DependencyInjection\Loader\XmlFileLoader;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
@@ -47,7 +49,9 @@ use Symfony\Component\ExpressionLanguage\Expression;
 
 class XmlFileLoaderTest extends TestCase
 {
-    protected static $fixturesPath;
+    use ExpectDeprecationTrait;
+
+    protected static string $fixturesPath;
 
     public static function setUpBeforeClass(): void
     {
@@ -75,7 +79,6 @@ class XmlFileLoaderTest extends TestCase
         $loader = new XmlFileLoader(new ContainerBuilder(), new FileLocator(self::$fixturesPath.'/ini'));
         $r = new \ReflectionObject($loader);
         $m = $r->getMethod('parseFileToDOM');
-        $m->setAccessible(true);
 
         try {
             $m->invoke($loader, self::$fixturesPath.'/ini/parameters.ini');
@@ -109,11 +112,11 @@ class XmlFileLoaderTest extends TestCase
 
     public function testLoadWithExternalEntitiesDisabled()
     {
-        $containerBuilder = new ContainerBuilder();
-        $loader = new XmlFileLoader($containerBuilder, new FileLocator(self::$fixturesPath.'/xml'));
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
         $loader->load('services2.xml');
 
-        $this->assertGreaterThan(0, $containerBuilder->getParameterBag()->all(), 'Parameters can be read from the config file.');
+        $this->assertGreaterThan(0, $container->getParameterBag()->all(), 'Parameters can be read from the config file.');
     }
 
     public function testLoadParameters()
@@ -124,7 +127,7 @@ class XmlFileLoaderTest extends TestCase
 
         $actual = $container->getParameterBag()->all();
         $expected = [
-            'a string',
+            'a_string' => 'a string',
             'foo' => 'bar',
             'values' => [
                 0,
@@ -138,6 +141,9 @@ class XmlFileLoaderTest extends TestCase
                 'float' => 1.3,
                 1000.3,
                 'a string',
+                ' a string not trimmed ',
+                'a trimmed string',
+                'an explicit trimmed string',
                 ['foo', 'bar'],
             ],
             'mixedcase' => ['MixedCaseKey' => 'value'],
@@ -160,7 +166,7 @@ class XmlFileLoaderTest extends TestCase
 
         $actual = $container->getParameterBag()->all();
         $expected = [
-            'a string',
+            'a_string' => 'a string',
             'foo' => 'bar',
             'values' => [
                 0,
@@ -370,13 +376,17 @@ class XmlFileLoaderTest extends TestCase
         $this->assertEquals([new IteratorArgument(['k1' => new Reference('foo.baz'), 'k2' => new Reference('service_container')]), new IteratorArgument([])], $lazyDefinition->getArguments(), '->load() parses lazy arguments');
     }
 
-    public function testParsesTags()
+    /**
+     * @testWith ["foo_tag"]
+     *           ["bar_tag"]
+     */
+    public function testParsesTags(string $tag)
     {
         $container = new ContainerBuilder();
         $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
         $loader->load('services10.xml');
 
-        $services = $container->findTaggedServiceIds('foo_tag');
+        $services = $container->findTaggedServiceIds($tag);
         $this->assertCount(1, $services);
 
         foreach ($services as $id => $tagAttributes) {
@@ -405,9 +415,38 @@ class XmlFileLoaderTest extends TestCase
 
         $taggedIterator = new TaggedIteratorArgument('foo_tag', 'barfoo', 'foobar', false, 'getPriority');
         $this->assertEquals($taggedIterator, $container->getDefinition('foo_tagged_iterator')->getArgument(0));
+        $taggedIterator2 = new TaggedIteratorArgument('foo_tag', null, null, false, null, ['baz']);
+        $this->assertEquals($taggedIterator2, $container->getDefinition('foo2_tagged_iterator')->getArgument(0));
+        $taggedIterator3 = new TaggedIteratorArgument('foo_tag', null, null, false, null, ['baz', 'qux'], false);
+        $this->assertEquals($taggedIterator3, $container->getDefinition('foo3_tagged_iterator')->getArgument(0));
 
         $taggedIterator = new TaggedIteratorArgument('foo_tag', 'barfoo', 'foobar', true, 'getPriority');
         $this->assertEquals(new ServiceLocatorArgument($taggedIterator), $container->getDefinition('foo_tagged_locator')->getArgument(0));
+        $taggedIterator2 = new TaggedIteratorArgument('foo_tag', 'foo_tag', 'getDefaultFooTagName', true, 'getDefaultFooTagPriority', ['baz']);
+        $this->assertEquals(new ServiceLocatorArgument($taggedIterator2), $container->getDefinition('foo2_tagged_locator')->getArgument(0));
+        $taggedIterator3 = new TaggedIteratorArgument('foo_tag', 'foo_tag', 'getDefaultFooTagName', true, 'getDefaultFooTagPriority', ['baz', 'qux'], false);
+        $this->assertEquals(new ServiceLocatorArgument($taggedIterator3), $container->getDefinition('foo3_tagged_locator')->getArgument(0));
+    }
+
+    /**
+     * @group legacy
+     */
+    public function testServiceWithServiceLocatorArgument()
+    {
+        $this->expectDeprecation('Since symfony/dependency-injection 6.3: Skipping "key" argument or using integers as values in a "service_locator" tag is deprecated. The keys will default to the IDs of the original services in 7.0.');
+
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('services_with_service_locator_argument.xml');
+
+        $values = ['foo' => new Reference('foo_service'), 'bar' => new Reference('bar_service')];
+        $this->assertEquals([new ServiceLocatorArgument($values)], $container->getDefinition('locator_dependent_service_indexed')->getArguments());
+
+        $values = [new Reference('foo_service'), new Reference('bar_service')];
+        $this->assertEquals([new ServiceLocatorArgument($values)], $container->getDefinition('locator_dependent_service_not_indexed')->getArguments());
+
+        $values = ['foo' => new Reference('foo_service'), 0 => new Reference('bar_service')];
+        $this->assertEquals([new ServiceLocatorArgument($values)], $container->getDefinition('locator_dependent_service_mixed')->getArguments());
     }
 
     public function testParseServiceClosure()
@@ -417,6 +456,15 @@ class XmlFileLoaderTest extends TestCase
         $loader->load('services_with_service_closure.xml');
 
         $this->assertEquals(new ServiceClosureArgument(new Reference('bar', ContainerInterface::IGNORE_ON_INVALID_REFERENCE)), $container->getDefinition('foo')->getArgument(0));
+    }
+
+    public function testParseServiceTagsWithArrayAttributes()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('services_with_array_tags.xml');
+
+        $this->assertEquals(['foo_tag' => [['foo' => 'bar', 'bar' => ['foo' => 'bar', 'bar' => 'foo']]]], $container->getDefinition('foo')->getTags());
     }
 
     public function testParseTagsWithoutNameThrowsException()
@@ -562,7 +610,7 @@ class XmlFileLoaderTest extends TestCase
 
     public function testExtensionInPhar()
     {
-        if (\extension_loaded('suhosin') && !str_contains(ini_get('suhosin.executor.include.whitelist'), 'phar')) {
+        if (\extension_loaded('suhosin') && !str_contains(\ini_get('suhosin.executor.include.whitelist'), 'phar')) {
             $this->markTestSkipped('To run this test, add "phar" to the "suhosin.executor.include.whitelist" settings in your php.ini file.');
         }
 
@@ -719,7 +767,7 @@ class XmlFileLoaderTest extends TestCase
         $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
         $loader->load('services_prototype.xml');
 
-        $ids = array_keys($container->getDefinitions());
+        $ids = array_keys(array_filter($container->getDefinitions(), fn ($def) => !$def->hasTag('container.excluded')));
         sort($ids);
         $this->assertSame([Prototype\Foo::class, Prototype\Sub\Bar::class, 'service_container'], $ids);
 
@@ -738,6 +786,7 @@ class XmlFileLoaderTest extends TestCase
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'OtherDir') => true,
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'BadClasses') => true,
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'SinglyImplementedInterface') => true,
+                str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'StaticConstructor') => true,
             ]
         );
         $this->assertContains((string) $globResource, $resources);
@@ -745,20 +794,23 @@ class XmlFileLoaderTest extends TestCase
         $this->assertContains('reflection.Symfony\Component\DependencyInjection\Tests\Fixtures\Prototype\Sub\Bar', $resources);
     }
 
-    public function testPrototypeExcludeWithArray()
+    /**
+     * @dataProvider prototypeExcludeWithArrayDataProvider
+     */
+    public function testPrototypeExcludeWithArray(string $fileName)
     {
         $container = new ContainerBuilder();
         $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
-        $loader->load('services_prototype_array.xml');
+        $loader->load($fileName);
 
-        $ids = array_keys($container->getDefinitions());
+        $ids = array_keys(array_filter($container->getDefinitions(), fn ($def) => !$def->hasTag('container.excluded')));
         sort($ids);
         $this->assertSame([Prototype\Foo::class, Prototype\Sub\Bar::class, 'service_container'], $ids);
 
         $resources = array_map('strval', $container->getResources());
 
         $fixturesDir = \dirname(__DIR__).\DIRECTORY_SEPARATOR.'Fixtures'.\DIRECTORY_SEPARATOR;
-        $this->assertContains((string) new FileResource($fixturesDir.'xml'.\DIRECTORY_SEPARATOR.'services_prototype_array.xml'), $resources);
+        $this->assertContains((string) new FileResource($fixturesDir.'xml'.\DIRECTORY_SEPARATOR.$fileName), $resources);
 
         $prototypeRealPath = realpath(__DIR__.\DIRECTORY_SEPARATOR.'..'.\DIRECTORY_SEPARATOR.'Fixtures'.\DIRECTORY_SEPARATOR.'Prototype');
         $globResource = new GlobResource(
@@ -770,11 +822,31 @@ class XmlFileLoaderTest extends TestCase
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'BadClasses') => true,
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'OtherDir') => true,
                 str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'SinglyImplementedInterface') => true,
+                str_replace(\DIRECTORY_SEPARATOR, '/', $prototypeRealPath.\DIRECTORY_SEPARATOR.'StaticConstructor') => true,
             ]
         );
         $this->assertContains((string) $globResource, $resources);
         $this->assertContains('reflection.Symfony\Component\DependencyInjection\Tests\Fixtures\Prototype\Foo', $resources);
         $this->assertContains('reflection.Symfony\Component\DependencyInjection\Tests\Fixtures\Prototype\Sub\Bar', $resources);
+    }
+
+    public static function prototypeExcludeWithArrayDataProvider(): iterable
+    {
+        return [
+            ['services_prototype_array.xml'],
+            // Same config than above but “<exclude> </exclude>” has been added
+            ['services_prototype_array_with_space_node.xml'],
+        ];
+    }
+
+    public function testPrototypeExcludeWithArrayWithEmptyNode()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The exclude list must not contain an empty value.');
+
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('services_prototype_array_with_empty_node.xml');
     }
 
     public function testAliasDefinitionContainsUnsupportedElements()
@@ -860,9 +932,6 @@ class XmlFileLoaderTest extends TestCase
         $this->assertSame(['foo' => [[]], 'bar' => [[]]], $definition->getTags());
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testEnumeration()
     {
         $container = new ContainerBuilder();
@@ -874,9 +943,6 @@ class XmlFileLoaderTest extends TestCase
         $this->assertSame([FooUnitEnum::BAR], $definition->getArguments());
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testInvalidEnumeration()
     {
         $container = new ContainerBuilder();
@@ -956,7 +1022,7 @@ class XmlFileLoaderTest extends TestCase
             '$quz' => 'quz',
             '$factory' => 'factory',
             'iterable $baz' => new TaggedIteratorArgument('bar'),
-        ], array_map(function (BoundArgument $v) { return $v->getValues()[0]; }, $definition->getBindings()));
+        ], array_map(fn (BoundArgument $v) => $v->getValues()[0], $definition->getBindings()));
         $this->assertEquals([
             'quz',
             null,
@@ -974,7 +1040,7 @@ class XmlFileLoaderTest extends TestCase
             'NonExistent' => null,
             '$quz' => 'quz',
             '$factory' => 'factory',
-        ], array_map(function (BoundArgument $v) { return $v->getValues()[0]; }, $definition->getBindings()));
+        ], array_map(fn (BoundArgument $v) => $v->getValues()[0], $definition->getBindings()));
     }
 
     public function testFqcnLazyProxy()
@@ -1119,5 +1185,83 @@ class XmlFileLoaderTest extends TestCase
         $loader->load('when-env.xml');
 
         $this->assertSame(['foo' => 234, 'bar' => 345], $container->getParameterBag()->all());
+    }
+
+    public function testClosure()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('closure.xml');
+
+        $definition = $container->getDefinition('closure_property')->getProperties()['foo'];
+        $this->assertEquals((new Definition('Closure'))->setFactory(['Closure', 'fromCallable'])->addArgument(new Reference('bar')), $definition);
+    }
+
+    /**
+     * @dataProvider dataForBindingsAndInnerCollections
+     */
+    public function testBindingsAndInnerCollections($bindName, $expected)
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('bindings_and_inner_collections.xml');
+        (new ResolveBindingsPass())->process($container);
+        $definition = $container->getDefinition($bindName);
+        $actual = $definition->getBindings()['$foo']->getValues()[0];
+        $this->assertEquals($actual, $expected);
+    }
+
+    public static function dataForBindingsAndInnerCollections()
+    {
+        return [
+           ['bar1', ['item.1', 'item.2']],
+           ['bar2', ['item.1', 'item.2']],
+           ['bar3', ['item.1', 'item.2', 'item.3', 'item.4']],
+           ['bar4', ['item.1', 'item.3', 'item.4']],
+           ['bar5', ['item.1', 'item.2', ['item.3.1', 'item.3.2']]],
+           ['bar6', ['item.1', ['item.2.1', 'item.2.2'], 'item.3']],
+           ['bar7', new IteratorArgument(['item.1', 'item.2'])],
+           ['bar8', new IteratorArgument(['item.1', 'item.2', ['item.3.1', 'item.3.2']])],
+        ];
+    }
+
+    public function testTagNameAttribute()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('tag_with_name_attribute.xml');
+
+        $definition = $container->getDefinition('foo');
+        $this->assertSame([['name' => 'name_attribute']], $definition->getTag('tag_name'));
+    }
+
+    public function testFromCallable()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('from_callable.xml');
+
+        $definition = $container->getDefinition('from_callable');
+        $this->assertEquals((new Definition('stdClass'))->setFactory(['Closure', 'fromCallable'])->addArgument([new Reference('bar'), 'do'])->setLazy(true), $definition);
+    }
+
+    public function testStaticConstructor()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+        $loader->load('static_constructor.xml');
+
+        $definition = $container->getDefinition('static_constructor');
+        $this->assertEquals((new Definition('stdClass'))->setFactory([null, 'create']), $definition);
+    }
+
+    public function testStaticConstructorWithFactoryThrows()
+    {
+        $container = new ContainerBuilder();
+        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('The "static_constructor" service cannot declare a factory as well as a constructor.');
+        $loader->load('static_constructor_and_factory.xml');
     }
 }

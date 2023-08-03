@@ -12,6 +12,10 @@
 namespace Symfony\Component\Serializer\Normalizer;
 
 use Symfony\Component\PropertyAccess\Exception\UninitializedPropertyException;
+use Symfony\Component\PropertyInfo\PropertyTypeExtractorInterface;
+use Symfony\Component\Serializer\Mapping\ClassDiscriminatorResolverInterface;
+use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactoryInterface;
+use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
 
 /**
  * Converts between objects and arrays by mapping properties.
@@ -29,30 +33,57 @@ use Symfony\Component\PropertyAccess\Exception\UninitializedPropertyException;
  *
  * @author Matthieu Napoli <matthieu@mnapoli.fr>
  * @author Kévin Dunglas <dunglas@gmail.com>
+ *
+ * @final since Symfony 6.3
  */
 class PropertyNormalizer extends AbstractObjectNormalizer
 {
+    public const NORMALIZE_PUBLIC = 1;
+    public const NORMALIZE_PROTECTED = 2;
+    public const NORMALIZE_PRIVATE = 4;
+
     /**
-     * {@inheritdoc}
+     * Flag to control whether fields should be output based on visibility.
      */
-    public function supportsNormalization(mixed $data, string $format = null): bool
+    public const NORMALIZE_VISIBILITY = 'normalize_visibility';
+
+    public function __construct(ClassMetadataFactoryInterface $classMetadataFactory = null, NameConverterInterface $nameConverter = null, PropertyTypeExtractorInterface $propertyTypeExtractor = null, ClassDiscriminatorResolverInterface $classDiscriminatorResolver = null, callable $objectClassResolver = null, array $defaultContext = [])
     {
-        return parent::supportsNormalization($data, $format) && $this->supports(\get_class($data));
+        parent::__construct($classMetadataFactory, $nameConverter, $propertyTypeExtractor, $classDiscriminatorResolver, $objectClassResolver, $defaultContext);
+
+        if (!isset($this->defaultContext[self::NORMALIZE_VISIBILITY])) {
+            $this->defaultContext[self::NORMALIZE_VISIBILITY] = self::NORMALIZE_PUBLIC | self::NORMALIZE_PROTECTED | self::NORMALIZE_PRIVATE;
+        }
+    }
+
+    public function getSupportedTypes(?string $format): array
+    {
+        return ['object' => __CLASS__ === static::class || $this->hasCacheableSupportsMethod()];
     }
 
     /**
-     * {@inheritdoc}
+     * @param array $context
      */
-    public function supportsDenormalization(mixed $data, string $type, string $format = null): bool
+    public function supportsNormalization(mixed $data, string $format = null /* , array $context = [] */): bool
+    {
+        return parent::supportsNormalization($data, $format) && $this->supports($data::class);
+    }
+
+    /**
+     * @param array $context
+     */
+    public function supportsDenormalization(mixed $data, string $type, string $format = null /* , array $context = [] */): bool
     {
         return parent::supportsDenormalization($data, $type, $format) && $this->supports($type);
     }
 
     /**
-     * {@inheritdoc}
+     * @deprecated since Symfony 6.3, use "getSupportedTypes()" instead
      */
     public function hasCacheableSupportsMethod(): bool
     {
+        trigger_deprecation('symfony/serializer', '6.3', 'The "%s()" method is deprecated, use "getSupportedTypes()" instead.', __METHOD__);
+
         return __CLASS__ === static::class;
     }
 
@@ -75,9 +106,6 @@ class PropertyNormalizer extends AbstractObjectNormalizer
         return false;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function isAllowedAttribute(object|string $classOrObject, string $attribute, string $format = null, array $context = []): bool
     {
         if (!parent::isAllowedAttribute($classOrObject, $attribute, $format, $context)) {
@@ -86,19 +114,31 @@ class PropertyNormalizer extends AbstractObjectNormalizer
 
         try {
             $reflectionProperty = $this->getReflectionProperty($classOrObject, $attribute);
-            if ($reflectionProperty->isStatic()) {
-                return false;
-            }
-        } catch (\ReflectionException $reflectionException) {
+        } catch (\ReflectionException) {
             return false;
         }
 
-        return true;
+        if ($reflectionProperty->isStatic()) {
+            return false;
+        }
+
+        $normalizeVisibility = $context[self::NORMALIZE_VISIBILITY] ?? $this->defaultContext[self::NORMALIZE_VISIBILITY];
+
+        if ((self::NORMALIZE_PUBLIC & $normalizeVisibility) && $reflectionProperty->isPublic()) {
+            return true;
+        }
+
+        if ((self::NORMALIZE_PROTECTED & $normalizeVisibility) && $reflectionProperty->isProtected()) {
+            return true;
+        }
+
+        if ((self::NORMALIZE_PRIVATE & $normalizeVisibility) && $reflectionProperty->isPrivate()) {
+            return true;
+        }
+
+        return false;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function extractAttributes(object $object, string $format = null, array $context = []): array
     {
         $reflectionObject = new \ReflectionObject($object);
@@ -117,20 +157,12 @@ class PropertyNormalizer extends AbstractObjectNormalizer
         return array_unique($attributes);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function getAttributeValue(object $object, string $attribute, string $format = null, array $context = []): mixed
     {
         try {
             $reflectionProperty = $this->getReflectionProperty($object, $attribute);
-        } catch (\ReflectionException $reflectionException) {
+        } catch (\ReflectionException) {
             return null;
-        }
-
-        // Override visibility
-        if (!$reflectionProperty->isPublic()) {
-            $reflectionProperty->setAccessible(true);
         }
 
         if ($reflectionProperty->hasType()) {
@@ -144,7 +176,7 @@ class PropertyNormalizer extends AbstractObjectNormalizer
                 || ($reflectionProperty->isProtected() && !\array_key_exists("\0*\0{$reflectionProperty->name}", $propertyValues))
                 || ($reflectionProperty->isPrivate() && !\array_key_exists("\0{$reflectionProperty->class}\0{$reflectionProperty->name}", $propertyValues))
             ) {
-                throw new UninitializedPropertyException(sprintf('The property "%s::$%s" is not initialized.', \get_class($object), $reflectionProperty->name));
+                throw new UninitializedPropertyException(sprintf('The property "%s::$%s" is not initialized.', $object::class, $reflectionProperty->name));
             }
         }
 
@@ -152,23 +184,18 @@ class PropertyNormalizer extends AbstractObjectNormalizer
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     protected function setAttributeValue(object $object, string $attribute, mixed $value, string $format = null, array $context = [])
     {
         try {
             $reflectionProperty = $this->getReflectionProperty($object, $attribute);
-        } catch (\ReflectionException $reflectionException) {
+        } catch (\ReflectionException) {
             return;
         }
 
         if ($reflectionProperty->isStatic()) {
             return;
-        }
-
-        // Override visibility
-        if (!$reflectionProperty->isPublic()) {
-            $reflectionProperty->setAccessible(true);
         }
 
         $reflectionProperty->setValue($object, $value);

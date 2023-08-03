@@ -27,7 +27,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  *
  * @author Nicolas Grekas <p@tchwork.com>
  */
-final class AsyncResponse implements ResponseInterface, StreamableInterface
+class AsyncResponse implements ResponseInterface, StreamableInterface
 {
     use CommonResponseTrait;
 
@@ -37,9 +37,10 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
     private ?HttpClientInterface $client;
     private ResponseInterface $response;
     private array $info = ['canceled' => false];
+    /** @var callable|null */
     private $passthru;
-    private $stream;
-    private $yieldedState;
+    private ?\Iterator $stream = null;
+    private ?int $yieldedState = null;
 
     /**
      * @param ?callable(ChunkInterface, AsyncContext): ?\Iterator $passthru
@@ -85,6 +86,9 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
         if (\array_key_exists('user_data', $options)) {
             $this->info['user_data'] = $options['user_data'];
         }
+        if (\array_key_exists('max_duration', $options)) {
+            $this->info['max_duration'] = $options['max_duration'];
+        }
     }
 
     public function getStatusCode(): int
@@ -121,7 +125,7 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @return resource
      */
     public function toStream(bool $throw = true)
     {
@@ -143,9 +147,6 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
         return $stream;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function cancel(): void
     {
         if ($this->info['canceled']) {
@@ -168,7 +169,7 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
             }
 
             $this->passthru = null;
-        } catch (ExceptionInterface $e) {
+        } catch (ExceptionInterface) {
             // ignore any errors when canceling
         }
     }
@@ -193,7 +194,7 @@ final class AsyncResponse implements ResponseInterface, StreamableInterface
                 foreach (self::passthru($this->client, $this, new LastChunk()) as $chunk) {
                     // no-op
                 }
-            } catch (ExceptionInterface $e) {
+            } catch (ExceptionInterface) {
                 // ignore any errors when destructing
             }
         }

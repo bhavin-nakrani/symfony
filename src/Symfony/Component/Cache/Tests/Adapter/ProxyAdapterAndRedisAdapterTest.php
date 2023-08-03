@@ -20,7 +20,7 @@ use Symfony\Component\Cache\CacheItem;
 /**
  * @group integration
  */
-class ProxyAdapterAndRedisAdapterTest extends AbstractRedisAdapterTest
+class ProxyAdapterAndRedisAdapterTest extends AbstractRedisAdapterTestCase
 {
     protected $skippedTests = [
         'testPrune' => 'RedisAdapter does not implement PruneableInterface.',
@@ -50,6 +50,7 @@ class ProxyAdapterAndRedisAdapterTest extends AbstractRedisAdapterTest
         );
 
         $cache = $this->createCachePool(1);
+        $cache->clear();
         $value = rand();
         $item = $cache->getItem('foo');
         $setCacheItemExpiry($item, 0);

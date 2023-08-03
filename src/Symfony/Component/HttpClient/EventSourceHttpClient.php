@@ -84,15 +84,15 @@ final class EventSourceHttpClient implements HttpClientInterface, ResetInterface
 
                     return;
                 }
-            } catch (TransportExceptionInterface $e) {
-                $state->lastError = $lastError ?? microtime(true);
+            } catch (TransportExceptionInterface) {
+                $state->lastError = $lastError ?? hrtime(true) / 1E9;
 
-                if (null === $state->buffer || ($isTimeout && microtime(true) - $state->lastError < $state->reconnectionTime)) {
+                if (null === $state->buffer || ($isTimeout && hrtime(true) / 1E9 - $state->lastError < $state->reconnectionTime)) {
                     yield $chunk;
                 } else {
                     $options['headers']['Last-Event-ID'] = $state->lastEventId;
                     $state->buffer = '';
-                    $state->lastError = microtime(true);
+                    $state->lastError = hrtime(true) / 1E9;
                     $context->getResponse()->cancel();
                     $context->replaceRequest($method, $url, $options);
                     if ($isTimeout) {

@@ -18,7 +18,7 @@ use PHPUnit\Framework\SkippedTestSuiteError;
  *
  * @requires extension redis
  */
-class RedisStoreTest extends AbstractRedisStoreTest
+class RedisStoreTest extends AbstractRedisStoreTestCase
 {
     protected function setUp(): void
     {
@@ -28,7 +28,7 @@ class RedisStoreTest extends AbstractRedisStoreTest
     public static function setUpBeforeClass(): void
     {
         try {
-            (new \Redis())->connect(getenv('REDIS_HOST'));
+            (new \Redis())->connect(...explode(':', getenv('REDIS_HOST')));
         } catch (\Exception $e) {
             throw new SkippedTestSuiteError($e->getMessage());
         }
@@ -37,7 +37,7 @@ class RedisStoreTest extends AbstractRedisStoreTest
     protected function getRedisConnection(): \Redis
     {
         $redis = new \Redis();
-        $redis->connect(getenv('REDIS_HOST'));
+        $redis->connect(...explode(':', getenv('REDIS_HOST')));
 
         return $redis;
     }

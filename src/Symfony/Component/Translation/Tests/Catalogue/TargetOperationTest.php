@@ -15,7 +15,7 @@ use Symfony\Component\Translation\Catalogue\TargetOperation;
 use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\MessageCatalogueInterface;
 
-class TargetOperationTest extends AbstractOperationTest
+class TargetOperationTest extends AbstractOperationTestCase
 {
     public function testGetMessagesFromSingleDomain()
     {
@@ -71,7 +71,6 @@ class TargetOperationTest extends AbstractOperationTest
     {
         $this->assertEquals(
             new MessageCatalogue('en', [
-                'messages' => ['a' => 'old_a'],
                 'messages+intl-icu' => ['a' => 'new_a'],
             ]),
             $this->createOperation(
@@ -103,7 +102,6 @@ class TargetOperationTest extends AbstractOperationTest
 
         $this->assertEquals(
             new MessageCatalogue('en', [
-                'messages' => ['a' => 'old_a'],
                 'messages+intl-icu' => ['b' => 'new_b', 'a' => 'new_a'],
             ]),
             $this->createOperation(

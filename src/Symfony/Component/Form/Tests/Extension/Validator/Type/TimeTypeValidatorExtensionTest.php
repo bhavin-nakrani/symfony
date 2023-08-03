@@ -14,13 +14,13 @@ namespace Symfony\Component\Form\Tests\Extension\Validator\Type;
 use Symfony\Component\Form\Extension\Core\Type\TimeType;
 use Symfony\Component\Form\Test\Traits\ValidatorExtensionTrait;
 
-class TimeTypeValidatorExtensionTest extends BaseValidatorExtensionTest
+class TimeTypeValidatorExtensionTest extends BaseValidatorExtensionTestCase
 {
     use ValidatorExtensionTrait;
 
     protected function createForm(array $options = [])
     {
-        return $this->factory->create(TimeType::class, null, $options);
+        return $this->factory->create(TimeType::class, null, $options + ['widget' => 'choice']);
     }
 
     public function testInvalidMessage()

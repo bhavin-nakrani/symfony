@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Messenger\Tests\Handler;
 
 use PHPUnit\Framework\TestCase;
@@ -18,7 +27,7 @@ class HandleDescriptorTest extends TestCase
         $this->assertStringMatchesFormat($expectedHandlerString, $descriptor->getName());
     }
 
-    public function provideHandlers(): iterable
+    public static function provideHandlers(): iterable
     {
         yield [function () {}, 'Closure'];
         yield ['var_dump', 'var_dump'];
@@ -35,6 +44,14 @@ class HandleDescriptorTest extends TestCase
             {
             }
         }, 'class@anonymous%sHandleDescriptorTest.php%s::__invoke'];
+    }
+
+    public function testGetOptions()
+    {
+        $options = ['option1' => 'value1', 'option2' => 'value2'];
+        $descriptor = new HandlerDescriptor(function () {}, $options);
+
+        $this->assertSame($options, $descriptor->getOptions());
     }
 }
 

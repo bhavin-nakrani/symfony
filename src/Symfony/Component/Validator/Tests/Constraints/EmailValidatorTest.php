@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\EmailValidator;
 use Symfony\Component\Validator\Exception\UnexpectedValueException;
@@ -21,9 +22,11 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
  */
 class EmailValidatorTest extends ConstraintValidatorTestCase
 {
-    protected function createValidator()
+    use ExpectDeprecationTrait;
+
+    protected function createValidator(): EmailValidator
     {
-        return new EmailValidator(Email::VALIDATION_MODE_LOOSE);
+        return new EmailValidator(Email::VALIDATION_MODE_HTML5);
     }
 
     public function testUnknownDefaultModeTriggerException()
@@ -70,12 +73,31 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidEmails()
+    public static function getValidEmails()
     {
         return [
             ['fabien@symfony.com'],
             ['example@example.co.uk'],
             ['fabien_potencier@example.fr'],
+        ];
+    }
+
+    /**
+     * @group legacy
+     *
+     * @dataProvider getValidEmails
+     * @dataProvider getEmailsOnlyValidInLooseMode
+     */
+    public function testValidInLooseModeEmails($email)
+    {
+        $this->validator->validate($email, new Email(['mode' => Email::VALIDATION_MODE_LOOSE]));
+
+        $this->assertNoViolation();
+    }
+
+    public static function getEmailsOnlyValidInLooseMode()
+    {
+        return [
             ['example@example.co..uk'],
             ['{}~!@!@£$%%^&*().!@£$%^&*()'],
             ['example@example.co..uk'],
@@ -94,15 +116,34 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidEmailsWithWhitespaces()
+    public static function getValidEmailsWithWhitespaces()
     {
         return [
             ["\x20example@example.co.uk\x20"],
+            ["example@example.com\x0B\x0B"],
+        ];
+    }
+
+    /**
+     * @group legacy
+     *
+     * @dataProvider getValidEmailsWithWhitespaces
+     * @dataProvider getEmailsWithWhitespacesOnlyValidInLooseMode
+     */
+    public function testValidNormalizedEmailsInLooseMode($email)
+    {
+        $this->validator->validate($email, new Email(['mode' => Email::VALIDATION_MODE_LOOSE, 'normalizer' => 'trim']));
+
+        $this->assertNoViolation();
+    }
+
+    public static function getEmailsWithWhitespacesOnlyValidInLooseMode()
+    {
+        return [
             ["\x09\x09example@example.co..uk\x09\x09"],
             ["\x0A{}~!@!@£$%%^&*().!@£$%^&*()\x0A"],
             ["\x0D\x0Dexample@example.co..uk\x0D\x0D"],
             ["\x00example@-example.com"],
-            ["example@example.com\x0B\x0B"],
         ];
     }
 
@@ -116,7 +157,7 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidEmailsHtml5()
+    public static function getValidEmailsHtml5()
     {
         return [
             ['fabien@symfony.com'],
@@ -143,7 +184,7 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getInvalidEmails()
+    public static function getInvalidEmails()
     {
         return [
             ['example'],
@@ -171,7 +212,7 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
              ->assertRaised();
     }
 
-    public function getInvalidHtml5Emails()
+    public static function getInvalidHtml5Emails()
     {
         return [
             ['example'],
@@ -190,6 +231,35 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
             [' example @example .com '],
             ['example@-example.com'],
             [sprintf('example@%s.com', str_repeat('a', 64))],
+        ];
+    }
+
+    /**
+     * @dataProvider getInvalidAllowNoTldEmails
+     */
+    public function testInvalidAllowNoTldEmails($email)
+    {
+        $constraint = new Email([
+            'message' => 'myMessage',
+            'mode' => Email::VALIDATION_MODE_HTML5_ALLOW_NO_TLD,
+        ]);
+
+        $this->validator->validate($email, $constraint);
+
+        $this->buildViolation('myMessage')
+            ->setParameter('{{ value }}', '"'.$email.'"')
+            ->setCode(Email::INVALID_FORMAT_ERROR)
+            ->assertRaised();
+    }
+
+    public static function getInvalidAllowNoTldEmails()
+    {
+        return [
+            ['example bar'],
+            ['example@'],
+            ['example@ bar'],
+            ['example@localhost bar'],
+            ['foo@example.com bar'],
         ];
     }
 
@@ -214,8 +284,22 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
              ->assertRaised();
     }
 
+    public function testModeHtml5AllowNoTld()
+    {
+        $constraint = new Email(['mode' => Email::VALIDATION_MODE_HTML5_ALLOW_NO_TLD]);
+
+        $this->validator->validate('example@example', $constraint);
+
+        $this->assertNoViolation();
+    }
+
+    /**
+     * @group legacy
+     */
     public function testModeLoose()
     {
+        $this->expectDeprecation('Since symfony/validator 6.2: The "loose" mode is deprecated. It will be removed in 7.0 and the default mode will be changed to "html5".');
+
         $constraint = new Email(['mode' => Email::VALIDATION_MODE_LOOSE]);
 
         $this->validator->validate('example@example..com', $constraint);
@@ -255,7 +339,7 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
     /**
      * @see https://github.com/egulias/EmailValidator/blob/1.2.8/tests/egulias/Tests/EmailValidator/EmailValidatorTest.php
      */
-    public function getInvalidEmailsForStrictChecks()
+    public static function getInvalidEmailsForStrictChecks()
     {
         return [
             ['test@example.com test'],
@@ -304,7 +388,7 @@ class EmailValidatorTest extends ConstraintValidatorTestCase
             ['test@email>'],
             ['test@email<'],
             ['test@email{'],
-            [str_repeat('x', 254).'@example.com'], //email with warnings
+            [str_repeat('x', 254).'@example.com'], // email with warnings
         ];
     }
 }

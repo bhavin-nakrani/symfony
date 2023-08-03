@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Bridge\Twig\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -11,13 +20,11 @@ use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Translation\LocaleSwitcher;
 
 class AppVariableTest extends TestCase
 {
-    /**
-     * @var AppVariable
-     */
-    protected $appVariable;
+    protected AppVariable $appVariable;
 
     protected function setUp(): void
     {
@@ -34,7 +41,7 @@ class AppVariableTest extends TestCase
         $this->assertEquals($debugFlag, $this->appVariable->getDebug());
     }
 
-    public function debugDataProvider()
+    public static function debugDataProvider()
     {
         return [
             'debug on' => [true],
@@ -95,6 +102,16 @@ class AppVariableTest extends TestCase
         $this->assertEquals($user, $this->appVariable->getUser());
     }
 
+    public function testGetLocale()
+    {
+        $localeSwitcher = $this->createMock(LocaleSwitcher::class);
+        $this->appVariable->setLocaleSwitcher($localeSwitcher);
+
+        $localeSwitcher->method('getLocale')->willReturn('fr');
+
+        self::assertEquals('fr', $this->appVariable->getLocale());
+    }
+
     public function testGetTokenWithNoToken()
     {
         $tokenStorage = $this->createMock(TokenStorageInterface::class);
@@ -145,6 +162,13 @@ class AppVariableTest extends TestCase
     {
         $this->expectException(\RuntimeException::class);
         $this->appVariable->getSession();
+    }
+
+    public function testGetLocaleWithLocaleSwitcherNotSet()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('The "app.locale" variable is not available.');
+        $this->appVariable->getLocale();
     }
 
     public function testGetFlashesWithNoRequest()
@@ -217,6 +241,40 @@ class AppVariableTest extends TestCase
             ['this-does-not-exist' => []],
             $this->appVariable->getFlashes(['this-does-not-exist'])
         );
+    }
+
+    public function testGetCurrentRoute()
+    {
+        $this->setRequestStack(new Request(attributes: ['_route' => 'some_route']));
+
+        $this->assertSame('some_route', $this->appVariable->getCurrent_route());
+    }
+
+    public function testGetCurrentRouteWithRequestStackNotSet()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->appVariable->getCurrent_route();
+    }
+
+    public function testGetCurrentRouteParameters()
+    {
+        $routeParams = ['some_param' => true];
+        $this->setRequestStack(new Request(attributes: ['_route_params' => $routeParams]));
+
+        $this->assertSame($routeParams, $this->appVariable->getCurrent_route_parameters());
+    }
+
+    public function testGetCurrentRouteParametersWithoutAttribute()
+    {
+        $this->setRequestStack(new Request());
+
+        $this->assertSame([], $this->appVariable->getCurrent_route_parameters());
+    }
+
+    public function testGetCurrentRouteParametersWithRequestStackNotSet()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->appVariable->getCurrent_route_parameters();
     }
 
     protected function setRequestStack($request)

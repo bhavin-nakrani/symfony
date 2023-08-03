@@ -1,10 +1,73 @@
 CHANGELOG
 =========
 
+6.4
+---
+
+ * Add native return type to `Translator` and to `Application::reset()`
+ * Deprecate the integration of Doctrine annotations, either uninstall the `doctrine/annotations` package or disable the integration by setting `framework.annotations` to `false`
+ * Enable `json_decode_detailed_errors` context for Serializer by default if `kernel.debug` is true and the `seld/jsonlint` package is installed
+
+6.3
+---
+
+ * Add `extra` option for `http_client.default_options` and `http_client.scoped_client`
+ * Add `DomCrawlerAssertionsTrait::assertSelectorCount(int $count, string $selector)`
+ * Allow to avoid `limit` definition in a RateLimiter configuration when using the `no_limit` policy
+ * Add `--format` option to the `debug:config` command
+ * Add support to pass namespace wildcard in `framework.messenger.routing`
+ * Deprecate `framework:exceptions` tag, unwrap it and replace `framework:exception` tags' `name` attribute by `class`
+ * Deprecate the `notifier.logger_notification_listener` service, use the `notifier.notification_logger_listener` service instead
+ * Allow setting private services with the test container
+ * Register alias for argument for workflow services with workflow name only
+ * Configure the `ErrorHandler` on `FrameworkBundle::boot()`
+ * Allow setting `debug.container.dump` to `false` to disable dumping the container to XML
+ * Add `framework.http_cache.skip_response_headers` option
+ * Display warmers duration on debug verbosity for `cache:clear` command
+ * Add `AbstractController::sendEarlyHints()` to send HTTP Early Hints
+ * Add autowiring aliases for `Http\Client\HttpAsyncClient`
+ * Deprecate the `Http\Client\HttpClient` service, use `Psr\Http\Client\ClientInterface` instead
+ * Add `stop_worker_on_signals` configuration option to `messenger` to define signals which would stop a worker
+ * Add support for `--all` option to clear all cache pools with `cache:pool:clear` command
+
+6.2
+---
+
+ * Add `resolve-env` option to `debug:config` command to display actual values of environment variables in dumped configuration
+ * Add `NotificationAssertionsTrait`
+ * Add option `framework.handle_all_throwables` to allow `Symfony\Component\HttpKernel\HttpKernel` to handle all kinds of `Throwable`
+ * Make `AbstractController::render()` able to deal with forms and deprecate `renderForm()`
+ * Deprecate the `Symfony\Component\Serializer\Normalizer\ObjectNormalizer` and
+   `Symfony\Component\Serializer\Normalizer\PropertyNormalizer` autowiring aliases, type-hint against
+   `Symfony\Component\Serializer\Normalizer\NormalizerInterface` or implement `NormalizerAwareInterface` instead
+ * Add service usages list to the `debug:container` command output
+ * Add service and alias deprecation message to `debug:container [<name>]` output
+ * Tag all workflows services with `workflow`, those with type=workflow are
+   tagged with `workflow.workflow`, and those with type=state_machine with
+   `workflow.state_machine`
+ * Add `rate_limiter` configuration option to `messenger.transport` to allow rate limited transports using the RateLimiter component
+ * Remove `@internal` tag from secret vaults to allow them to be used directly outside the framework bundle and custom vaults to be added
+ * Deprecate `framework.form.legacy_error_messages` config node
+ * Add a `framework.router.cache_dir` configuration option to configure the default `Router` `cache_dir` option
+ * Add option `framework.messenger.buses.*.default_middleware.allow_no_senders` to enable throwing when a message doesn't have a sender
+ * Deprecate `AbstractController::renderForm()`, use `render()` instead
+ * Deprecate `FrameworkExtension::registerRateLimiter()`
+
 6.1
 ---
 
- * Environment variable `SYMFONY_IDE` is read by default when `framework.ide` config is not set.
+ * Add support for configuring semaphores
+ * Environment variable `SYMFONY_IDE` is read by default when `framework.ide` config is not set
+ * Load PHP configuration files by default in the `MicroKernelTrait`
+ * Add `cache:pool:invalidate-tags` command
+ * Add `xliff` support in addition to `xlf` for `XliffFileDumper`
+ * Deprecate the `reset_on_message` config option. It can be set to `true` only and does nothing now
+ * Add `trust_x_sendfile_type_header` option
+ * Add support for first-class callable route controller in `MicroKernelTrait`
+ * Add tag `routing.condition_service` to autoconfigure routing condition services
+ * Automatically register kernel methods marked with the `Symfony\Component\Routing\Annotation\Route` attribute or annotation as controllers in `MicroKernelTrait`
+ * Deprecate not setting the `http_method_override` config option. The default value will change to `false` in 7.0.
+ * Add `framework.profiler.collect_serializer_data` config option, set it to `true` to enable the serializer data collector and profiler panel
 
 6.0
 ---

@@ -1,7 +1,17 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Workflow\Tests\EventListener;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Authentication\AuthenticationTrustResolverInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
@@ -23,10 +33,10 @@ use Symfony\Component\Workflow\WorkflowInterface;
 
 class GuardListenerTest extends TestCase
 {
-    private $authenticationChecker;
-    private $validator;
-    private $listener;
-    private $configuration;
+    private MockObject&AuthorizationCheckerInterface $authenticationChecker;
+    private MockObject&ValidatorInterface $validator;
+    private GuardListener $listener;
+    private array $configuration;
 
     protected function setUp(): void
     {
@@ -47,13 +57,6 @@ class GuardListenerTest extends TestCase
         $this->validator = $this->createMock(ValidatorInterface::class);
         $roleHierarchy = new RoleHierarchy([]);
         $this->listener = new GuardListener($this->configuration, $expressionLanguage, $tokenStorage, $this->authenticationChecker, $trustResolver, $roleHierarchy, $this->validator);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->authenticationChecker = null;
-        $this->validator = null;
-        $this->listener = null;
     }
 
     public function testWithNotSupportedEvent()
@@ -134,7 +137,7 @@ class GuardListenerTest extends TestCase
         $this->assertTrue($event->isBlocked());
     }
 
-    private function createEvent(Transition $transition = null)
+    private function createEvent(Transition $transition = null): GuardEvent
     {
         $subject = new Subject();
         $transition ??= new Transition('name', 'from', 'to');
@@ -162,7 +165,7 @@ class GuardListenerTest extends TestCase
         ;
     }
 
-    private function configureValidator($isUsed, $valid = true)
+    private function configureValidator($isUsed, $valid = true): void
     {
         if (!$isUsed) {
             $this->validator

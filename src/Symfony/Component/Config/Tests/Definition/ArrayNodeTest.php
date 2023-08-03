@@ -55,7 +55,7 @@ class ArrayNodeTest extends TestCase
         $node->normalize(['beta' => 'foo']);
     }
 
-    public function ignoreAndRemoveMatrixProvider(): array
+    public static function ignoreAndRemoveMatrixProvider(): array
     {
         $unrecognizedOptionException = new InvalidConfigurationException('Unrecognized option "foo" under "root"');
 
@@ -73,7 +73,7 @@ class ArrayNodeTest extends TestCase
     public function testIgnoreAndRemoveBehaviors(bool $ignore, bool $remove, array|\Exception $expected, string $message = '')
     {
         if ($expected instanceof \Exception) {
-            $this->expectException(\get_class($expected));
+            $this->expectException($expected::class);
             $this->expectExceptionMessage($expected->getMessage());
         }
         $node = new ArrayNode('root');
@@ -90,12 +90,11 @@ class ArrayNodeTest extends TestCase
         $node = new ArrayNode('foo');
 
         $r = new \ReflectionMethod($node, 'preNormalize');
-        $r->setAccessible(true);
 
         $this->assertSame($normalized, $r->invoke($node, $denormalized));
     }
 
-    public function getPreNormalizationTests(): array
+    public static function getPreNormalizationTests(): array
     {
         return [
             [
@@ -132,12 +131,11 @@ class ArrayNodeTest extends TestCase
         $rootNode->addChild($fiveNode);
         $rootNode->addChild(new ScalarNode('string_key'));
         $r = new \ReflectionMethod($rootNode, 'normalizeValue');
-        $r->setAccessible(true);
 
         $this->assertSame($normalized, $r->invoke($rootNode, $denormalized));
     }
 
-    public function getZeroNamedNodeExamplesData(): array
+    public static function getZeroNamedNodeExamplesData(): array
     {
         return [
             [
@@ -179,12 +177,11 @@ class ArrayNodeTest extends TestCase
         $node->addChild($scalar2);
 
         $r = new \ReflectionMethod($node, 'normalizeValue');
-        $r->setAccessible(true);
 
         $this->assertSame($normalized, $r->invoke($node, $prenormalized));
     }
 
-    public function getPreNormalizedNormalizedOrderedData(): array
+    public static function getPreNormalizedNormalizedOrderedData(): array
     {
         return [
             [
@@ -278,7 +275,6 @@ class ArrayNodeTest extends TestCase
         $node->setIgnoreExtraKeys(false);
 
         $r = new \ReflectionMethod($node, 'mergeValues');
-        $r->setAccessible(true);
 
         $r->invoke($node, ...$prenormalizeds);
     }
@@ -296,7 +292,6 @@ class ArrayNodeTest extends TestCase
         $node->setIgnoreExtraKeys(true);
 
         $r = new \ReflectionMethod($node, 'mergeValues');
-        $r->setAccessible(true);
 
         $r->invoke($node, ...$prenormalizeds);
     }
@@ -312,12 +307,11 @@ class ArrayNodeTest extends TestCase
         $node->setIgnoreExtraKeys(true, false);
 
         $r = new \ReflectionMethod($node, 'mergeValues');
-        $r->setAccessible(true);
 
         $this->assertEquals($merged, $r->invoke($node, ...$prenormalizeds));
     }
 
-    public function getDataWithIncludedExtraKeys(): array
+    public static function getDataWithIncludedExtraKeys(): array
     {
         return [
             [

@@ -19,11 +19,11 @@ use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\Test\TypeTestCase;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
-use Symfony\Contracts\Translation\TranslatorInterface;
+use Symfony\Component\Translation\IdentityTranslator;
 
 class FormTypeCsrfExtensionTest_ChildType extends AbstractType
 {
-    public function buildForm(FormBuilderInterface $builder, array $options)
+    public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         // The form needs a child in order to trigger CSRF protection by
         // default
@@ -33,37 +33,19 @@ class FormTypeCsrfExtensionTest_ChildType extends AbstractType
 
 class FormTypeCsrfExtensionTest extends TypeTestCase
 {
-    /**
-     * @var MockObject&CsrfTokenManagerInterface
-     */
-    protected $tokenManager;
-
-    /**
-     * @var MockObject&TranslatorInterface
-     */
-    protected $translator;
+    protected MockObject&CsrfTokenManagerInterface $tokenManager;
 
     protected function setUp(): void
     {
         $this->tokenManager = $this->createMock(CsrfTokenManagerInterface::class);
-        $this->translator = $this->createMock(TranslatorInterface::class);
-        $this->translator->expects($this->any())->method('trans')->willReturnArgument(0);
 
         parent::setUp();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->tokenManager = null;
-        $this->translator = null;
-
-        parent::tearDown();
     }
 
     protected function getExtensions()
     {
         return array_merge(parent::getExtensions(), [
-            new CsrfExtension($this->tokenManager, $this->translator),
+            new CsrfExtension($this->tokenManager, new IdentityTranslator()),
         ]);
     }
 
@@ -176,7 +158,7 @@ class FormTypeCsrfExtensionTest extends TypeTestCase
         $this->assertEquals('token', $view['csrf']->vars['value']);
     }
 
-    public function provideBoolean()
+    public static function provideBoolean()
     {
         return [
             [true],

@@ -132,7 +132,7 @@ class FormLoginTest extends AbstractWebTestCase
 
                     break;
                 case 1: // Second attempt : login throttling !
-                    $this->assertStringContainsString('Too many failed login attempts, please try again in 8 minutes.', $text, 'Invalid response on 2nd attempt');
+                    $this->assertStringContainsString('Too many failed login attempts, please try again', $text, 'Invalid response on 2nd attempt');
 
                     break;
                 case 2: // Third attempt with unexisting username
@@ -140,14 +140,14 @@ class FormLoginTest extends AbstractWebTestCase
 
                     break;
                 case 3: // Fourth attempt : still login throttling !
-                    $this->assertStringContainsString('Too many failed login attempts, please try again in 8 minutes.', $text, 'Invalid response on 4th attempt');
+                    $this->assertStringContainsString('Too many failed login attempts, please try again', $text, 'Invalid response on 4th attempt');
 
                     break;
             }
         }
     }
 
-    public function provideClientOptions()
+    public static function provideClientOptions()
     {
         yield [['test_case' => 'StandardFormLogin', 'root_config' => 'base_config.yml']];
         yield [['test_case' => 'StandardFormLogin', 'root_config' => 'routes_as_path.yml']];

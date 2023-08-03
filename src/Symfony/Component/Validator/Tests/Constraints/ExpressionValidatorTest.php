@@ -15,12 +15,12 @@ use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
 use Symfony\Component\Validator\Constraints\Expression;
 use Symfony\Component\Validator\Constraints\ExpressionValidator;
 use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
-use Symfony\Component\Validator\Tests\Fixtures\Annotation\Entity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\Entity;
 use Symfony\Component\Validator\Tests\Fixtures\ToString;
 
 class ExpressionValidatorTest extends ConstraintValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): ExpressionValidator
     {
         return new ExpressionValidator();
     }
@@ -284,5 +284,24 @@ class ExpressionValidatorTest extends ConstraintValidatorTestCase
         $this->validator->validate(1, $constraint);
 
         $this->assertNoViolation();
+    }
+
+    public function testViolationOnPass()
+    {
+        $constraint = new Expression([
+            'expression' => 'value + custom != 2',
+            'values' => [
+                'custom' => 1,
+            ],
+            'negate' => false,
+        ]);
+
+        $this->validator->validate(2, $constraint);
+
+        $this->buildViolation('This value is not valid.')
+            ->atPath('property.path')
+            ->setParameter('{{ value }}', 2)
+            ->setCode(Expression::EXPRESSION_FAILED_ERROR)
+            ->assertRaised();
     }
 }

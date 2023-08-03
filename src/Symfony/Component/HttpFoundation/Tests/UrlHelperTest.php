@@ -16,6 +16,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\UrlHelper;
 use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Routing\RequestContextAwareInterface;
 
 class UrlHelperTest extends TestCase
 {
@@ -31,7 +32,7 @@ class UrlHelperTest extends TestCase
         $this->assertEquals($expected, $helper->getAbsoluteUrl($path));
     }
 
-    public function getGenerateAbsoluteUrlData()
+    public static function getGenerateAbsoluteUrlData()
     {
         return [
             ['http://localhost/foo.png', '/foo.png', '/foo/bar.html'],
@@ -64,7 +65,40 @@ class UrlHelperTest extends TestCase
         }
 
         $requestContext = new RequestContext($baseUrl, 'GET', $host, $scheme, $httpPort, $httpsPort, $path);
+
         $helper = new UrlHelper(new RequestStack(), $requestContext);
+
+        $this->assertEquals($expected, $helper->getAbsoluteUrl($path));
+    }
+
+    /**
+     * @dataProvider getGenerateAbsoluteUrlRequestContextData
+     */
+    public function testGenerateAbsoluteUrlWithRequestContextAwareInterface($path, $baseUrl, $host, $scheme, $httpPort, $httpsPort, $expected)
+    {
+        if (!class_exists(RequestContext::class)) {
+            $this->markTestSkipped('The Routing component is needed to run tests that depend on its request context.');
+        }
+
+        $requestContext = new RequestContext($baseUrl, 'GET', $host, $scheme, $httpPort, $httpsPort, $path);
+        $contextAware = new class($requestContext) implements RequestContextAwareInterface {
+            public function __construct(
+                private RequestContext $requestContext,
+            ) {
+            }
+
+            public function setContext(RequestContext $context): void
+            {
+                $this->requestContext = $context;
+            }
+
+            public function getContext(): RequestContext
+            {
+                return $this->requestContext;
+            }
+        };
+
+        $helper = new UrlHelper(new RequestStack(), $contextAware);
 
         $this->assertEquals($expected, $helper->getAbsoluteUrl($path));
     }
@@ -83,7 +117,7 @@ class UrlHelperTest extends TestCase
         $this->assertEquals($path, $helper->getAbsoluteUrl($path));
     }
 
-    public function getGenerateAbsoluteUrlRequestContextData()
+    public static function getGenerateAbsoluteUrlRequestContextData()
     {
         return [
             ['/foo.png', '/foo', 'localhost', 'http', 80, 443, 'http://localhost/foo.png'],
@@ -117,10 +151,6 @@ class UrlHelperTest extends TestCase
      */
     public function testGenerateRelativePath($expected, $path, $pathinfo)
     {
-        if (!method_exists(Request::class, 'getRelativeUriForPath')) {
-            $this->markTestSkipped('Your version of Symfony HttpFoundation is too old.');
-        }
-
         $stack = new RequestStack();
         $stack->push(Request::create($pathinfo));
         $urlHelper = new UrlHelper($stack);
@@ -128,7 +158,7 @@ class UrlHelperTest extends TestCase
         $this->assertEquals($expected, $urlHelper->getRelativePath($path));
     }
 
-    public function getGenerateRelativePathData()
+    public static function getGenerateRelativePathData()
     {
         return [
             ['../foo.png', '/foo.png', '/foo/bar.html'],

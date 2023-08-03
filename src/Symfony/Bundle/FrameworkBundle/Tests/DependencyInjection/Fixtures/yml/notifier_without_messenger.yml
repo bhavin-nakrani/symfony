@@ -1,4 +1,6 @@
 framework:
+    annotations: false
+    http_method_override: false
     mailer:
         dsn: 'smtp://example.com'
     messenger:
@@ -15,3 +17,4 @@ framework:
             high: ['slack', 'twilio']
         admin_recipients:
             - { email: 'test@test.de', phone: '+490815' }
+    scheduler: false

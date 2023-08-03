@@ -26,12 +26,12 @@ class FileLoaderTest extends TestCase
 
         $locatorMockForAdditionalLoader = $this->createMock(FileLocatorInterface::class);
         $locatorMockForAdditionalLoader->expects($this->any())->method('locate')->will($this->onConsecutiveCalls(
-                ['path/to/file1'],                    // Default
-                ['path/to/file1', 'path/to/file2'],   // First is imported
-                ['path/to/file1', 'path/to/file2'],   // Second is imported
-                ['path/to/file1'],                    // Exception
-                ['path/to/file1', 'path/to/file2']    // Exception
-                ));
+            ['path/to/file1'],                    // Default
+            ['path/to/file1', 'path/to/file2'],   // First is imported
+            ['path/to/file1', 'path/to/file2'],   // Second is imported
+            ['path/to/file1'],                    // Exception
+            ['path/to/file1', 'path/to/file2']    // Exception
+        ));
 
         $fileLoader = new TestFileLoader($locatorMock);
         $fileLoader->setSupports(false);
@@ -139,7 +139,7 @@ class FileLoaderTest extends TestCase
         $this->assertNotContains('baz.txt', $loadedFiles);
     }
 
-    public function excludeTrailingSlashConsistencyProvider(): iterable
+    public static function excludeTrailingSlashConsistencyProvider(): iterable
     {
         yield [__DIR__.'/../Fixtures/Exclude/ExcludeToo/'];
         yield [__DIR__.'/../Fixtures/Exclude/ExcludeToo'];
@@ -153,7 +153,7 @@ class FileLoaderTest extends TestCase
 
 class TestFileLoader extends FileLoader
 {
-    private $supports = true;
+    private bool $supports = true;
 
     public function load(mixed $resource, string $type = null): mixed
     {

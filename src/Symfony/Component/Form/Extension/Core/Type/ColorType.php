@@ -34,7 +34,7 @@ class ColorType extends AbstractType
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
@@ -42,7 +42,8 @@ class ColorType extends AbstractType
             return;
         }
 
-        $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event): void {
+        $translator = $this->translator;
+        $builder->addEventListener(FormEvents::PRE_SUBMIT, static function (FormEvent $event) use ($translator): void {
             $value = $event->getData();
             if (null === $value || '' === $value) {
                 return;
@@ -54,16 +55,16 @@ class ColorType extends AbstractType
 
             $messageTemplate = 'This value is not a valid HTML5 color.';
             $messageParameters = [
-                '{{ value }}' => is_scalar($value) ? (string) $value : \gettype($value),
+                '{{ value }}' => \is_scalar($value) ? (string) $value : \gettype($value),
             ];
-            $message = $this->translator ? $this->translator->trans($messageTemplate, $messageParameters, 'validators') : $messageTemplate;
+            $message = $translator?->trans($messageTemplate, $messageParameters, 'validators') ?? $messageTemplate;
 
             $event->getForm()->addError(new FormError($message, $messageTemplate, $messageParameters));
         });
     }
 
     /**
-     * {@inheritdoc}
+     * @return void
      */
     public function configureOptions(OptionsResolver $resolver)
     {
@@ -75,17 +76,11 @@ class ColorType extends AbstractType
         $resolver->setAllowedTypes('html5', 'bool');
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getParent(): ?string
     {
         return TextType::class;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getBlockPrefix(): string
     {
         return 'color';

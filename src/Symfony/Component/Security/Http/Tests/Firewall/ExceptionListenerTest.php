@@ -12,6 +12,7 @@
 namespace Symfony\Component\Security\Http\Tests\Firewall;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -63,7 +64,7 @@ class ExceptionListenerTest extends TestCase
         $this->assertSame($exception, $event->getThrowable());
     }
 
-    public function getAuthenticationExceptionProvider()
+    public static function getAuthenticationExceptionProvider()
     {
         return [
             [$e = new AuthenticationException(), new HttpException(Response::HTTP_UNAUTHORIZED, '', $e, [], 0)],
@@ -179,7 +180,19 @@ class ExceptionListenerTest extends TestCase
         $this->assertEquals(403, $event->getThrowable()->getStatusCode());
     }
 
-    public function getAccessDeniedExceptionProvider()
+    public function testUnregister()
+    {
+        $listener = $this->createExceptionListener();
+        $dispatcher = new EventDispatcher();
+
+        $listener->register($dispatcher);
+        $this->assertNotEmpty($dispatcher->getListeners());
+
+        $listener->unregister($dispatcher);
+        $this->assertEmpty($dispatcher->getListeners());
+    }
+
+    public static function getAccessDeniedExceptionProvider()
     {
         return [
             [new AccessDeniedException()],
@@ -208,9 +221,7 @@ class ExceptionListenerTest extends TestCase
 
     private function createEvent(\Exception $exception, $kernel = null)
     {
-        if (null === $kernel) {
-            $kernel = $this->createMock(HttpKernelInterface::class);
-        }
+        $kernel ??= $this->createMock(HttpKernelInterface::class);
 
         return new ExceptionEvent($kernel, Request::create('/'), HttpKernelInterface::MAIN_REQUEST, $exception);
     }

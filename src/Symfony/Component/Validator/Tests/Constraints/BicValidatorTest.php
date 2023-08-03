@@ -21,7 +21,7 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 class BicValidatorTest extends ConstraintValidatorTestCase
 {
-    protected function createValidator()
+    protected function createValidator(): BicValidator
     {
         return new BicValidator();
     }
@@ -163,7 +163,7 @@ class BicValidatorTest extends ConstraintValidatorTestCase
         $constraint = new Bic(['ibanPropertyPath' => 'foo']);
 
         $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage(sprintf('Invalid property path "foo" provided to "%s" constraint', \get_class($constraint)));
+        $this->expectExceptionMessage(sprintf('Invalid property path "foo" provided to "%s" constraint', $constraint::class));
 
         $object = new BicComparisonTestClass(5);
 
@@ -188,7 +188,7 @@ class BicValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidBics()
+    public static function getValidBics()
     {
         // http://formvalidation.io/validators/bic/
         return [
@@ -233,7 +233,7 @@ class BicValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    public function getInvalidBics()
+    public static function getInvalidBics()
     {
         return [
             ['DEUTD', Bic::INVALID_LENGTH_ERROR],
@@ -277,7 +277,7 @@ class BicValidatorTest extends ConstraintValidatorTestCase
         $this->assertNoViolation();
     }
 
-    public function getValidBicSpecialCases()
+    public static function getValidBicSpecialCases()
     {
         // FR related special cases
         yield ['BNPAGFGX', 'FR14 2004 1010 0505 0001 3M02 606'];
@@ -288,6 +288,8 @@ class BicValidatorTest extends ConstraintValidatorTestCase
         yield ['BNPAYTGX', 'FR14 2004 1010 0505 0001 3M02 606'];
         yield ['BNPANCGX', 'FR14 2004 1010 0505 0001 3M02 606'];
         yield ['BNPAREGX', 'FR14 2004 1010 0505 0001 3M02 606'];
+        yield ['BNPABLGX', 'FR14 2004 1010 0505 0001 3M02 606'];
+        yield ['BNPAMFGX', 'FR14 2004 1010 0505 0001 3M02 606'];
         yield ['BNPAPMGX', 'FR14 2004 1010 0505 0001 3M02 606'];
         yield ['BNPAWFGX', 'FR14 2004 1010 0505 0001 3M02 606'];
 
@@ -296,6 +298,13 @@ class BicValidatorTest extends ConstraintValidatorTestCase
         yield ['BARCIMSA', 'GB12 CPBK 0892 9965 0449 911'];
         yield ['BARCGGSA', 'GB12 CPBK 0892 9965 0449 911'];
         yield ['BARCVGSA', 'GB12 CPBK 0892 9965 0449 911'];
+
+        // FI related special cases
+        yield ['NDEAAXHH', 'FI14 1009 3000 1234 58'];
+
+        // ES related special cases
+        yield ['CAIXICBBXXX', 'ES79 2100 0813 6101 2345 6789'];
+        yield ['CAIXEABBXXX', 'ES79 2100 0813 6101 2345 6789'];
     }
 }
 

@@ -1,9 +1,13 @@
 <?php
 
+use Symfony\Bundle\FrameworkBundle\Tests\Fixtures\Messenger\DummyMessage;
+
 $container->loadFromExtension('framework', [
+    'annotations' => false,
+    'http_method_override' => false,
     'messenger' => [
         'routing' => [
-            'Symfony\Bundle\FrameworkBundle\Tests\Fixtures\Messenger\DummyMessage' => ['amqp'],
+            DummyMessage::class => ['amqp'],
         ],
         'transports' => [
             'amqp' => 'amqp://localhost/%2f/messages',

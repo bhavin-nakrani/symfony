@@ -16,6 +16,7 @@ use Doctrine\ORM\Mapping\ClassMetadataInfo;
 use Doctrine\ORM\Mapping\MappingException as OrmMappingException;
 use Doctrine\Persistence\Mapping\MappingException;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\PropertyInfo\Type;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\Valid;
 use Symfony\Component\Validator\Mapping\AutoMappingStrategy;
@@ -41,15 +42,12 @@ final class DoctrineLoader implements LoaderInterface
         $this->classValidatorRegexp = $classValidatorRegexp;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function loadClassMetadata(ClassMetadata $metadata): bool
     {
         $className = $metadata->getClassName();
         try {
             $doctrineMetadata = $this->entityManager->getClassMetadata($className);
-        } catch (MappingException|OrmMappingException $exception) {
+        } catch (MappingException|OrmMappingException) {
             return false;
         }
 
@@ -99,7 +97,7 @@ final class DoctrineLoader implements LoaderInterface
                 $loaded = true;
             }
 
-            if (null === ($mapping['length'] ?? null) || !\in_array($mapping['type'], ['string', 'text'], true)) {
+            if (null === ($mapping['length'] ?? null) || null !== ($mapping['enumType'] ?? null) || !\in_array($mapping['type'], ['string', 'text'], true)) {
                 continue;
             }
 
@@ -107,7 +105,7 @@ final class DoctrineLoader implements LoaderInterface
                 if (isset($mapping['originalClass']) && !str_contains($mapping['declaredField'], '.')) {
                     $metadata->addPropertyConstraint($mapping['declaredField'], new Valid());
                     $loaded = true;
-                } elseif (property_exists($className, $mapping['fieldName'])) {
+                } elseif (property_exists($className, $mapping['fieldName']) && (!$doctrineMetadata->isMappedSuperclass || $metadata->getReflectionClass()->getProperty($mapping['fieldName'])->isPrivate())) {
                     $metadata->addPropertyConstraint($mapping['fieldName'], new Length(['max' => $mapping['length']]));
                     $loaded = true;
                 }

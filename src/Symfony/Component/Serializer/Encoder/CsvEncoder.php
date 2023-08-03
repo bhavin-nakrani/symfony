@@ -38,7 +38,7 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
 
     private const FORMULAS_START_CHARACTERS = ['=', '-', '+', '@', "\t", "\r"];
 
-    private $defaultContext = [
+    private array $defaultContext = [
         self::DELIMITER_KEY => ',',
         self::ENCLOSURE_KEY => '"',
         self::ESCAPE_CHAR_KEY => '',
@@ -56,9 +56,6 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
         $this->defaultContext = array_merge($this->defaultContext, $defaultContext);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function encode(mixed $data, string $format, array $context = []): string
     {
         $handle = fopen('php://temp,', 'w+');
@@ -90,19 +87,20 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
         unset($value);
 
         $headers = array_merge(array_values($headers), array_diff($this->extractHeaders($data), $headers));
+        $endOfLine = $context[self::END_OF_LINE] ?? $this->defaultContext[self::END_OF_LINE];
 
         if (!($context[self::NO_HEADERS_KEY] ?? $this->defaultContext[self::NO_HEADERS_KEY])) {
             fputcsv($handle, $headers, $delimiter, $enclosure, $escapeChar);
-            if ("\n" !== ($context[self::END_OF_LINE] ?? $this->defaultContext[self::END_OF_LINE]) && 0 === fseek($handle, -1, \SEEK_CUR)) {
-                fwrite($handle, $context[self::END_OF_LINE]);
+            if ("\n" !== $endOfLine && 0 === fseek($handle, -1, \SEEK_CUR)) {
+                fwrite($handle, $endOfLine);
             }
         }
 
         $headers = array_fill_keys($headers, '');
         foreach ($data as $row) {
             fputcsv($handle, array_replace($headers, $row), $delimiter, $enclosure, $escapeChar);
-            if ("\n" !== ($context[self::END_OF_LINE] ?? $this->defaultContext[self::END_OF_LINE]) && 0 === fseek($handle, -1, \SEEK_CUR)) {
-                fwrite($handle, $context[self::END_OF_LINE]);
+            if ("\n" !== $endOfLine && 0 === fseek($handle, -1, \SEEK_CUR)) {
+                fwrite($handle, $endOfLine);
             }
         }
 
@@ -121,17 +119,11 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
         return $value;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function supportsEncoding(string $format): bool
     {
         return self::FORMAT === $format;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function decode(string $data, string $format, array $context = []): mixed
     {
         $handle = fopen('php://temp', 'r+');
@@ -162,7 +154,7 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
                     $headerCount = array_fill(0, $nbCols, 1);
                 } else {
                     foreach ($cols as $col) {
-                        $header = explode($keySeparator, $col);
+                        $header = explode($keySeparator, $col ?? '');
                         $headers[] = $header;
                         $headerCount[] = \count($header);
                     }
@@ -207,9 +199,6 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
         return $result[0];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function supportsDecoding(string $format): bool
     {
         return self::FORMAT === $format;
@@ -218,7 +207,7 @@ class CsvEncoder implements EncoderInterface, DecoderInterface
     /**
      * Flattens an array and generates keys including the path.
      */
-    private function flatten(iterable $array, array &$result, string $keySeparator, string $parentKey = '', bool $escapeFormulas = false)
+    private function flatten(iterable $array, array &$result, string $keySeparator, string $parentKey = '', bool $escapeFormulas = false): void
     {
         foreach ($array as $key => $value) {
             if (is_iterable($value)) {

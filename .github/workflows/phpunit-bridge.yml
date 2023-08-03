@@ -1,4 +1,4 @@
-name: PhpUnitBridge
+name: Lint PhpUnitBridge
 
 on:
   push:
@@ -12,14 +12,21 @@ defaults:
   run:
     shell: bash
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   lint:
-    name: Lint
+    name: Lint PhpUnitBridge
     runs-on: Ubuntu-20.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
