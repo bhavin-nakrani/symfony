@@ -11,7 +11,6 @@
 
 namespace Symfony\Component\Validator\Mapping\Loader;
 
-use Symfony\Component\Validator\Attribute\HasNamedArguments;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\MappingException;
 
@@ -33,12 +32,7 @@ abstract class AbstractLoader implements LoaderInterface
      */
     public const DEFAULT_NAMESPACE = '\\Symfony\\Component\\Validator\\Constraints\\';
 
-    protected $namespaces = [];
-
-    /**
-     * @var array<class-string, bool>
-     */
-    private array $namedArgumentsCache = [];
+    protected array $namespaces = [];
 
     /**
      * Adds a namespace alias.
@@ -49,10 +43,8 @@ abstract class AbstractLoader implements LoaderInterface
      *     $this->addNamespaceAlias('mynamespace', '\\Acme\\Package\\Constraints\\');
      *
      *     $constraint = $this->newConstraint('mynamespace:NotNull');
-     *
-     * @return void
      */
-    protected function addNamespaceAlias(string $alias, string $namespace)
+    protected function addNamespaceAlias(string $alias, string $namespace): void
     {
         $this->namespaces[$alias] = $namespace;
     }
@@ -78,7 +70,7 @@ abstract class AbstractLoader implements LoaderInterface
             [$prefix, $className] = explode(':', $name, 2);
 
             if (!isset($this->namespaces[$prefix])) {
-                throw new MappingException(sprintf('Undefined namespace prefix "%s".', $prefix));
+                throw new MappingException(\sprintf('Undefined namespace prefix "%s".', $prefix));
             }
 
             $className = $this->namespaces[$prefix].$className;
@@ -86,10 +78,14 @@ abstract class AbstractLoader implements LoaderInterface
             $className = self::DEFAULT_NAMESPACE.$name;
         }
 
-        if ($this->namedArgumentsCache[$className] ??= (bool) (new \ReflectionMethod($className, '__construct'))->getAttributes(HasNamedArguments::class)) {
-            return new $className(...$options);
+        if (null === $options) {
+            return new $className();
         }
 
-        return new $className($options);
+        if (!\is_array($options)) {
+            return new $className($options);
+        }
+
+        return new $className(...$options);
     }
 }

@@ -14,22 +14,22 @@ namespace Symfony\Component\Validator\Tests\Constraints;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\Positive;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
 
 class PositiveTest extends TestCase
 {
     public function testAttributes()
     {
         $metadata = new ClassMetadata(PositiveDummy::class);
-        $loader = new AnnotationLoader();
+        $loader = new AttributeLoader();
         self::assertTrue($loader->loadClassMetadata($metadata));
 
-        [$aConstraint] = $metadata->properties['a']->getConstraints();
+        [$aConstraint] = $metadata->getPropertyMetadata('a')[0]->getConstraints();
         self::assertSame(0, $aConstraint->value);
         self::assertNull($aConstraint->propertyPath);
         self::assertSame(['Default', 'PositiveDummy'], $aConstraint->groups);
 
-        [$bConstraint] = $metadata->properties['b']->getConstraints();
+        [$bConstraint] = $metadata->getPropertyMetadata('b')[0]->getConstraints();
         self::assertSame('myMessage', $bConstraint->message);
         self::assertSame(['foo'], $bConstraint->groups);
     }

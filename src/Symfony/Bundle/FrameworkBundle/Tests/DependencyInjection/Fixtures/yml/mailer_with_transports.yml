@@ -1,6 +1,4 @@
 framework:
-    annotations: false
-    http_method_override: false
     mailer:
         transports:
             transport1: 'smtp://example1.com'
@@ -10,6 +8,9 @@ framework:
             recipients:
                 - redirected@example.org
                 - redirected1@example.org
+            allowed_recipients:
+                - foobar@example\.org
+                - .*@example\.com
         headers:
             from: from@example.org
             bcc: [bcc1@example.org, bcc2@example.org]

@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Form\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\FormBuilder;
@@ -23,9 +24,7 @@ use Symfony\Component\Validator\ConstraintViolation;
 
 class FormErrorIteratorTest extends TestCase
 {
-    /**
-     * @dataProvider findByCodesProvider
-     */
+    #[DataProvider('findByCodesProvider')]
     public function testFindByCodes($code, $violationsCount)
     {
         $formBuilder = new FormBuilder(
@@ -51,7 +50,7 @@ class FormErrorIteratorTest extends TestCase
         $this->assertCount($violationsCount, $specificFormErrors);
     }
 
-    public static function findByCodesProvider()
+    public static function findByCodesProvider(): array
     {
         return [
             ['code1', 2],

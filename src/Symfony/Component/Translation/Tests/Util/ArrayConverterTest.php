@@ -11,14 +11,13 @@
 
 namespace Symfony\Component\Translation\Tests\Util;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Translation\Util\ArrayConverter;
 
 class ArrayConverterTest extends TestCase
 {
-    /**
-     * @dataProvider messagesData
-     */
+    #[DataProvider('messagesData')]
     public function testDump($input, $expectedOutput)
     {
         $this->assertEquals($expectedOutput, ArrayConverter::expandToTree($input));
@@ -66,6 +65,34 @@ class ArrayConverterTest extends TestCase
                         'level2' => 'value2',
                         'level2.level3.level4' => 'value1',
                         'bar' => 'value3',
+                    ],
+                ],
+            ],
+            [
+                // input
+                [
+                    'foo.' => 'foo.',
+                    '.bar' => '.bar',
+                    'abc.abc' => 'value',
+                    'bcd.bcd.' => 'value',
+                    '.cde.cde.' => 'value',
+                    '.def.def' => 'value',
+                ],
+                // expected output
+                [
+                    'foo.' => 'foo.',
+                    '.bar' => '.bar',
+                    'abc' => [
+                        'abc' => 'value',
+                    ],
+                    'bcd' => [
+                        'bcd.' => 'value',
+                    ],
+                    '.cde' => [
+                        'cde.' => 'value',
+                    ],
+                    '.def' => [
+                        'def' => 'value',
                     ],
                 ],
             ],

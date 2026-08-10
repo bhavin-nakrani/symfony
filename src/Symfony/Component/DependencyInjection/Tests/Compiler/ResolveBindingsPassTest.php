@@ -11,11 +11,13 @@
 
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
+use Symfony\Component\DependencyInjection\Argument\AbstractArgument;
 use Symfony\Component\DependencyInjection\Argument\BoundArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\DependencyInjection\Compiler\AutowireRequiredMethodsPass;
 use Symfony\Component\DependencyInjection\Compiler\DefinitionErrorExceptionPass;
 use Symfony\Component\DependencyInjection\Compiler\ResolveBindingsPass;
@@ -31,6 +33,7 @@ use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedArgumentsDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedEnumArgumentDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedIterableArgumentDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\ParentNotExists;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\UntypedWithTarget;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\WithTarget;
 use Symfony\Component\DependencyInjection\TypedReference;
 
@@ -38,8 +41,6 @@ require_once __DIR__.'/../Fixtures/includes/autowiring_classes.php';
 
 class ResolveBindingsPassTest extends TestCase
 {
-    use ExpectDeprecationTrait;
-
     public function testProcess()
     {
         $container = new ContainerBuilder();
@@ -146,24 +147,6 @@ class ResolveBindingsPassTest extends TestCase
         $this->assertEquals([new Reference('bar')], $container->getDefinition('def3')->getArguments());
     }
 
-    /**
-     * @group legacy
-     */
-    public function testScalarSetterAnnotation()
-    {
-        $this->expectDeprecation('Since symfony/dependency-injection 6.3: Relying on the "@required" annotation on method "Symfony\Component\DependencyInjection\Tests\Compiler\ScalarSetterAnnotation::setDefaultLocale()" is deprecated, use the "Symfony\Contracts\Service\Attribute\Required" attribute instead.');
-
-        $container = new ContainerBuilder();
-
-        $definition = $container->autowire('foo', ScalarSetterAnnotation::class);
-        $definition->setBindings(['$defaultLocale' => 'fr']);
-
-        (new AutowireRequiredMethodsPass())->process($container);
-        (new ResolveBindingsPass())->process($container);
-
-        $this->assertEquals([['setDefaultLocale', ['fr']]], $definition->getMethodCalls());
-    }
-
     public function testScalarSetterAttribute()
     {
         $container = new ContainerBuilder();
@@ -231,6 +214,74 @@ class ResolveBindingsPassTest extends TestCase
         $pass->process($container);
     }
 
+    #[DataProvider('provideEmptyBindingTypehintWithMultipleBindingsCases')]
+    public function testEmptyBindingTypehintWithMultipleBindings(string $expectedType, string $expectedArgument, string $class, array $bindings)
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(\sprintf('Did you forget to add the type "%s" to argument "$%s"', $expectedType, $expectedArgument));
+
+        $container = new ContainerBuilder();
+        $definition = $container->register($class, $class);
+        $definition->setBindings($bindings);
+
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+    }
+
+    public static function provideEmptyBindingTypehintWithMultipleBindingsCases(): iterable
+    {
+        yield 'multiple bindings with matching first' => [
+            'string',
+            'apiKey',
+            NamedArgumentsDummy::class,
+            [
+                'string $apiKey' => new BoundArgument('foo'),
+                'int $hostName' => new BoundArgument(80),
+            ],
+        ];
+
+        yield 'multiple bindings with matching last' => [
+            'string',
+            'apiKey',
+            NamedArgumentsDummy::class,
+            [
+                'int $hostName' => new BoundArgument(80),
+                'string $apiKey' => new BoundArgument('foo'),
+            ],
+        ];
+
+        yield 'three bindings with matching in the middle' => [
+            'string',
+            'apiKey',
+            NamedArgumentsDummy::class,
+            [
+                'bool $debug' => new BoundArgument(true),
+                'string $apiKey' => new BoundArgument('foo'),
+                'int $hostName' => new BoundArgument(80),
+            ],
+        ];
+
+        yield 'class type binding' => [
+            'Psr\Log\LoggerInterface',
+            'apiKey',
+            NamedArgumentsDummy::class,
+            [
+                'int $hostName' => new BoundArgument(80),
+                'Psr\Log\LoggerInterface $apiKey' => new BoundArgument(new Reference('logger')),
+            ],
+        ];
+
+        yield 'binding matching parameter name with #[Target] attribute' => [
+            'string',
+            'key',
+            UntypedWithTarget::class,
+            [
+                'int $other' => new BoundArgument(80),
+                'string $key' => new BoundArgument('secret'),
+            ],
+        ];
+    }
+
     public function testIterableBindingTypehint()
     {
         $autoloader = static function ($class) {
@@ -277,11 +328,63 @@ class ResolveBindingsPassTest extends TestCase
         $definition->setArguments(['c' => 'C', 'hostName' => 'H']);
         $definition->setBindings($bindings);
 
-        $container->register('foo', CaseSensitiveClass::class);
-
         $pass = new ResolveBindingsPass();
         $pass->process($container);
 
         $this->assertEquals(['C', 'K', 'H'], $definition->getArguments());
+    }
+
+    public function testAbstractArg()
+    {
+        $container = new ContainerBuilder();
+
+        $definition = $container->register(NamedArgumentsDummy::class, NamedArgumentsDummy::class);
+        $definition->setArguments([new AbstractArgument(), 'apiKey' => new AbstractArgument()]);
+        $definition->setBindings(['$c' => new BoundArgument('C'), '$apiKey' => new BoundArgument('K')]);
+
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $this->assertEquals(['C', 'K'], $definition->getArguments());
+    }
+
+    public function testBindingsOnTargetedArguments()
+    {
+        $container = new ContainerBuilder();
+        $container->register('service', TargetedBindingsService::class)
+            ->setAutowired(true)
+            ->setBindings([
+                '$targetName' => 'bound_via_target',
+                '$variableName' => 'bound_via_variable',
+                '$commonName' => 'bound_via_common_name',
+            ]);
+
+        (new ResolveBindingsPass())->process($container);
+
+        $definition = $container->getDefinition('service');
+
+        // 1. Priority: Binding matches the #[Target] name
+        $this->assertSame('bound_via_target', $definition->getArgument(0));
+
+        // 2. Fallback: Binding matches the variable name (Target name 'unusedTarget' has no binding)
+        $this->assertSame('bound_via_variable', $definition->getArgument(1));
+
+        // 3. Equality: Target name and variable name are identical
+        $this->assertSame('bound_via_common_name', $definition->getArgument(2));
+    }
+}
+
+class TargetedBindingsService
+{
+    public function __construct(
+        #[Target('targetName')]
+        public $arg1,
+
+        #[Target('unusedTarget')]
+        public $variableName,
+
+        #[Target('commonName')]
+        public $commonName,
+    ) {
     }
 }

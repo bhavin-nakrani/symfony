@@ -25,10 +25,10 @@ class PassConfigTest extends TestCase
         $config = new PassConfig();
         $config->setBeforeOptimizationPasses([]);
 
-        $pass1 = $this->createMock(CompilerPassInterface::class);
+        $pass1 = $this->createStub(CompilerPassInterface::class);
         $config->addPass($pass1, PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
 
-        $pass2 = $this->createMock(CompilerPassInterface::class);
+        $pass2 = $this->createStub(CompilerPassInterface::class);
         $config->addPass($pass2, PassConfig::TYPE_BEFORE_OPTIMIZATION, 30);
 
         $passes = $config->getBeforeOptimizationPasses();
@@ -45,10 +45,10 @@ class PassConfigTest extends TestCase
         $config->setOptimizationPasses([]);
         $config->setRemovingPasses([]);
 
-        $this->assertEmpty($config->getBeforeOptimizationPasses());
-        $this->assertEmpty($config->getAfterRemovingPasses());
-        $this->assertEmpty($config->getBeforeRemovingPasses());
-        $this->assertEmpty($config->getOptimizationPasses());
-        $this->assertEmpty($config->getRemovingPasses());
+        $this->assertSame([], $config->getBeforeOptimizationPasses());
+        $this->assertSame([], $config->getAfterRemovingPasses());
+        $this->assertSame([], $config->getBeforeRemovingPasses());
+        $this->assertSame([], $config->getOptimizationPasses());
+        $this->assertSame([], $config->getRemovingPasses());
     }
 }

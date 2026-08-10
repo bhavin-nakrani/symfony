@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Compiler\AliasDeprecatedPublicServicesPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -42,18 +43,16 @@ final class AliasDeprecatedPublicServicesPassTest extends TestCase
         ], $alias->getDeprecation('foo'));
     }
 
-    /**
-     * @dataProvider processWithMissingAttributeProvider
-     */
+    #[DataProvider('processWithMissingAttributeProvider')]
     public function testProcessWithMissingAttribute(string $attribute, array $attributes)
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The "%s" attribute is mandatory for the "container.private" tag on the "foo" service.', $attribute));
-
         $container = new ContainerBuilder();
         $container
             ->register('foo')
             ->addTag('container.private', $attributes);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(\sprintf('The "%s" attribute is mandatory for the "container.private" tag on the "foo" service.', $attribute));
 
         (new AliasDeprecatedPublicServicesPass())->process($container);
     }

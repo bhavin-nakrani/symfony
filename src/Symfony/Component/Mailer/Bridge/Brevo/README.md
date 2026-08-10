@@ -2,7 +2,7 @@ Brevo Bridge
 ============
 
 Provides Brevo integration for Symfony Mailer.
-This was added uppon Sendinblue's rebranding to Brevo.
+This was added upon Sendinblue's rebranding to Brevo.
 
 Configuration example:
 
@@ -10,18 +10,25 @@ Configuration example:
 # SMTP
 MAILER_DSN=brevo+smtp://USERNAME:PASSWORD@default
 
+# SMTP on a specific port
+MAILER_DSN=brevo+smtp://USERNAME:PASSWORD@default:587
+
 # API
 MAILER_DSN=brevo+api://KEY@default
 ```
 
 where:
-- `KEY` is your Brevo API Key
+ - `KEY` is your Brevo API Key
+
+The SMTP port defaults to 465, which uses implicit TLS. On any other port the
+connection starts in clear text and is upgraded with STARTTLS when the server
+offers it.
 
 With API, you can use custom headers.
 
 ```php
 $params = ['param1' => 'foo', 'param2' => 'bar'];
-$json = json_encode(['"custom_header_1' => 'custom_value_1']);
+$json = json_encode(['custom_header_1' => 'custom_value_1']);
 
 $email = new Email();
 $email
@@ -36,21 +43,31 @@ $email
 ;
 ```
 
-This example allow you to set :
+This example allow you to set:
 
-* templateId
-* params
-* tags
-* headers
-    * sender.ip
-    * X-Mailin-Custom
+ * templateId
+ * params
+ * tags
+ * headers
+     * sender.ip
+     * X-Mailin-Custom
 
-For more informations, you can refer to [Brevo API documentation](https://developers.brevo.com/reference/sendtransacemail).
+For more information, you can refer to [Brevo API documentation](https://developers.brevo.com/reference/sendtransacemail).
+
+Sponsor
+-------
+
+This package is looking for a [backer][1].
+
+Help Symfony by [sponsoring][3] its development!
 
 Resources
 ---------
 
-* [Contributing](https://symfony.com/doc/current/contributing/index.html)
-* [Report issues](https://github.com/symfony/symfony/issues) and
-  [send Pull Requests](https://github.com/symfony/symfony/pulls)
-  in the [main Symfony repository](https://github.com/symfony/symfony)
+ * [Contributing](https://symfony.com/doc/current/contributing/index.html)
+ * [Report issues](https://github.com/symfony/symfony/issues) and
+   [send Pull Requests](https://github.com/symfony/symfony/pulls)
+   in the [main Symfony repository](https://github.com/symfony/symfony)
+
+[1]: https://symfony.com/backers
+[3]: https://symfony.com/sponsor

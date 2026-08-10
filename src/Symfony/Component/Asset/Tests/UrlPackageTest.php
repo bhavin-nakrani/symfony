@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Asset\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Asset\Context\ContextInterface;
 use Symfony\Component\Asset\Exception\InvalidArgumentException;
@@ -22,16 +23,14 @@ use Symfony\Component\Asset\VersionStrategy\VersionStrategyInterface;
 
 class UrlPackageTest extends TestCase
 {
-    /**
-     * @dataProvider getConfigs
-     */
-    public function testGetUrl($baseUrls, $format, $path, $expected)
+    #[DataProvider('getConfigs')]
+    public function testGetUrl($baseUrls, string $format, string $path, string $expected)
     {
         $package = new UrlPackage($baseUrls, new StaticVersionStrategy('v1', $format));
         $this->assertSame($expected, $package->getUrl($path));
     }
 
-    public static function getConfigs()
+    public static function getConfigs(): array
     {
         return [
             ['http://example.net', '', 'http://example.com/foo', 'http://example.com/foo'],
@@ -62,17 +61,15 @@ class UrlPackageTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider getContextConfigs
-     */
-    public function testGetUrlWithContext($secure, $baseUrls, $format, $path, $expected)
+    #[DataProvider('getContextConfigs')]
+    public function testGetUrlWithContext(bool $secure, $baseUrls, string $format, string $path, string $expected)
     {
         $package = new UrlPackage($baseUrls, new StaticVersionStrategy('v1', $format), $this->getContext($secure));
 
         $this->assertSame($expected, $package->getUrl($path));
     }
 
-    public static function getContextConfigs()
+    public static function getContextConfigs(): array
     {
         return [
             [false, 'http://example.com', '', 'foo', 'http://example.com/foo?v1'],
@@ -92,8 +89,8 @@ class UrlPackageTest extends TestCase
 
     public function testVersionStrategyGivesAbsoluteURL()
     {
-        $versionStrategy = $this->createMock(VersionStrategyInterface::class);
-        $versionStrategy->expects($this->any())
+        $versionStrategy = $this->createStub(VersionStrategyInterface::class);
+        $versionStrategy
             ->method('applyVersion')
             ->willReturn('https://cdn.com/bar/main.css');
         $package = new UrlPackage('https://example.com', $versionStrategy);
@@ -107,16 +104,14 @@ class UrlPackageTest extends TestCase
         new UrlPackage([], new EmptyVersionStrategy());
     }
 
-    /**
-     * @dataProvider getWrongBaseUrlConfig
-     */
-    public function testWrongBaseUrl($baseUrls)
+    #[DataProvider('getWrongBaseUrlConfig')]
+    public function testWrongBaseUrl(string $baseUrls)
     {
         $this->expectException(InvalidArgumentException::class);
         new UrlPackage($baseUrls, new EmptyVersionStrategy());
     }
 
-    public static function getWrongBaseUrlConfig()
+    public static function getWrongBaseUrlConfig(): array
     {
         return [
             ['not-a-url'],
@@ -124,10 +119,10 @@ class UrlPackageTest extends TestCase
         ];
     }
 
-    private function getContext($secure)
+    private function getContext($secure): ContextInterface
     {
-        $context = $this->createMock(ContextInterface::class);
-        $context->expects($this->any())->method('isSecure')->willReturn($secure);
+        $context = $this->createStub(ContextInterface::class);
+        $context->method('isSecure')->willReturn($secure);
 
         return $context;
     }

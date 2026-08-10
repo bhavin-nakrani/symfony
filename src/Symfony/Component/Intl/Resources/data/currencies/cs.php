@@ -898,9 +898,13 @@ return [
             'SKK',
             'slovenská koruna',
         ],
+        'SLE' => [
+            'SLE',
+            'sierraleonský leone',
+        ],
         'SLL' => [
             'SLL',
-            'sierro-leonský leone',
+            'sierraleonský leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1074,6 +1078,10 @@ return [
             'EC$',
             'východokaribský dolar',
         ],
+        'XCG' => [
+            'Cg.',
+            'karibský gulden',
+        ],
         'XEU' => [
             'ECU',
             'evropská měnová jednotka',
@@ -1149,6 +1157,10 @@ return [
         'ZWD' => [
             'ZWD',
             'zimbabwský dolar (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'zimbabwský zlatý',
         ],
         'ZWL' => [
             'ZWL',

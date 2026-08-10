@@ -12,6 +12,7 @@
 namespace Symfony\Component\Form\Test\Traits;
 
 use Symfony\Component\Form\Extension\Validator\ValidatorExtension;
+use Symfony\Component\Form\Extension\Validator\ViolationMapper\ViolationMapperInterface;
 use Symfony\Component\Form\Test\TypeTestCase;
 use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
@@ -19,26 +20,27 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 trait ValidatorExtensionTrait
 {
-    /**
-     * @var ValidatorInterface|null
-     */
-    protected $validator;
+    protected ValidatorInterface $validator;
 
-    protected function getValidatorExtension(): ValidatorExtension
+    /**
+     * @param ViolationMapperInterface|null $violationMapper
+     */
+    protected function getValidatorExtension(/* ?ViolationMapperInterface $violationMapper = null */): ValidatorExtension
     {
+        $violationMapper = \func_num_args() ? func_get_arg(0) : null;
         if (!interface_exists(ValidatorInterface::class)) {
             throw new \Exception('In order to use the "ValidatorExtensionTrait", the symfony/validator component must be installed.');
         }
 
         if (!$this instanceof TypeTestCase) {
-            throw new \Exception(sprintf('The trait "ValidatorExtensionTrait" can only be added to a class that extends "%s".', TypeTestCase::class));
+            throw new \Exception(\sprintf('The trait "ValidatorExtensionTrait" can only be added to a class that extends "%s".', TypeTestCase::class));
         }
 
         $this->validator = $this->createMock(ValidatorInterface::class);
         $metadata = $this->getMockBuilder(ClassMetadata::class)->setConstructorArgs([''])->onlyMethods(['addPropertyConstraint'])->getMock();
-        $this->validator->expects($this->any())->method('getMetadataFor')->will($this->returnValue($metadata));
-        $this->validator->expects($this->any())->method('validate')->will($this->returnValue(new ConstraintViolationList()));
+        $this->validator->expects($this->any())->method('getMetadataFor')->willReturn($metadata);
+        $this->validator->expects($this->any())->method('validate')->willReturn(new ConstraintViolationList());
 
-        return new ValidatorExtension($this->validator, false);
+        return new ValidatorExtension($this->validator, $violationMapper);
     }
 }

@@ -530,9 +530,13 @@ return [
             'SHP',
             'Pauni ya St. Helena',
         ],
+        'SLE' => [
+            'SLE',
+            'Leone ya Siera Leoni',
+        ],
         'SLL' => [
             'SLL',
-            'Leone ya Siera Leoni',
+            'Leone ya Siera Leoni (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -646,6 +650,10 @@ return [
             'EC$',
             'Dola ya Karibi Mashariki',
         ],
+        'XCG' => [
+            'Cg.',
+            'Guilder ya Karibe',
+        ],
         'XOF' => [
             'F CFA',
             'Faranga ya Afrika Magharibi CFA',
@@ -673,6 +681,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Dola ya Zimbabwe',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Dhahabu ya Zimbabwe',
         ],
     ],
 ];

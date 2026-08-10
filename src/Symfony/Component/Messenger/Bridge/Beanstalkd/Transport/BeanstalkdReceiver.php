@@ -14,55 +14,69 @@ namespace Symfony\Component\Messenger\Bridge\Beanstalkd\Transport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\LogicException;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
+use Symfony\Component\Messenger\Stamp\SentForRetryStamp;
+use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
+use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
-use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 
 /**
  * @author Antonio Pauletich <antonio.pauletich95@gmail.com>
  */
-class BeanstalkdReceiver implements ReceiverInterface, MessageCountAwareInterface
+class BeanstalkdReceiver implements KeepaliveReceiverInterface, MessageCountAwareInterface
 {
-    private Connection $connection;
     private SerializerInterface $serializer;
 
-    public function __construct(Connection $connection, SerializerInterface $serializer = null)
-    {
-        $this->connection = $connection;
+    public function __construct(
+        private Connection $connection,
+        ?SerializerInterface $serializer = null,
+    ) {
         $this->serializer = $serializer ?? new PhpSerializer();
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
-        $beanstalkdEnvelope = $this->connection->get();
-
-        if (null === $beanstalkdEnvelope) {
-            return [];
+        if (!$beanstalkdEnvelope = $this->connection->get()) {
+            return;
         }
+
+        $stamps = [
+            new BeanstalkdReceivedStamp($beanstalkdEnvelope['id'], $this->connection->getTube()),
+            new TransportMessageIdStamp($beanstalkdEnvelope['id']),
+            new BeanstalkdPriorityStamp($this->connection->getMessagePriority($beanstalkdEnvelope['id'])),
+        ];
 
         try {
-            $envelope = $this->serializer->decode([
+            yield $this->serializer->decode($beanstalkdEnvelope = [
                 'body' => $beanstalkdEnvelope['body'],
                 'headers' => $beanstalkdEnvelope['headers'],
-            ]);
-        } catch (MessageDecodingFailedException $exception) {
-            $this->connection->reject($beanstalkdEnvelope['id']);
-
-            throw $exception;
+            ])->withoutAll(TransportMessageIdStamp::class)->with(...$stamps);
+        } catch (MessageDecodingFailedException $e) {
+            yield MessageDecodingFailedException::wrap($beanstalkdEnvelope, $e->getMessage(), $e->getCode(), $e)->with(...$stamps);
         }
-
-        return [$envelope->with(new BeanstalkdReceivedStamp($beanstalkdEnvelope['id'], $this->connection->getTube()))];
     }
 
     public function ack(Envelope $envelope): void
     {
-        $this->connection->ack($this->findBeanstalkdReceivedStamp($envelope)->getId());
+        $this->connection->ack($this->findBeanstalkdReceivedStampId($envelope));
     }
 
     public function reject(Envelope $envelope): void
     {
-        $this->connection->reject($this->findBeanstalkdReceivedStamp($envelope)->getId());
+        $this->connection->reject(
+            $this->findBeanstalkdReceivedStampId($envelope),
+            $envelope->last(BeanstalkdPriorityStamp::class)?->priority,
+            $envelope->last(SentForRetryStamp::class)?->isSent ?? false,
+        );
+    }
+
+    public function keepalive(Envelope $envelope, ?int $seconds = null): void
+    {
+        $this->connection->keepalive($this->findBeanstalkdReceivedStampId($envelope), $seconds);
     }
 
     public function getMessageCount(): int
@@ -70,15 +84,8 @@ class BeanstalkdReceiver implements ReceiverInterface, MessageCountAwareInterfac
         return $this->connection->getMessageCount();
     }
 
-    private function findBeanstalkdReceivedStamp(Envelope $envelope): BeanstalkdReceivedStamp
+    private function findBeanstalkdReceivedStampId(Envelope $envelope): string
     {
-        /** @var BeanstalkdReceivedStamp|null $beanstalkdReceivedStamp */
-        $beanstalkdReceivedStamp = $envelope->last(BeanstalkdReceivedStamp::class);
-
-        if (null === $beanstalkdReceivedStamp) {
-            throw new LogicException('No BeanstalkdReceivedStamp found on the Envelope.');
-        }
-
-        return $beanstalkdReceivedStamp;
+        return $envelope->last(BeanstalkdReceivedStamp::class)?->getId() ?? throw new LogicException('No BeanstalkdReceivedStamp found on the Envelope.');
     }
 }

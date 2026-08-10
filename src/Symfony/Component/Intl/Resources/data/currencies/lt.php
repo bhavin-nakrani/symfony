@@ -898,9 +898,13 @@ return [
             'SKK',
             'Slovakijos krona',
         ],
+        'SLE' => [
+            'SLE',
+            'Siera Leonės leonė',
+        ],
         'SLL' => [
             'SLL',
-            'Siera Leonės leonė',
+            'Siera Leonės leonė (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1074,6 +1078,10 @@ return [
             'XCD',
             'Rytų Karibų doleris',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karibų guldenas',
+        ],
         'XEU' => [
             'XEU',
             'Europos piniginis vienetas (1993–1999)',
@@ -1149,6 +1157,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Zimbabvės doleris (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabvės auksas',
         ],
         'ZWL' => [
             'ZWL',

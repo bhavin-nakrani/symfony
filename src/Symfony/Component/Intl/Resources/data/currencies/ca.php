@@ -220,7 +220,7 @@ return [
         ],
         'BYN' => [
             'BYN',
-            'ruble bielorús',
+            'ruble belarús',
         ],
         'BYR' => [
             'BYR',
@@ -890,9 +890,13 @@ return [
             'SKK',
             'corona eslovaca',
         ],
+        'SLE' => [
+            'SLE',
+            'leone de Sierra Leone',
+        ],
         'SLL' => [
             'SLL',
-            'leone de Sierra Leone',
+            'leone de Sierra Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1066,6 +1070,10 @@ return [
             'XCD',
             'dòlar del Carib Oriental',
         ],
+        'XCG' => [
+            'XCG',
+            'florí de les Antilles',
+        ],
         'XEU' => [
             'XEU',
             'unitat de moneda europea',
@@ -1141,6 +1149,10 @@ return [
         'ZWD' => [
             'ZWD',
             'dòlar zimbabuès (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'or de Zimbàbue',
         ],
         'ZWL' => [
             'ZWL',

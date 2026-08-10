@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'UserAssignedNames' => [
+        'XK' => 'Kosovo',
+    ],
     'Names' => [
         'AD' => 'Andora',
         'AE' => 'Uni Émirat Arab',
@@ -33,7 +36,7 @@ return [
         'BO' => 'Bolivia',
         'BQ' => 'Karibia Walanda',
         'BR' => 'Brasil',
-        'BS' => 'Bahamas',
+        'BS' => 'Bahama',
         'BT' => 'Bhutan',
         'BV' => 'Pulo Bovèt',
         'BW' => 'Botswana',
@@ -107,7 +110,7 @@ return [
         'IL' => 'Israèl',
         'IM' => 'Pulo Man',
         'IN' => 'Indhia',
-        'IO' => 'Wilayah Inggris nang Segoro Hindia',
+        'IO' => 'Wilayah Inggris ing Segara Hindia',
         'IQ' => 'Irak',
         'IR' => 'Iran',
         'IS' => 'Èslan',

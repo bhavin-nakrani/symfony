@@ -11,8 +11,10 @@
 
 namespace Symfony\Component\CssSelector\Tests\XPath;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\CssSelector\Exception\ExpressionErrorException;
+use Symfony\Component\CssSelector\Exception\SyntaxErrorException;
 use Symfony\Component\CssSelector\Node\ElementNode;
 use Symfony\Component\CssSelector\Node\FunctionNode;
 use Symfony\Component\CssSelector\Parser\Parser;
@@ -22,13 +24,13 @@ use Symfony\Component\CssSelector\XPath\XPathExpr;
 
 class TranslatorTest extends TestCase
 {
-    /** @dataProvider getXpathLiteralTestData */
+    #[DataProvider('getXpathLiteralTestData')]
     public function testXpathLiteral($value, $literal)
     {
         $this->assertEquals($literal, Translator::getXpathLiteral($value));
     }
 
-    /** @dataProvider getCssToXPathTestData */
+    #[DataProvider('getCssToXPathTestData')]
     public function testCssToXPath($css, $xpath)
     {
         $translator = new Translator();
@@ -36,62 +38,90 @@ class TranslatorTest extends TestCase
         $this->assertEquals($xpath, $translator->cssToXPath($css, ''));
     }
 
-    public function testCssToXPathPseudoElement()
+    #[DataProvider('getUnsupportedHasSelectorTestData')]
+    public function testHasUnsupportedSelector(string $css)
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
+
+        $this->expectException(SyntaxErrorException::class);
+
+        $translator->cssToXPath($css, '');
+    }
+
+    public static function getUnsupportedHasSelectorTestData(): iterable
+    {
+        yield 'pseudo-element inside :has()' => ['div:has(::before)'];
+    }
+
+    public function testCssToXPathPseudoElement()
+    {
+        $translator = new Translator();
+        $translator->registerExtension(new HtmlExtension($translator));
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->cssToXPath('e::first-line');
     }
 
     public function testGetExtensionNotExistsExtension()
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->getExtension('fake');
     }
 
     public function testAddCombinationNotExistsExtension()
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
         $parser = new Parser();
         $xpath = $parser->parse('*')[0];
         $combinedXpath = $parser->parse('*')[0];
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->addCombination('fake', $xpath, $combinedXpath);
     }
 
     public function testAddFunctionNotExistsFunction()
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
         $xpath = new XPathExpr();
         $function = new FunctionNode(new ElementNode(), 'fake');
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->addFunction($xpath, $function);
     }
 
     public function testAddPseudoClassNotExistsClass()
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
         $xpath = new XPathExpr();
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->addPseudoClass($xpath, 'fake');
     }
 
     public function testAddAttributeMatchingClassNotExistsClass()
     {
-        $this->expectException(ExpressionErrorException::class);
         $translator = new Translator();
         $translator->registerExtension(new HtmlExtension($translator));
         $xpath = new XPathExpr();
+
+        $this->expectException(ExpressionErrorException::class);
+
         $translator->addAttributeMatching($xpath, '', '', '');
     }
 
-    /** @dataProvider getXmlLangTestData */
+    #[DataProvider('getXmlLangTestData')]
     public function testXmlLang($css, array $elementsId)
     {
         $translator = new Translator();
@@ -103,7 +133,7 @@ class TranslatorTest extends TestCase
         }
     }
 
-    /** @dataProvider getHtmlIdsTestData */
+    #[DataProvider('getHtmlIdsTestData')]
     public function testHtmlIds($css, array $elementsId)
     {
         $translator = new Translator();
@@ -124,7 +154,7 @@ class TranslatorTest extends TestCase
         libxml_use_internal_errors($internalErrors);
     }
 
-    /** @dataProvider getHtmlShakespearTestData */
+    #[DataProvider('getHtmlShakespearTestData')]
     public function testHtmlShakespear($css, $count)
     {
         $translator = new Translator();
@@ -144,18 +174,18 @@ class TranslatorTest extends TestCase
         $translator->registerExtension(new HtmlExtension($translator));
         $document = new \DOMDocument();
         $document->loadHTML(<<<'HTML'
-<html>
-  <body>
-    <p>
-      <span>A</span>
-    </p>
-    <p>
-      <span>B</span>
-      <span>C</span>
-    </p>
-  </body>
-</html>
-HTML
+            <html>
+              <body>
+                <p>
+                  <span>A</span>
+                </p>
+                <p>
+                  <span>B</span>
+                  <span>C</span>
+                </p>
+              </body>
+            </html>
+            HTML
         );
 
         $xpath = new \DOMXPath($document);
@@ -221,6 +251,24 @@ HTML
             ['div#container p', "div[@id = 'container']/descendant-or-self::*/p"],
             [':scope > div[dataimg="<testmessage>"]', "*[1]/div[@dataimg = '<testmessage>']"],
             [':scope', '*[1]'],
+            ['e:is(section, article) h1', "e[(name() = 'section') or (name() = 'article')]/descendant-or-self::*/h1"],
+            ['e:where(section, article) h1', "e[(name() = 'section') or (name() = 'article')]/descendant-or-self::*/h1"],
+            ['[hidden]:where(:is(span))', "*[(@hidden) and (name() = 'span')]"],
+            ['[hidden]:where(:not(span))', "*[(@hidden) and (not(name() = 'span'))]"],
+            ['[hidden]:is(span, div)', "*[(@hidden) and ((name() = 'span') or (name() = 'div'))]"],
+            ['[hidden]:where(:not([hidden=until-found]))', "*[(@hidden) and (not(@hidden = 'until-found'))]"],
+            ['div:has(> .foo)', "div[./*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]]"],
+            ['div:has(~ .foo)', "div[following-sibling::*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]]"],
+            ['div:has(+ .foo)', "div[following-sibling::*[(@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')) and (position() = 1)]]"],
+            ['div:has(.foo)', "div[descendant-or-self::*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]]"],
+            ['div:has(#bar)', "div[descendant-or-self::*[@id = 'bar']]"],
+            ['div:has([data-x])', 'div[descendant-or-self::*[@data-x]]'],
+            ['div:has(.foo .bar)', "div[descendant-or-self::*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]/descendant-or-self::*/*[@class and contains(concat(' ', normalize-space(@class), ' '), ' bar ')]]"],
+            ['div:has(:not(.foo))', "div[descendant-or-self::*[not(@class and contains(concat(' ', normalize-space(@class), ' '), ' foo '))]]"],
+            ['div:has(> .foo > .bar)', "div[./*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]/*[@class and contains(concat(' ', normalize-space(@class), ' '), ' bar ')]]"],
+            ['div:has(.foo, .bar)', "div[(descendant-or-self::*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]) or (descendant-or-self::*[@class and contains(concat(' ', normalize-space(@class), ' '), ' bar ')])]"],
+            ['div:has(> .foo, + .bar)', "div[(./*[@class and contains(concat(' ', normalize-space(@class), ' '), ' foo ')]) or (following-sibling::*[(@class and contains(concat(' ', normalize-space(@class), ' '), ' bar ')) and (position() = 1)])]"],
+            ['div:has(:scope > a)', 'div[descendant-or-self::*[1]/a]'],
         ];
     }
 
@@ -265,7 +313,7 @@ HTML
             ['div[foobar~="cd"]', []],
             ['*[lang|="En"]', ['second-li']],
             ['[lang|="En-us"]', ['second-li']],
-            // Attribute values are case sensitive
+            // Attribute values are case-sensitive
             ['*[lang|="en"]', []],
             ['[lang|="en-US"]', []],
             ['*[lang|="e"]', []],
@@ -322,7 +370,7 @@ HTML
             ['* :root', []],
             ['*:contains("link")', ['html', 'nil', 'outer-div', 'tag-anchor', 'nofollow-anchor']],
             [':CONtains("link")', ['html', 'nil', 'outer-div', 'tag-anchor', 'nofollow-anchor']],
-            ['*:contains("LInk")', []],  // case sensitive
+            ['*:contains("LInk")', []],  // case-sensitive
             ['*:contains("e")', ['html', 'nil', 'outer-div', 'first-ol', 'first-li', 'paragraph', 'p-em']],
             ['*:contains("E")', []],  // case-sensitive
             ['.a', ['first-ol']],
@@ -355,6 +403,19 @@ HTML
             [':not(*)', []],
             ['a:not([href])', ['name-anchor']],
             ['ol :Not(li[class])', ['first-li', 'second-li', 'li-div', 'fifth-li', 'sixth-li', 'seventh-li']],
+            [':is(#first-li, #second-li)', ['first-li', 'second-li']],
+            ['a:is(#name-anchor, #tag-anchor)', ['name-anchor', 'tag-anchor']],
+            [':is(.c)', ['first-ol', 'third-li', 'fourth-li']],
+            ['a:is(:not(#name-anchor))', ['tag-anchor', 'nofollow-anchor']],
+            ['a:not(:is(#name-anchor))', ['tag-anchor', 'nofollow-anchor']],
+            [':where(#first-li, #second-li)', ['first-li', 'second-li']],
+            ['a:where(#name-anchor, #tag-anchor)', ['name-anchor', 'tag-anchor']],
+            [':where(.c)', ['first-ol', 'third-li', 'fourth-li']],
+            ['a:where(:not(#name-anchor))', ['tag-anchor', 'nofollow-anchor']],
+            ['a:not(:where(#name-anchor))', ['tag-anchor', 'nofollow-anchor']],
+            ['a:where(:is(#name-anchor), :where(#tag-anchor))', ['name-anchor', 'tag-anchor']],
+            ['li:has(div, [foobar])', ['second-li']],
+            ['ol:has(> li[lang], > .nonexistent)', ['first-ol']],
             // HTML-specific
             [':link', ['link-href', 'tag-anchor', 'nofollow-anchor', 'area-href']],
             [':visited', []],
@@ -416,6 +477,7 @@ HTML
             [':scope > div', 1],
             [':scope > div > div[class=dialog]', 1],
             [':scope > div div', 242],
+            ['div:is(div#test .dialog) .direction', 4],
         ];
     }
 }

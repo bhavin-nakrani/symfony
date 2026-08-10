@@ -27,9 +27,9 @@ interface ListableReceiverInterface extends ReceiverInterface
      *
      * Messages should be given the same stamps as when using ReceiverInterface::get().
      *
-     * @return Envelope[]|iterable
+     * @return iterable<Envelope>
      */
-    public function all(int $limit = null): iterable;
+    public function all(?int $limit = null): iterable;
 
     /**
      * Returns the Envelope by id or none.

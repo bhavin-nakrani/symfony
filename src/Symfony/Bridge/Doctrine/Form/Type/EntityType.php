@@ -21,16 +21,13 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class EntityType extends DoctrineType
 {
-    /**
-     * @return void
-     */
-    public function configureOptions(OptionsResolver $resolver)
+    public function configureOptions(OptionsResolver $resolver): void
     {
         parent::configureOptions($resolver);
 
         // Invoke the query builder closure so that we can cache choice lists
         // for equal query builders
-        $queryBuilderNormalizer = function (Options $options, $queryBuilder) {
+        $queryBuilderNormalizer = static function (Options $options, $queryBuilder) {
             if (\is_callable($queryBuilder)) {
                 $queryBuilder = $queryBuilder($options['em']->getRepository($options['class']));
 
@@ -54,7 +51,7 @@ class EntityType extends DoctrineType
     public function getLoader(ObjectManager $manager, object $queryBuilder, string $class): ORMQueryBuilderLoader
     {
         if (!$queryBuilder instanceof QueryBuilder) {
-            throw new \TypeError(sprintf('Expected an instance of "%s", but got "%s".', QueryBuilder::class, get_debug_type($queryBuilder)));
+            throw new \TypeError(\sprintf('Expected an instance of "%s", but got "%s".', QueryBuilder::class, get_debug_type($queryBuilder)));
         }
 
         return new ORMQueryBuilderLoader($queryBuilder);
@@ -77,7 +74,7 @@ class EntityType extends DoctrineType
     public function getQueryBuilderPartsForCachingHash(object $queryBuilder): ?array
     {
         if (!$queryBuilder instanceof QueryBuilder) {
-            throw new \TypeError(sprintf('Expected an instance of "%s", but got "%s".', QueryBuilder::class, get_debug_type($queryBuilder)));
+            throw new \TypeError(\sprintf('Expected an instance of "%s", but got "%s".', QueryBuilder::class, get_debug_type($queryBuilder)));
         }
 
         return [

@@ -40,18 +40,20 @@ use Symfony\Component\Process\Exception\RuntimeException;
  *
  * @author Yanick Witschi <yanick.witschi@terminal42.ch>
  * @author Partially copied and heavily inspired from composer/xdebug-handler by John Stevenson <john-stevenson@blueyonder.co.uk>
+ *
+ * @psalm-import-type EnvArray from Process
  */
 class PhpSubprocess extends Process
 {
     /**
-     * @param array       $command The command to run and its arguments listed as separate entries. They will automatically
-     *                             get prefixed with the PHP binary
-     * @param string|null $cwd     The working directory or null to use the working dir of the current PHP process
-     * @param array|null  $env     The environment variables or null to use the same environment as the current PHP process
-     * @param int         $timeout The timeout in seconds
-     * @param array|null  $php     Path to the PHP binary to use with any additional arguments
+     * @param array         $command The command to run and its arguments listed as separate entries. They will automatically
+     *                               get prefixed with the PHP binary
+     * @param string|null   $cwd     The working directory or null to use the working dir of the current PHP process
+     * @param EnvArray|null $env     The environment variables or null to use the same environment as the current PHP process
+     * @param int           $timeout The timeout in seconds
+     * @param array|null    $php     Path to the PHP binary to use with any additional arguments
      */
-    public function __construct(array $command, string $cwd = null, array $env = null, int $timeout = 60, array $php = null)
+    public function __construct(array $command, ?string $cwd = null, ?array $env = null, int $timeout = 60, ?array $php = null)
     {
         if (null === $php) {
             $executableFinder = new PhpExecutableFinder();
@@ -73,12 +75,15 @@ class PhpSubprocess extends Process
         parent::__construct($command, $cwd, $env, null, $timeout);
     }
 
-    public static function fromShellCommandline(string $command, string $cwd = null, array $env = null, mixed $input = null, ?float $timeout = 60): static
+    public static function fromShellCommandline(string $command, ?string $cwd = null, ?array $env = null, mixed $input = null, ?float $timeout = 60): static
     {
-        throw new LogicException(sprintf('The "%s()" method cannot be called when using "%s".', __METHOD__, self::class));
+        throw new LogicException(\sprintf('The "%s()" method cannot be called when using "%s".', __METHOD__, self::class));
     }
 
-    public function start(callable $callback = null, array $env = []): void
+    /**
+     * @param (callable('out'|'err', string):void)|null $callback
+     */
+    public function start(?callable $callback = null, array $env = []): void
     {
         if (null === $this->getCommandLine()) {
             throw new RuntimeException('Unable to find the PHP executable.');
@@ -106,7 +111,7 @@ class PhpSubprocess extends Process
                 throw new RuntimeException('Unable to read ini: '.$file);
             }
             // Check and remove directives after HOST and PATH sections
-            if (preg_match('/^\s*\[(?:PATH|HOST)\s*=/mi', $data, $matches)) {
+            if (preg_match('/^\s*\[(?:PATH|HOST)\s*=/mi', $data, $matches, \PREG_OFFSET_CAPTURE)) {
                 $data = substr($data, 0, $matches[0][1]);
             }
 

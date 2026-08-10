@@ -13,26 +13,29 @@ namespace Symfony\Component\Security\Http\Tests\AccessToken\Oidc;
 
 use Jose\Component\Core\AlgorithmManager;
 use Jose\Component\Core\JWK;
+use Jose\Component\Core\JWKSet;
 use Jose\Component\Signature\Algorithm\ES256;
 use Jose\Component\Signature\JWSBuilder;
 use Jose\Component\Signature\Serializer\CompactSerializer;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Core\User\OidcUser;
 use Symfony\Component\Security\Http\AccessToken\Oidc\OidcTokenHandler;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
+use Symfony\Contracts\Cache\ItemInterface;
 
-/**
- * @requires extension openssl
- */
+#[RequiresPhpExtension('openssl')]
 class OidcTokenHandlerTest extends TestCase
 {
     private const AUDIENCE = 'Symfony OIDC';
 
-    /**
-     * @dataProvider getClaims
-     */
+    #[DataProvider('getClaims')]
     public function testGetsUserIdentifierFromSignedToken(string $claim, string $expected)
     {
         $time = time();
@@ -45,15 +48,15 @@ class OidcTokenHandlerTest extends TestCase
             'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
             'email' => 'foo@example.com',
         ];
-        $token = $this->buildJWS(json_encode($claims));
-        $expectedUser = new OidcUser(...$claims);
+        $token = self::buildJWS(json_encode($claims));
+        $expectedUser = new OidcUser(...$claims, userIdentifier: $claims[$claim]);
 
         $loggerMock = $this->createMock(LoggerInterface::class);
         $loggerMock->expects($this->never())->method('error');
 
         $userBadge = (new OidcTokenHandler(
-            new ES256(),
-            $this->getJWK(),
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
             self::AUDIENCE,
             ['https://www.example.com'],
             $claim,
@@ -61,11 +64,13 @@ class OidcTokenHandlerTest extends TestCase
         ))->getUserBadgeFrom($token);
         $actualUser = $userBadge->getUserLoader()();
 
-        $this->assertEquals(new UserBadge($expected, fn () => $expectedUser, $claims), $userBadge);
+        $this->assertInstanceOf(UserBadge::class, $userBadge);
+        $this->assertSame($expected, $userBadge->getUserIdentifier());
+        $this->assertSame($claims, $userBadge->getAttributes());
         $this->assertInstanceOf(OidcUser::class, $actualUser);
         $this->assertEquals($expectedUser, $actualUser);
         $this->assertEquals($claims, $userBadge->getAttributes());
-        $this->assertEquals($claims['sub'], $actualUser->getUserIdentifier());
+        $this->assertEquals($claims[$claim], $actualUser->getUserIdentifier());
     }
 
     public static function getClaims(): iterable
@@ -74,20 +79,18 @@ class OidcTokenHandlerTest extends TestCase
         yield ['email', 'foo@example.com'];
     }
 
-    /**
-     * @dataProvider getInvalidTokens
-     */
+    #[DataProvider('getInvalidTokens')]
     public function testThrowsAnErrorIfTokenIsInvalid(string $token)
     {
-        $this->expectException(BadCredentialsException::class);
-        $this->expectExceptionMessage('Invalid credentials.');
-
         $loggerMock = $this->createMock(LoggerInterface::class);
         $loggerMock->expects($this->once())->method('error');
 
+        $this->expectException(BadCredentialsException::class);
+        $this->expectExceptionMessage('Invalid credentials.');
+
         (new OidcTokenHandler(
-            new ES256(),
-            $this->getJWK(),
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
             self::AUDIENCE,
             ['https://www.example.com'],
             'sub',
@@ -97,10 +100,8 @@ class OidcTokenHandlerTest extends TestCase
 
     public static function getInvalidTokens(): iterable
     {
-        // Invalid token
-        yield ['invalid'];
-        // Token is expired
-        yield [
+        yield 'Invalid token' => ['invalid'];
+        yield 'Token is expired' => [
             self::buildJWS(json_encode([
                 'iat' => time() - 3600,
                 'nbf' => time() - 3600,
@@ -111,8 +112,7 @@ class OidcTokenHandlerTest extends TestCase
                 'email' => 'foo@example.com',
             ])),
         ];
-        // Invalid audience
-        yield [
+        yield 'Invalid audience' => [
             self::buildJWS(json_encode([
                 'iat' => time(),
                 'nbf' => time(),
@@ -123,13 +123,46 @@ class OidcTokenHandlerTest extends TestCase
                 'email' => 'foo@example.com',
             ])),
         ];
+        yield 'Missing "aud" claim' => [
+            self::buildJWS(json_encode([
+                'iat' => time(),
+                'nbf' => time(),
+                'exp' => time() + 3600,
+                'iss' => 'https://www.example.com',
+                'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+            ])),
+        ];
+        yield 'Missing "iss" claim' => [
+            self::buildJWS(json_encode([
+                'iat' => time(),
+                'nbf' => time(),
+                'exp' => time() + 3600,
+                'aud' => self::AUDIENCE,
+                'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+            ])),
+        ];
+        yield 'Missing "exp" claim' => [
+            self::buildJWS(json_encode([
+                'iat' => time(),
+                'nbf' => time(),
+                'iss' => 'https://www.example.com',
+                'aud' => self::AUDIENCE,
+                'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+            ])),
+        ];
+        yield 'Missing "iat" claim' => [
+            self::buildJWS(json_encode([
+                'nbf' => time(),
+                'exp' => time() + 3600,
+                'iss' => 'https://www.example.com',
+                'aud' => self::AUDIENCE,
+                'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+            ])),
+        ];
     }
 
     public function testThrowsAnErrorIfUserPropertyIsMissing()
     {
-        $this->expectException(BadCredentialsException::class);
-        $this->expectExceptionMessage('Invalid credentials.');
-
         $loggerMock = $this->createMock(LoggerInterface::class);
         $loggerMock->expects($this->once())->method('error');
 
@@ -144,9 +177,12 @@ class OidcTokenHandlerTest extends TestCase
         ];
         $token = $this->buildJWS(json_encode($claims));
 
+        $this->expectException(BadCredentialsException::class);
+        $this->expectExceptionMessage('Invalid credentials.');
+
         (new OidcTokenHandler(
-            new ES256(),
-            self::getJWK(),
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
             self::AUDIENCE,
             ['https://www.example.com'],
             'email',
@@ -175,5 +211,501 @@ class OidcTokenHandlerTest extends TestCase
             'y' => 'KYl-qyZ26HobuYwlQh-r0iHX61thfP82qqEku7i0woo',
             'd' => 'iA_TV2zvftni_9aFAQwFO_9aypfJFCSpcCyevDvz220',
         ]);
+    }
+
+    private static function getSecondJWK(): JWK
+    {
+        return new JWK([
+            'kty' => 'EC',
+            'd' => '0LCBSOYvrksazPnC0pzwY0P5MWEESUhEzbc2zJEnOsc',
+            'crv' => 'P-256',
+            'x' => 'N1aUu8Pd2WdClkpCQ4QCPnGjYe_bTmDgEaSoxy5LhTw',
+            'y' => 'Yr1v-tCNxE8QgAGlartrJAi343bI8VlAaNvgCOp8Azs',
+        ]);
+    }
+
+    private static function getJWKSet(): JWKSet
+    {
+        return new JWKSet([
+            new JWK([
+                'kty' => 'EC',
+                'crv' => 'P-256',
+                'x' => 'FtgMtrsKDboRO-Zo0XC7tDJTATHVmwuf9GK409kkars',
+                'y' => 'rWDE0ERU2SfwGYCo1DWWdgFEbZ0MiAXLRBBOzBgs_jY',
+                'd' => '4G7bRIiKih0qrFxc0dtvkHUll19tTyctoCR3eIbOrO0',
+            ]),
+            self::getJWK(),
+        ]);
+    }
+
+    public function testGetsUserIdentifierWithSingleDiscoveryEndpoint()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+            'email' => 'foo@example.com',
+        ];
+        $token = $this->buildJWS(json_encode($claims));
+
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/.well-known/jwks.json']),
+            new JsonMockResponse(['keys' => [array_merge(self::getJWK()->all(), ['use' => 'sig'])]]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_config');
+
+        $userBadge = $handler->getUserBadgeFrom($token);
+
+        $this->assertInstanceOf(UserBadge::class, $userBadge);
+        $this->assertSame('e21bf182-1538-406e-8ccb-e25a17aba39f', $userBadge->getUserIdentifier());
+    }
+
+    public function testGetsUserIdentifierWithMultipleDiscoveryEndpoints()
+    {
+        $time = time();
+
+        $httpClient1 = new MockHttpClient(static function ($method, $url) {
+            if (str_contains($url, 'openid-configuration')) {
+                return new JsonMockResponse(['jwks_uri' => 'https://provider1.example.com/.well-known/jwks.json']);
+            }
+
+            return new JsonMockResponse(['keys' => [array_merge(self::getJWK()->all(), ['use' => 'sig'])]]);
+        });
+
+        $httpClient2 = new MockHttpClient(static function ($method, $url) {
+            if (str_contains($url, 'openid-configuration')) {
+                return new JsonMockResponse(['jwks_uri' => 'https://provider2.example.com/.well-known/jwks.json']);
+            }
+
+            return new JsonMockResponse(['keys' => [array_merge(self::getSecondJWK()->all(), ['use' => 'sig'])]]);
+        });
+
+        $cache = new ArrayAdapter();
+
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, [$httpClient1, $httpClient2], 'oidc_config');
+
+        $claims1 = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-from-provider1',
+            'email' => 'user1@example.com',
+        ];
+        $token1 = self::buildJWSWithKey(json_encode($claims1), self::getJWK());
+        $userBadge1 = $handler->getUserBadgeFrom($token1);
+
+        $this->assertInstanceOf(UserBadge::class, $userBadge1);
+        $this->assertSame('user-from-provider1', $userBadge1->getUserIdentifier());
+
+        $claims2 = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-from-provider2',
+            'email' => 'user2@example.com',
+        ];
+        $token2 = self::buildJWSWithKey(json_encode($claims2), self::getSecondJWK());
+        $userBadge2 = $handler->getUserBadgeFrom($token2);
+
+        $this->assertInstanceOf(UserBadge::class, $userBadge2);
+        $this->assertSame('user-from-provider2', $userBadge2->getUserIdentifier());
+
+        $this->assertTrue($cache->hasItem('oidc_config'));
+    }
+
+    private static function buildJWSWithKey(string $payload, JWK $jwk): string
+    {
+        return (new CompactSerializer())->serialize((new JWSBuilder(new AlgorithmManager([
+            new ES256(),
+        ])))->create()
+            ->withPayload($payload)
+            ->addSignature($jwk, ['alg' => 'ES256'])
+            ->build()
+        );
+    }
+
+    public function testDiscoveryCachesJwksAccordingToCacheControl()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-cache-control',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $requestCount = 0;
+        $httpClient = new MockHttpClient(static function ($method, $url) use (&$requestCount) {
+            ++$requestCount;
+            if (str_contains($url, 'openid-configuration')) {
+                return new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']);
+            }
+
+            return new JsonMockResponse(
+                ['keys' => [array_merge(self::getJWK()->all(), ['use' => 'sig'])]],
+                ['response_headers' => ['Cache-Control' => 'public, max-age=120']]
+            );
+        });
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_ttl_cc');
+        $this->assertSame('user-cache-control', $handler->getUserBadgeFrom($token)->getUserIdentifier());
+        $this->assertSame(2, $requestCount);
+        $this->assertSame('user-cache-control', $handler->getUserBadgeFrom($token)->getUserIdentifier());
+        $this->assertSame(2, $requestCount);
+    }
+
+    public function testDiscoveryCachesJwksAccordingToExpires()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-expires',
+        ];
+
+        $token = self::buildJWS(json_encode($claims));
+
+        $requestCount = 0;
+        $httpClient = new MockHttpClient(static function ($method, $url) use (&$requestCount) {
+            ++$requestCount;
+            if (str_contains($url, 'openid-configuration')) {
+                return new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']);
+            }
+
+            return new JsonMockResponse(
+                ['keys' => [array_merge(self::getJWK()->all(), ['use' => 'sig'])]],
+                ['response_headers' => ['Expires' => gmdate('D, d M Y H:i:s \G\M\T', time() + 60)]]
+            );
+        });
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_ttl_expires');
+        $this->assertSame('user-expires', $handler->getUserBadgeFrom($token)->getUserIdentifier());
+        $this->assertSame(2, $requestCount);
+        $this->assertSame('user-expires', $handler->getUserBadgeFrom($token)->getUserIdentifier());
+        $this->assertSame(2, $requestCount);
+    }
+
+    public function testComputeDiscoveryKeysReturnsEmptyWhenNoClients()
+    {
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+
+        $handler->enableDiscovery($cache, [], 'oidc_empty_clients');
+
+        $item = $this->createMock(ItemInterface::class);
+        $item->expects($this->never())->method('expiresAfter');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('No OIDC discovery client configured.');
+        $handler->computeDiscoveryKeys($item);
+    }
+
+    public function testDiscoveryThrowsWhenJwksUriIsMissing()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-missing-jwks-uri',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['issuer' => 'https://www.example.com']),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_missing_jwks_uri');
+
+        $this->expectException(BadCredentialsException::class);
+        $handler->getUserBadgeFrom($token);
+    }
+
+    public function testDiscoveryExcludesEncryptionKeys()
+    {
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']),
+            new JsonMockResponse([
+                'keys' => [
+                    array_merge(self::getJWK()->all(), ['use' => 'enc']),
+                    array_merge(self::getSecondJWK()->all(), ['use' => 'sig']),
+                ],
+            ]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_non_sig_keys', enforceKeyUsageVerification: false);
+
+        $item = $this->createMock(ItemInterface::class);
+        $item->expects($this->never())->method('expiresAfter');
+        $keys = $handler->computeDiscoveryKeys($item);
+        $this->assertCount(1, $keys);
+        $this->assertSame('sig', $keys[0]['use']);
+    }
+
+    public function testDiscoveryExcludesEncryptionKeyOps()
+    {
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']),
+            new JsonMockResponse([
+                'keys' => [
+                    array_merge(self::getJWK()->all(), ['key_ops' => ['encrypt', 'decrypt']]),
+                    array_merge(self::getSecondJWK()->all(), ['key_ops' => ['sign', 'verify']]),
+                ],
+            ]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_enc_key_ops', enforceKeyUsageVerification: false);
+
+        $item = $this->createStub(ItemInterface::class);
+        $keys = $handler->computeDiscoveryKeys($item);
+        $this->assertCount(1, $keys);
+        $this->assertSame(['sign', 'verify'], $keys[0]['key_ops']);
+    }
+
+    public function testDiscoveryIncludesKeysWithoutUsageDesignation()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'user-no-use-field',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $jwkData = self::getJWK()->all();
+        unset($jwkData['d']);
+
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']),
+            new JsonMockResponse(['keys' => [$jwkData]]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_no_use', enforceKeyUsageVerification: false);
+
+        $userBadge = $handler->getUserBadgeFrom($token);
+
+        $this->assertInstanceOf(UserBadge::class, $userBadge);
+        $this->assertSame('user-no-use-field', $userBadge->getUserIdentifier());
+    }
+
+    public function testDiscoveryEnforcedUsageOnlyAcceptsExplicitSignatureKeys()
+    {
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']),
+            new JsonMockResponse([
+                'keys' => [
+                    array_merge(self::getJWK()->all(), ['use' => 'enc']),
+                    array_merge(self::getSecondJWK()->all(), []),
+                ],
+            ]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_enforced', enforceKeyUsageVerification: true);
+
+        $item = $this->createMock(ItemInterface::class);
+        $item->expects($this->never())->method('expiresAfter');
+        $this->assertSame([], $handler->computeDiscoveryKeys($item));
+    }
+
+    public function testDiscoveryEnforcedUsageAcceptsKeyOpsSign()
+    {
+        $httpClient = new MockHttpClient([
+            new JsonMockResponse(['jwks_uri' => 'https://www.example.com/jwks.json']),
+            new JsonMockResponse([
+                'keys' => [
+                    array_merge(self::getJWK()->all(), ['key_ops' => ['sign']]),
+                    array_merge(self::getSecondJWK()->all(), ['key_ops' => ['encrypt']]),
+                ],
+            ]),
+        ]);
+
+        $cache = new ArrayAdapter();
+        $handler = new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            null,
+            self::AUDIENCE,
+            ['https://www.example.com']
+        );
+        $handler->enableDiscovery($cache, $httpClient, 'oidc_enforced_ops', enforceKeyUsageVerification: true);
+        $item = $this->createStub(ItemInterface::class);
+        $keys = $handler->computeDiscoveryKeys($item);
+        $this->assertCount(1, $keys);
+        $this->assertSame(['sign'], $keys[0]['key_ops']);
+    }
+
+    public function testTokenWithFutureIatIsRejectedByDefault()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time + 3,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $loggerMock = $this->createMock(LoggerInterface::class);
+        $loggerMock->expects($this->once())->method('error');
+
+        $this->expectException(BadCredentialsException::class);
+        $this->expectExceptionMessage('Invalid credentials.');
+
+        (new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
+            self::AUDIENCE,
+            ['https://www.example.com'],
+            'sub',
+            $loggerMock,
+        ))->getUserBadgeFrom($token);
+    }
+
+    public function testTokenWithFutureIatIsAcceptedWithAllowedTimeDrift()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time + 3,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $loggerMock = $this->createMock(LoggerInterface::class);
+        $loggerMock->expects($this->never())->method('error');
+
+        $userBadge = (new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
+            self::AUDIENCE,
+            ['https://www.example.com'],
+            'sub',
+            $loggerMock,
+            allowedTimeDrift: 5,
+        ))->getUserBadgeFrom($token);
+
+        $this->assertInstanceOf(UserBadge::class, $userBadge);
+        $this->assertSame('e21bf182-1538-406e-8ccb-e25a17aba39f', $userBadge->getUserIdentifier());
+    }
+
+    public function testTokenWithFutureIatBeyondAllowedTimeDriftIsRejected()
+    {
+        $time = time();
+        $claims = [
+            'iat' => $time + 10,
+            'nbf' => $time,
+            'exp' => $time + 3600,
+            'iss' => 'https://www.example.com',
+            'aud' => self::AUDIENCE,
+            'sub' => 'e21bf182-1538-406e-8ccb-e25a17aba39f',
+        ];
+        $token = self::buildJWS(json_encode($claims));
+
+        $loggerMock = $this->createMock(LoggerInterface::class);
+        $loggerMock->expects($this->once())->method('error');
+
+        $this->expectException(BadCredentialsException::class);
+        $this->expectExceptionMessage('Invalid credentials.');
+
+        (new OidcTokenHandler(
+            new AlgorithmManager([new ES256()]),
+            self::getJWKSet(),
+            self::AUDIENCE,
+            ['https://www.example.com'],
+            'sub',
+            $loggerMock,
+            allowedTimeDrift: 5,
+        ))->getUserBadgeFrom($token);
     }
 }

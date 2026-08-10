@@ -12,7 +12,6 @@
 namespace Symfony\Component\HttpFoundation\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\ParameterBag;
@@ -20,8 +19,6 @@ use Symfony\Component\HttpFoundation\Tests\Fixtures\FooEnum;
 
 class ParameterBagTest extends TestCase
 {
-    use ExpectDeprecationTrait;
-
     public function testConstructor()
     {
         $this->testAll();
@@ -187,33 +184,29 @@ class ParameterBagTest extends TestCase
         $this->assertSame(1, $bag->getInt('bool', 0), '->getInt() returns 1 if a parameter is true');
     }
 
-    /**
-     * @group legacy
-     */
     public function testGetIntExceptionWithArray()
     {
-        $this->expectDeprecation(sprintf('Since symfony/http-foundation 6.3: Ignoring invalid values when using "%s::getInt(\'digits\')" is deprecated and will throw an "%s" in 7.0; use method "filter()" with flag "FILTER_NULL_ON_FAILURE" to keep ignoring them.', ParameterBag::class, UnexpectedValueException::class));
-
         $bag = new ParameterBag(['digits' => ['123']]);
-        $result = $bag->getInt('digits', 0);
-        $this->assertSame(0, $result);
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter value "digits" cannot be converted to "int".');
+
+        $bag->getInt('digits');
     }
 
-    /**
-     * @group legacy
-     */
     public function testGetIntExceptionWithInvalid()
     {
-        $this->expectDeprecation(sprintf('Since symfony/http-foundation 6.3: Ignoring invalid values when using "%s::getInt(\'word\')" is deprecated and will throw an "%s" in 7.0; use method "filter()" with flag "FILTER_NULL_ON_FAILURE" to keep ignoring them.', ParameterBag::class, UnexpectedValueException::class));
-
         $bag = new ParameterBag(['word' => 'foo_BAR_012']);
-        $result = $bag->getInt('word', 0);
-        $this->assertSame(0, $result);
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter value "word" cannot be converted to "int".');
+
+        $bag->getInt('word');
     }
 
     public function testGetString()
     {
-        $bag = new ParameterBag(['integer' => 123, 'bool_true' => true, 'bool_false' => false, 'string' => 'abc', 'stringable' => new class() implements \Stringable {
+        $bag = new ParameterBag(['integer' => 123, 'bool_true' => true, 'bool_false' => false, 'string' => 'abc', 'stringable' => new class implements \Stringable {
             public function __toString(): string
             {
                 return 'strval';
@@ -226,7 +219,7 @@ class ParameterBagTest extends TestCase
         $this->assertSame('foo', $bag->getString('unknown', 'foo'), '->getString() returns the default if a parameter is not defined');
         $this->assertSame('1', $bag->getString('bool_true'), '->getString() returns "1" if a parameter is true');
         $this->assertSame('', $bag->getString('bool_false', 'foo'), '->getString() returns an empty empty string if a parameter is false');
-        $this->assertSame('strval', $bag->getString('stringable'), '->getString() gets a value of a stringable paramater as string');
+        $this->assertSame('strval', $bag->getString('stringable'), '->getString() gets a value of a stringable parameter as string');
     }
 
     public function testGetStringExceptionWithArray()
@@ -258,9 +251,9 @@ class ParameterBagTest extends TestCase
             'dec' => '256',
             'hex' => '0x100',
             'array' => ['bang'],
-            ]);
+        ]);
 
-        $this->assertEmpty($bag->filter('nokey'), '->filter() should return empty by default if no key is found');
+        $this->assertSame('', $bag->filter('nokey'), '->filter() should return empty by default if no key is found');
 
         $this->assertEquals('0123', $bag->filter('digits', '', \FILTER_SANITIZE_NUMBER_INT), '->filter() gets a value of parameter as integer filtering out invalid characters');
 
@@ -301,6 +294,84 @@ class ParameterBagTest extends TestCase
         $this->assertSame('BAR', $result);
     }
 
+    public function testFilterCallbackMethod()
+    {
+        $bag = new ParameterBag(['foo' => 'bar']);
+
+        $this->assertSame('BAR', $bag->filterCallback('foo', strtoupper(...)));
+    }
+
+    public function testFilterCallbackMethodCastsTheValueToString()
+    {
+        $bag = new ParameterBag(['foo' => 42]);
+
+        $this->assertSame('42', $bag->filterCallback('foo', static fn (string $value): string => $value));
+        $this->assertSame('', $bag->filterCallback('missing', static fn (string $value): string => $value), 'a missing key with a null default arrives as an empty string');
+    }
+
+    public function testFilterCallbackMethodAppliesTheCallbackToEachEntryOfAnArrayValue()
+    {
+        $bag = new ParameterBag(['foo' => ['a', 'b']]);
+
+        $this->assertSame(['A', 'B'], $bag->filterCallback('foo', strtoupper(...)));
+    }
+
+    public function testFilterCallbackMethodAppliesTheCallbackToAnArrayDefault()
+    {
+        $bag = new ParameterBag([]);
+
+        $this->assertSame(['A'], $bag->filterCallback('missing', strtoupper(...), ['a']));
+    }
+
+    public function testFilterCallbackMethodWithRequireArrayFlag()
+    {
+        $bag = new ParameterBag(['foo' => ['a'], 'bar' => 'scalar']);
+
+        $this->assertSame(['A'], $bag->filterCallback('foo', strtoupper(...), flags: \FILTER_REQUIRE_ARRAY));
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter value "bar" is invalid and flag "FILTER_NULL_ON_FAILURE" was not set.');
+
+        $bag->filterCallback('bar', strtoupper(...), flags: \FILTER_REQUIRE_ARRAY);
+    }
+
+    public function testFilterCallbackMethodDoesNotMapAnArrayValueWhenFlagsOmitRequireArray()
+    {
+        $bag = new ParameterBag(['foo' => ['a', 'b']]);
+
+        $this->assertNull($bag->filterCallback('foo', strtoupper(...), flags: \FILTER_NULL_ON_FAILURE));
+        $this->assertSame(['A', 'B'], $bag->filterCallback('foo', strtoupper(...), flags: \FILTER_REQUIRE_ARRAY | \FILTER_NULL_ON_FAILURE));
+    }
+
+    public function testFilterCallbackMethodReturnsNullOnFailure()
+    {
+        $bag = new ParameterBag(['foo' => 'bar']);
+
+        $this->assertNull($bag->filterCallback('foo', static fn () => null, flags: \FILTER_NULL_ON_FAILURE));
+    }
+
+    public function testFilterCallbackMethodThrowsOnFailureByDefault()
+    {
+        $bag = new ParameterBag(['foo' => 'bar']);
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter value "foo" is invalid and flag "FILTER_NULL_ON_FAILURE" was not set.');
+
+        $bag->filterCallback('foo', static fn () => null);
+    }
+
+    public function testFilterCallbackMethodLetsCallbackExceptionsBubble()
+    {
+        $bag = new ParameterBag(['foo' => 'bar']);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('from the callback');
+
+        $bag->filterCallback('foo', static function (): never {
+            throw new \DomainException('from the callback');
+        });
+    }
+
     public function testGetIterator()
     {
         $parameters = ['foo' => 'bar', 'hello' => 'world'];
@@ -334,16 +405,14 @@ class ParameterBagTest extends TestCase
         $this->assertTrue($bag->getBoolean('unknown', true), '->getBoolean() returns default if a parameter is not defined');
     }
 
-    /**
-     * @group legacy
-     */
     public function testGetBooleanExceptionWithInvalid()
     {
-        $this->expectDeprecation(sprintf('Since symfony/http-foundation 6.3: Ignoring invalid values when using "%s::getBoolean(\'invalid\')" is deprecated and will throw an "%s" in 7.0; use method "filter()" with flag "FILTER_NULL_ON_FAILURE" to keep ignoring them.', ParameterBag::class, UnexpectedValueException::class));
-
         $bag = new ParameterBag(['invalid' => 'foo']);
-        $result = $bag->getBoolean('invalid', 0);
-        $this->assertFalse($result);
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter value "invalid" cannot be converted to "bool".');
+
+        $bag->getBoolean('invalid');
     }
 
     public function testGetEnum()
@@ -356,16 +425,20 @@ class ParameterBagTest extends TestCase
         $this->assertSame(FooEnum::Bar, $bag->getEnum('invalid-key', FooEnum::class, FooEnum::Bar));
     }
 
+    public function testGetEnumReturnsDefaultWhenStoredValueIsNull()
+    {
+        $bag = new ParameterBag(['stored-null' => null]);
+
+        $this->assertNull($bag->getEnum('stored-null', FooEnum::class));
+        $this->assertSame(FooEnum::Bar, $bag->getEnum('stored-null', FooEnum::class, FooEnum::Bar));
+    }
+
     public function testGetEnumThrowsExceptionWithNotBackingValue()
     {
         $bag = new ParameterBag(['invalid-value' => 2]);
 
-        $this->expectException(UnexpectedValueException::class);
-        if (\PHP_VERSION_ID >= 80200) {
-            $this->expectExceptionMessage('Parameter "invalid-value" cannot be converted to enum: 2 is not a valid backing value for enum Symfony\Component\HttpFoundation\Tests\Fixtures\FooEnum.');
-        } else {
-            $this->expectExceptionMessage('Parameter "invalid-value" cannot be converted to enum: 2 is not a valid backing value for enum "Symfony\Component\HttpFoundation\Tests\Fixtures\FooEnum".');
-        }
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Parameter "invalid-value" cannot be converted to enum: 2 is not a valid backing value for enum Symfony\Component\HttpFoundation\Tests\Fixtures\FooEnum.');
 
         $this->assertNull($bag->getEnum('invalid-value', FooEnum::class));
     }
@@ -378,17 +451,5 @@ class ParameterBagTest extends TestCase
         $this->expectExceptionMessage('Parameter "invalid-value" cannot be converted to enum: Symfony\Component\HttpFoundation\Tests\Fixtures\FooEnum::from(): Argument #1 ($value) must be of type int, array given.');
 
         $this->assertNull($bag->getEnum('invalid-value', FooEnum::class));
-    }
-}
-
-class InputStringable
-{
-    public function __construct(private string $value)
-    {
-    }
-
-    public function __toString(): string
-    {
-        return $this->value;
     }
 }

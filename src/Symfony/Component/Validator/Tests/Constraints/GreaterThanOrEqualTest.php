@@ -14,26 +14,26 @@ namespace Symfony\Component\Validator\Tests\Constraints;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
 
 class GreaterThanOrEqualTest extends TestCase
 {
     public function testAttributes()
     {
         $metadata = new ClassMetadata(GreaterThanOrEqualDummy::class);
-        $loader = new AnnotationLoader();
+        $loader = new AttributeLoader();
         self::assertTrue($loader->loadClassMetadata($metadata));
 
-        [$aConstraint] = $metadata->properties['a']->getConstraints();
+        [$aConstraint] = $metadata->getPropertyMetadata('a')[0]->getConstraints();
         self::assertSame(2, $aConstraint->value);
         self::assertNull($aConstraint->propertyPath);
 
-        [$bConstraint] = $metadata->properties['b']->getConstraints();
+        [$bConstraint] = $metadata->getPropertyMetadata('b')[0]->getConstraints();
         self::assertSame(4711, $bConstraint->value);
         self::assertSame('myMessage', $bConstraint->message);
         self::assertSame(['Default', 'GreaterThanOrEqualDummy'], $bConstraint->groups);
 
-        [$cConstraint] = $metadata->properties['c']->getConstraints();
+        [$cConstraint] = $metadata->getPropertyMetadata('c')[0]->getConstraints();
         self::assertNull($cConstraint->value);
         self::assertSame('b', $cConstraint->propertyPath);
         self::assertSame('myMessage', $cConstraint->message);

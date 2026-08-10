@@ -2,39 +2,39 @@
 
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\Service\Attribute\Required;
 
 require __DIR__.'/uniontype_classes.php';
 require __DIR__.'/autowiring_classes_80.php';
 require __DIR__.'/intersectiontype_classes.php';
-if (\PHP_VERSION_ID >= 80200) {
-    require __DIR__.'/compositetype_classes.php';
-}
-
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class FooAnnotation
-{
-    /**
-     * @required
-     */
-    public function cloneFoo(): static
-    {
-        return clone $this;
-    }
-}
+require __DIR__.'/compositetype_classes.php';
 
 class Foo
 {
     public static int $counter = 0;
+    public int $foo = 0;
 
     #[Required]
-    public function cloneFoo(\stdClass $bar = null): static
+    public function cloneFoo(?\stdClass $bar = null): static
     {
         ++self::$counter;
 
         return clone $this;
+    }
+}
+
+class FooVoid
+{
+    public static int $counter = 0;
+
+    public function __invoke(string $name): void
+    {
+        ++self::$counter;
     }
 }
 
@@ -110,7 +110,7 @@ class D
 
 class E
 {
-    public function __construct(D $d = null)
+    public function __construct(?D $d = null)
     {
     }
 }
@@ -141,6 +141,15 @@ class CollisionB implements CollisionInterface
 {
 }
 
+class UnionClassesWithTarget
+{
+    public function __construct(
+        #[Target('collision')]
+        CollisionA|CollisionB $any,
+    ) {
+    }
+}
+
 class CannotBeAutowired
 {
     public function __construct(CollisionInterface $collision)
@@ -162,13 +171,6 @@ class Dunglas
 class LesTilleuls
 {
     public function __construct(Dunglas $j, Dunglas $k)
-    {
-    }
-}
-
-class OptionalParameter
-{
-    public function __construct(CollisionInterface $c = null, A $a, Foo $f = null)
     {
     }
 }
@@ -206,7 +208,7 @@ class MultipleArguments
 
 class MultipleArgumentsOptionalScalar
 {
-    public function __construct(A $a, $foo = 'default_val', Lille $lille = null)
+    public function __construct(A $a, $foo = 'default_val', ?Lille $lille = null)
     {
     }
 }
@@ -217,12 +219,29 @@ class MultipleArgumentsOptionalScalarLast
     }
 }
 
+class UnderscoreNamedArgument
+{
+    public function __construct(
+        public \DateTimeImmutable $now_datetime,
+    ) {
+    }
+}
+
+class UnderscoreNamedArgumentWithTarget
+{
+    public function __construct(
+        #[Target('now_datetime')]
+        public \DateTimeImmutable $dt,
+    ) {
+    }
+}
+
 /*
  * Classes used for testing createResourceForClass
  */
 class ClassForResource
 {
-    public function __construct($foo, Bar $bar = null)
+    public function __construct($foo, ?Bar $bar = null)
     {
     }
 
@@ -241,20 +260,6 @@ class ClassChangedConstructorArgs extends ClassForResource
     }
 }
 
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class SetterInjectionCollisionAnnotation
-{
-    /**
-     * @required
-     */
-    public function setMultipleInstancesForOneArg(CollisionInterface $collision)
-    {
-        // The CollisionInterface cannot be autowired - there are multiple
-
-        // should throw an exception
-    }
-}
-
 class SetterInjectionCollision
 {
     #[Required]
@@ -266,86 +271,11 @@ class SetterInjectionCollision
     }
 }
 
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class SetterInjectionAnnotation extends SetterInjectionParentAnnotation
-{
-
-    /**
-     * @required
-     */
-    public function setFoo(Foo $foo)
-    {
-        // should be called
-    }
-
-    public function notASetter(A $a)
-    {
-        // should be called only when explicitly specified
-    }
-
-    /**
-     * @required*/
-    public function setChildMethodWithoutDocBlock(A $a)
-    {
-    }
-}
-
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class SetterInjection extends SetterInjectionParent
+class SetterInjectionCollisionWithTarget
 {
     #[Required]
-    public function setFoo(Foo $foo)
+    public function setMultipleInstancesForOneArg(#[Target('collision')] CollisionInterface $col)
     {
-        // should be called
-    }
-
-    /** @inheritdoc*/ // <- brackets are missing on purpose
-    public function setDependencies(Foo $foo, A $a)
-    {
-        // should be called
-    }
-
-    /** {@inheritdoc} */
-    public function setWithCallsConfigured(A $a)
-    {
-        // this method has a calls configured on it
-    }
-
-    public function notASetter(A $a)
-    {
-        // should be called only when explicitly specified
-    }
-}
-
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class WitherAnnotation
-{
-    public $foo;
-
-    /**
-     * @required
-     */
-    public function setFoo(FooAnnotation $foo)
-    {
-    }
-
-    /**
-     * @required
-     */
-    public function withFoo1(FooAnnotation $foo): static
-    {
-        return $this->withFoo2($foo);
-    }
-
-    /**
-     * @required
-     */
-    public function withFoo2(FooAnnotation $foo): static
-    {
-        $new = clone $this;
-        $new->foo = $foo;
-
-        return $new;
     }
 }
 
@@ -374,31 +304,6 @@ class Wither
     }
 }
 
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class SetterInjectionParentAnnotation
-{
-    /** @required*/
-    public function setDependencies(Foo $foo, A $a)
-    {
-        // should be called
-    }
-
-    public function notASetter(A $a)
-    {
-        // @required should be ignored when the child does not add @inheritdoc
-    }
-
-    /**	@required <tab> prefix is on purpose */
-    public function setWithCallsConfigured(A $a)
-    {
-    }
-
-    /** @required */
-    public function setChildMethodWithoutDocBlock(A $a)
-    {
-    }
-}
-
 class SetterInjectionParent
 {
     #[Required]
@@ -409,7 +314,7 @@ class SetterInjectionParent
 
     public function notASetter(A $a)
     {
-        // #[Required] should be ignored when the child does not add @inheritdoc
+        // #[Required] should be ignored when the child does not also add #[Required]
     }
 
     #[Required]
@@ -420,6 +325,32 @@ class SetterInjectionParent
     #[Required]
     public function setChildMethodWithoutDocBlock(A $a)
     {
+    }
+}
+
+
+class SetterInjection extends SetterInjectionParent
+{
+    #[Required]
+    public function setFoo(Foo $foo)
+    {
+        // should be called
+    }
+
+    #[Required]
+    public function setDependencies(Foo $foo, A $a)
+    {
+        // should be called
+    }
+
+    public function setWithCallsConfigured(A $a)
+    {
+        // this method has a calls configured on it
+    }
+
+    public function notASetter(A $a)
+    {
+        // should be called only when explicitly specified
     }
 }
 
@@ -437,7 +368,7 @@ class NotWireable
     {
     }
 
-    public function setOptionalNotAutowireable(NotARealClass $n = null)
+    public function setOptionalNotAutowireable(?NotARealClass $n = null)
     {
     }
 
@@ -466,17 +397,6 @@ class PrivateConstructor
     }
 }
 
-// @deprecated since Symfony 6.3, to be removed in 7.0
-class ScalarSetterAnnotation
-{
-    /**
-     * @required
-     */
-    public function setDefaultLocale($defaultLocale)
-    {
-    }
-}
-
 class ScalarSetter
 {
     #[Required]
@@ -495,7 +415,7 @@ class DecoratorImpl implements DecoratorInterface
 
 class Decorated implements DecoratorInterface
 {
-    public function __construct($quz = null, \NonExistent $nonExistent = null, DecoratorInterface $decorated = null, array $foo = [])
+    public function __construct($quz = null, ?\NonExistent $nonExistent = null, ?DecoratorInterface $decorated = null, array $foo = [])
     {
     }
 }
@@ -570,5 +490,194 @@ class MyCallable
 {
     public function __invoke(): void
     {
+    }
+
+    public static function theMethodImpl(): int
+    {
+        return 124;
+    }
+}
+
+class MyInlineService
+{
+    public function __construct(private readonly ?string $someParam = null)
+    {
+    }
+
+    public function someMethod(): void
+    {
+    }
+
+    public function someMethod1(): void
+    {
+    }
+
+    public function someMethod2(): void
+    {
+    }
+
+    public function getSomeParam(): ?string
+    {
+        return $this->someParam;
+    }
+}
+
+class MyFactory
+{
+    public function __construct()
+    {
+    }
+
+    public function __invoke(mixed $someParam = null): MyInlineService
+    {
+        return new MyInlineService($someParam ?? 'someString');
+    }
+
+    public function createFoo(): MyInlineService
+    {
+        return new MyInlineService('someString');
+    }
+
+    public function createFooWithParam(mixed $someParam): MyInlineService
+    {
+        return new MyInlineService($someParam);
+    }
+
+    public static function staticCreateFoo(): MyInlineService
+    {
+        return new MyInlineService('someString');
+    }
+
+    public static function staticCreateFooWithParam(mixed $someParam): MyInlineService
+    {
+        return new MyInlineService($someParam);
+    }
+}
+
+interface LazyProxyTestInterface
+{
+    public function getSelf(): self;
+}
+
+final class FinalLazyProxyImplementation implements LazyProxyTestInterface
+{
+    public function getSelf(): self
+    {
+        return $this;
+    }
+}
+
+class BaseLazyProxyClass
+{
+    public function getSelf(): self
+    {
+        return $this;
+    }
+}
+
+class ExtendedLazyProxyClass extends BaseLazyProxyClass
+{
+    public function getSelf(): self
+    {
+        return $this;
+    }
+}
+
+class LazyProxyInterfaceConsumer
+{
+    public function __construct(#[Autowire(lazy: true)] private readonly LazyProxyTestInterface $dep)
+    {
+    }
+
+    public function getDep(): LazyProxyTestInterface
+    {
+        return $this->dep;
+    }
+}
+
+class LazyProxyInheritanceConsumer
+{
+    public function __construct(#[Autowire(lazy: true)] private readonly BaseLazyProxyClass $dep)
+    {
+    }
+
+    public function getDependency(): BaseLazyProxyClass
+    {
+        return $this->dep;
+    }
+}
+
+class Listener1
+{
+    public function __construct(
+        #[AutowireCallable(service: MyInlineService::class, method: 'someMethod1')]
+        public \Closure $closure,
+    ) {
+    }
+}
+
+class Listener2
+{
+    public function __construct(
+        #[AutowireCallable(service: MyInlineService::class, method: 'someMethod2')]
+        public \Closure $closure,
+        public \stdClass $someOtherService,
+    ) {
+    }
+}
+
+class ListenerResolver
+{
+    public function __construct(public ContainerInterface $container)
+    {
+    }
+}
+
+interface SomeServiceInterface
+{
+    public function getValue(): string;
+}
+
+class SomeServiceClass implements SomeServiceInterface
+{
+    public function getValue(): string
+    {
+        return 'original';
+    }
+}
+
+class DecoratedSomeServiceClass implements SomeServiceInterface
+{
+    public function __construct(private SomeServiceInterface $inner)
+    {
+    }
+
+    public function getValue(): string
+    {
+        return 'decorated:'.$this->inner->getValue();
+    }
+}
+
+class LazyDecoratedServiceConsumer
+{
+    public function __construct(
+        #[Autowire(service: 'some_service', lazy: true)]
+        private SomeServiceInterface $service,
+    ) {
+    }
+
+    public function getValue(): string
+    {
+        return $this->service->getValue();
+    }
+}
+
+class EnvAutowireWithMissingArgument
+{
+    public function __construct(
+        #[Autowire(env: 'SOME_ENV')]
+        string $env,
+        string $missing,
+    ) {
     }
 }

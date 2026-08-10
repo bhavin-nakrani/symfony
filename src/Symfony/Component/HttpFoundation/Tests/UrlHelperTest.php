@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\HttpFoundation\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -20,9 +21,7 @@ use Symfony\Component\Routing\RequestContextAwareInterface;
 
 class UrlHelperTest extends TestCase
 {
-    /**
-     * @dataProvider getGenerateAbsoluteUrlData
-     */
+    #[DataProvider('getGenerateAbsoluteUrlData')]
     public function testGenerateAbsoluteUrl($expected, $path, $pathinfo)
     {
         $stack = new RequestStack();
@@ -52,12 +51,13 @@ class UrlHelperTest extends TestCase
             ['http://localhost/foo/bar?0#baz', '#baz', '/foo/bar?0'],
             ['http://localhost/foo/bar?baz=1#baz', '?baz=1#baz', '/foo/bar?foo=1'],
             ['http://localhost/foo/baz?baz=1#baz', 'baz?baz=1#baz', '/foo/bar?foo=1'],
+
+            ['mailto:hello@example.localhost', 'mailto:hello@example.localhost', '/'],
+            ['tel:123', 'tel:123', '/'],
         ];
     }
 
-    /**
-     * @dataProvider getGenerateAbsoluteUrlRequestContextData
-     */
+    #[DataProvider('getGenerateAbsoluteUrlRequestContextData')]
     public function testGenerateAbsoluteUrlWithRequestContext($path, $baseUrl, $host, $scheme, $httpPort, $httpsPort, $expected)
     {
         if (!class_exists(RequestContext::class)) {
@@ -71,9 +71,7 @@ class UrlHelperTest extends TestCase
         $this->assertEquals($expected, $helper->getAbsoluteUrl($path));
     }
 
-    /**
-     * @dataProvider getGenerateAbsoluteUrlRequestContextData
-     */
+    #[DataProvider('getGenerateAbsoluteUrlRequestContextData')]
     public function testGenerateAbsoluteUrlWithRequestContextAwareInterface($path, $baseUrl, $host, $scheme, $httpPort, $httpsPort, $expected)
     {
         if (!class_exists(RequestContext::class)) {
@@ -103,10 +101,8 @@ class UrlHelperTest extends TestCase
         $this->assertEquals($expected, $helper->getAbsoluteUrl($path));
     }
 
-    /**
-     * @dataProvider getGenerateAbsoluteUrlRequestContextData
-     */
-    public function testGenerateAbsoluteUrlWithoutRequestAndRequestContext($path)
+    #[DataProvider('getGenerateAbsoluteUrlRequestContextData')]
+    public function testGenerateAbsoluteUrlWithoutRequestAndRequestContext($path, $baseUrl, $host, $scheme, $httpPort, $httpsPort, $expected)
     {
         if (!class_exists(RequestContext::class)) {
             $this->markTestSkipped('The Routing component is needed to run tests that depend on its request context.');
@@ -146,9 +142,7 @@ class UrlHelperTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider getGenerateRelativePathData
-     */
+    #[DataProvider('getGenerateRelativePathData')]
     public function testGenerateRelativePath($expected, $path, $pathinfo)
     {
         $stack = new RequestStack();

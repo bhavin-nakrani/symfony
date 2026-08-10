@@ -18,44 +18,49 @@ namespace Symfony\Component\DependencyInjection\Argument;
  */
 class TaggedIteratorArgument extends IteratorArgument
 {
-    private string $tag;
-    private mixed $indexAttribute;
-    private ?string $defaultIndexMethod;
-    private ?string $defaultPriorityMethod;
-    private bool $needsIndexes;
-    private array $exclude;
+    private mixed $indexAttribute = null;
+    private ?string $defaultIndexMethod = null;
+    private ?string $defaultPriorityMethod = null;
+    private bool $needsIndexes = false;
+    private array $exclude = [];
     private bool $excludeSelf = true;
 
     /**
-     * @param string      $tag                   The name of the tag identifying the target services
-     * @param string|null $indexAttribute        The name of the attribute that defines the key referencing each service in the tagged collection
-     * @param string|null $defaultIndexMethod    The static method that should be called to get each service's key when their tag doesn't define the previous attribute
-     * @param bool        $needsIndexes          Whether indexes are required and should be generated when computing the map
-     * @param string|null $defaultPriorityMethod The static method that should be called to get each service's priority when their tag doesn't define the "priority" attribute
-     * @param array       $exclude               Services to exclude from the iterator
-     * @param bool        $excludeSelf           Whether to automatically exclude the referencing service from the iterator
+     * @param string      $tag            The name of the tag identifying the target services
+     * @param string|null $indexAttribute The name of the attribute that defines the key referencing each service in the tagged collection
+     * @param bool        $needsIndexes   Whether indexes are required and should be generated when computing the map
+     * @param string[]    $exclude        Services to exclude from the iterator
+     * @param bool        $excludeSelf    Whether to automatically exclude the referencing service from the iterator
      */
-    public function __construct(string $tag, string $indexAttribute = null, string $defaultIndexMethod = null, bool $needsIndexes = false, string $defaultPriorityMethod = null, array $exclude = [], bool $excludeSelf = true)
-    {
+    public function __construct(
+        private string $tag,
+        ?string $indexAttribute = null,
+        bool|string|null $needsIndexes = false,
+        array|bool $exclude = [],
+        bool|string|null $excludeSelf = true,
+    ) {
         parent::__construct([]);
+
+        if (\func_num_args() > 5 || !\is_bool($needsIndexes) || !\is_array($exclude) || !\is_bool($excludeSelf)) {
+            [, , $defaultIndexMethod, $needsIndexes, $defaultPriorityMethod, $exclude, $excludeSelf] = \func_get_args() + [2 => null, false, null, [], true];
+            trigger_deprecation('symfony/dependency-injection', '8.1', 'The $defaultIndexMethod and $defaultPriorityMethod arguments of tagged locators and iterators are deprecated, use the #[AsTaggedItem] attribute instead. (tag: "%s")', $tag);
+        } else {
+            $defaultIndexMethod = $defaultPriorityMethod = false;
+        }
 
         if (null === $indexAttribute && $needsIndexes) {
             $indexAttribute = preg_match('/[^.]++$/', $tag, $m) ? $m[0] : $tag;
         }
 
-        $this->tag = $tag;
         $this->indexAttribute = $indexAttribute;
         $this->defaultIndexMethod = $defaultIndexMethod ?: ($indexAttribute ? 'getDefault'.str_replace(' ', '', ucwords(preg_replace('/[^a-zA-Z0-9\x7f-\xff]++/', ' ', $indexAttribute))).'Name' : null);
-        $this->needsIndexes = $needsIndexes;
         $this->defaultPriorityMethod = $defaultPriorityMethod ?: ($indexAttribute ? 'getDefault'.str_replace(' ', '', ucwords(preg_replace('/[^a-zA-Z0-9\x7f-\xff]++/', ' ', $indexAttribute))).'Priority' : null);
+        $this->needsIndexes = $needsIndexes;
         $this->exclude = $exclude;
         $this->excludeSelf = $excludeSelf;
     }
 
-    /**
-     * @return string
-     */
-    public function getTag()
+    public function getTag(): string
     {
         return $this->tag;
     }
@@ -65,8 +70,15 @@ class TaggedIteratorArgument extends IteratorArgument
         return $this->indexAttribute;
     }
 
-    public function getDefaultIndexMethod(): ?string
+    /**
+     * @deprecated since Symfony 8.1, use the #[AsTaggedItem] attribute instead of default methods
+     */
+    public function getDefaultIndexMethod(/* bool $triggerDeprecation = true */): ?string
     {
+        if (!\func_num_args() || func_get_arg(0)) {
+            trigger_deprecation('symfony/dependency-injection', '8.1', 'The "%s()" method is deprecated, use the #[AsTaggedItem] attribute instead of default methods.', __METHOD__);
+        }
+
         return $this->defaultIndexMethod;
     }
 
@@ -75,8 +87,15 @@ class TaggedIteratorArgument extends IteratorArgument
         return $this->needsIndexes;
     }
 
-    public function getDefaultPriorityMethod(): ?string
+    /**
+     * @deprecated since Symfony 8.1, use the #[AsTaggedItem] attribute instead of default methods
+     */
+    public function getDefaultPriorityMethod(/* bool $triggerDeprecation = true */): ?string
     {
+        if (!\func_num_args() || func_get_arg(0)) {
+            trigger_deprecation('symfony/dependency-injection', '8.1', 'The "%s()" method is deprecated, use the #[AsTaggedItem] attribute instead of default methods.', __METHOD__);
+        }
+
         return $this->defaultPriorityMethod;
     }
 

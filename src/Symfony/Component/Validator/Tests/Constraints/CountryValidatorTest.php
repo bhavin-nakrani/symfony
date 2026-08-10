@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Intl\Util\IntlTestHelper;
 use Symfony\Component\Validator\Constraints\Country;
 use Symfony\Component\Validator\Constraints\CountryValidator;
@@ -42,14 +43,14 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Country());
+        $this->validate(null, new Country());
 
         $this->assertNoViolation();
     }
 
     public function testEmptyStringIsValid()
     {
-        $this->validator->validate('', new Country());
+        $this->validate('', new Country());
 
         $this->assertNoViolation();
     }
@@ -57,15 +58,13 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
     public function testExpectsStringCompatibleType()
     {
         $this->expectException(UnexpectedValueException::class);
-        $this->validator->validate(new \stdClass(), new Country());
+        $this->validate(new \stdClass(), new Country());
     }
 
-    /**
-     * @dataProvider getValidCountries
-     */
+    #[DataProvider('getValidCountries')]
     public function testValidCountries($country)
     {
-        $this->validator->validate($country, new Country());
+        $this->validate($country, new Country());
 
         $this->assertNoViolation();
     }
@@ -79,16 +78,12 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getInvalidCountries
-     */
+    #[DataProvider('getInvalidCountries')]
     public function testInvalidCountries($country)
     {
-        $constraint = new Country([
-            'message' => 'myMessage',
-        ]);
+        $constraint = new Country(message: 'myMessage');
 
-        $this->validator->validate($country, $constraint);
+        $this->validate($country, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$country.'"')
@@ -104,14 +99,10 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getValidAlpha3Countries
-     */
+    #[DataProvider('getValidAlpha3Countries')]
     public function testValidAlpha3Countries($country)
     {
-        $this->validator->validate($country, new Country([
-            'alpha3' => true,
-        ]));
+        $this->validate($country, new Country(alpha3: true));
 
         $this->assertNoViolation();
     }
@@ -125,17 +116,15 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getInvalidAlpha3Countries
-     */
+    #[DataProvider('getInvalidAlpha3Countries')]
     public function testInvalidAlpha3Countries($country)
     {
-        $constraint = new Country([
-            'alpha3' => true,
-            'message' => 'myMessage',
-        ]);
+        $constraint = new Country(
+            alpha3: true,
+            message: 'myMessage',
+        );
 
-        $this->validator->validate($country, $constraint);
+        $this->validate($country, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$country.'"')
@@ -155,7 +144,7 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
 
     public function testInvalidAlpha3CountryNamed()
     {
-        $this->validator->validate(
+        $this->validate(
             'DE',
             new Country(alpha3: true, message: 'myMessage')
         );
@@ -169,13 +158,13 @@ class CountryValidatorTest extends ConstraintValidatorTestCase
     public function testValidateUsingCountrySpecificLocale()
     {
         // in order to test with "en_GB"
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('en_GB');
 
         $existingCountry = 'GB';
 
-        $this->validator->validate($existingCountry, new Country());
+        $this->validate($existingCountry, new Country());
 
         $this->assertNoViolation();
     }

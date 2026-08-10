@@ -11,12 +11,14 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Form\CallbackTransformer;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
 class CheckboxTypeTest extends BaseTypeTestCase
 {
-    public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\CheckboxType';
+    public const TESTED_TYPE = CheckboxType::class;
 
     public function testDataIsFalseByDefault()
     {
@@ -139,15 +141,13 @@ class CheckboxTypeTest extends BaseTypeTestCase
         $this->assertSame('', $form->getViewData());
     }
 
-    /**
-     * @dataProvider provideCustomModelTransformerData
-     */
+    #[DataProvider('provideCustomModelTransformerData')]
     public function testCustomModelTransformer($data, $checked)
     {
         // present a binary status field as a checkbox
         $transformer = new CallbackTransformer(
-            fn ($value) => 'checked' == $value,
-            fn ($value) => $value ? 'checked' : 'unchecked'
+            static fn ($value) => 'checked' == $value,
+            static fn ($value) => $value ? 'checked' : 'unchecked'
         );
 
         $form = $this->factory->createBuilder(static::TESTED_TYPE)
@@ -162,7 +162,7 @@ class CheckboxTypeTest extends BaseTypeTestCase
         $this->assertEquals($checked, $view->vars['checked']);
     }
 
-    public static function provideCustomModelTransformerData()
+    public static function provideCustomModelTransformerData(): array
     {
         return [
             ['checked', true],
@@ -170,9 +170,7 @@ class CheckboxTypeTest extends BaseTypeTestCase
         ];
     }
 
-    /**
-     * @dataProvider provideCustomFalseValues
-     */
+    #[DataProvider('provideCustomFalseValues')]
     public function testCustomFalseValues($falseValue)
     {
         $form = $this->factory->create(static::TESTED_TYPE, null, [
@@ -182,7 +180,7 @@ class CheckboxTypeTest extends BaseTypeTestCase
         $this->assertFalse($form->getData());
     }
 
-    public static function provideCustomFalseValues()
+    public static function provideCustomFalseValues(): array
     {
         return [
             [''],

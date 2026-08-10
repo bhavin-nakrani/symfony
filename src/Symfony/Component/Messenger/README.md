@@ -7,11 +7,7 @@ other applications or via message queues.
 Sponsor
 -------
 
-The Messenger component for Symfony 6.2 is [backed][1] by [SensioLabs][2].
-
-As the creator of Symfony, SensioLabs supports companies using Symfony, with an
-offering encompassing consultancy, expertise, services, training, and technical
-assistance to ensure the success of web application development projects.
+This package is looking for a [backer][1].
 
 Help Symfony by [sponsoring][3] its development!
 
@@ -25,5 +21,4 @@ Resources
    in the [main Symfony repository](https://github.com/symfony/symfony)
 
 [1]: https://symfony.com/backers
-[2]: https://sensiolabs.com
 [3]: https://symfony.com/sponsor

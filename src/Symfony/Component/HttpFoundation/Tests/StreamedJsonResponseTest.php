@@ -30,6 +30,23 @@ class StreamedJsonResponseTest extends TestCase
         $this->assertSame('{"_embedded":{"articles":["Article 1","Article 2","Article 3"],"news":["News 1","News 2","News 3"]}}', $content);
     }
 
+    public function testResponseSimpleGenerator()
+    {
+        $content = $this->createSendResponse($this->generatorSimple('Article'));
+
+        $this->assertSame('["Article 1","Article 2","Article 3"]', $content);
+    }
+
+    public function testResponseNestedGenerator()
+    {
+        $content = $this->createSendResponse((function (): iterable {
+            yield 'articles' => $this->generatorSimple('Article');
+            yield 'news' => $this->generatorSimple('News');
+        })());
+
+        $this->assertSame('{"articles":["Article 1","Article 2","Article 3"],"news":["News 1","News 2","News 3"]}', $content);
+    }
+
     public function testResponseEmptyList()
     {
         $content = $this->createSendResponse(
@@ -92,15 +109,15 @@ class StreamedJsonResponseTest extends TestCase
         $content = $this->createSendResponse(
             [
                 '_embedded' => [
-                    'list' => (function (): \Generator {
+                    'list' => (static function (): \Generator {
                         yield 0 => 'test';
                         yield 'key' => 'value';
                     })(),
-                    'map' => (function (): \Generator {
+                    'map' => (static function (): \Generator {
                         yield 'key' => 'value';
                         yield 0 => 'test';
                     })(),
-                    'integer' => (function (): \Generator {
+                    'integer' => (static function (): \Generator {
                         yield 1 => 'one';
                         yield 3 => 'three';
                     })(),
@@ -115,14 +132,14 @@ class StreamedJsonResponseTest extends TestCase
     {
         $arrayObject = new \ArrayObject(['__symfony_json__' => '__symfony_json__']);
 
-        $iteratorAggregate = new class() implements \IteratorAggregate {
+        $iteratorAggregate = new class implements \IteratorAggregate {
             public function getIterator(): \Traversable
             {
                 return new \ArrayIterator(['__symfony_json__']);
             }
         };
 
-        $jsonSerializable = new class() implements \IteratorAggregate, \JsonSerializable {
+        $jsonSerializable = new class implements \IteratorAggregate, \JsonSerializable {
             public function getIterator(): \Traversable
             {
                 return new \ArrayIterator(['This should be ignored']);
@@ -170,7 +187,7 @@ class StreamedJsonResponseTest extends TestCase
 
     public function testPlaceholderAsObjectStructure()
     {
-        $object = new class() {
+        $object = new class {
             public $__symfony_json__ = 'foo';
             public $bar = '__symfony_json__';
         };
@@ -205,7 +222,7 @@ class StreamedJsonResponseTest extends TestCase
         $response = new StreamedJsonResponse([
             '_embedded' => [
                 'count' => '2', // options are applied to the initial json encode
-                'values' => (function (): \Generator {
+                'values' => (static function (): \Generator {
                     yield 'with/unescaped/slash' => 'With/a/slash'; // options are applied to key and values
                     yield '3' => '3'; // numeric check for value, but not for the key
                 })(),
@@ -220,9 +237,9 @@ class StreamedJsonResponseTest extends TestCase
     }
 
     /**
-     * @param mixed[] $data
+     * @param iterable<mixed> $data
      */
-    private function createSendResponse(array $data): string
+    private function createSendResponse(iterable $data): string
     {
         $response = new StreamedJsonResponse($data);
 

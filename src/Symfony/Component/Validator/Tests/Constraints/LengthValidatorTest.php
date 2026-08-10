@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\LengthValidator;
 use Symfony\Component\Validator\Exception\UnexpectedValueException;
@@ -25,21 +26,23 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Length(['value' => 6]));
+        $this->validate(null, new Length(exactly: 6));
 
         $this->assertNoViolation();
     }
 
     public function testEmptyStringIsInvalid()
     {
-        $this->validator->validate('', new Length([
-            'value' => $limit = 6,
-            'exactMessage' => 'myMessage',
-        ]));
+        $this->validate('', new Length(
+            exactly: $limit = 6,
+            exactMessage: 'myMessage',
+        ));
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '""')
             ->setParameter('{{ limit }}', $limit)
+            ->setParameter('{{ min }}', $limit)
+            ->setParameter('{{ max }}', $limit)
             ->setParameter('{{ value_length }}', 0)
             ->setInvalidValue('')
             ->setPlural($limit)
@@ -50,7 +53,7 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     public function testExpectsStringCompatibleType()
     {
         $this->expectException(UnexpectedValueException::class);
-        $this->validator->validate(new \stdClass(), new Length(['value' => 5]));
+        $this->validate(new \stdClass(), new Length(exactly: 5));
     }
 
     public static function getThreeOrLessCharacters()
@@ -113,46 +116,38 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getFiveOrMoreCharacters
-     */
-    public function testValidValuesMin($value)
+    #[DataProvider('getFiveOrMoreCharacters')]
+    public function testValidValuesMin(int|string $value, int $valueLength)
     {
-        $constraint = new Length(['min' => 5]);
-        $this->validator->validate($value, $constraint);
+        $constraint = new Length(min: 5);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getThreeOrLessCharacters
-     */
-    public function testValidValuesMax($value)
+    #[DataProvider('getThreeOrLessCharacters')]
+    public function testValidValuesMax(int|string $value, int $valueLength)
     {
-        $constraint = new Length(['max' => 3]);
-        $this->validator->validate($value, $constraint);
+        $constraint = new Length(max: 3);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getFourCharacters
-     */
-    public function testValidValuesExact($value)
+    #[DataProvider('getFourCharacters')]
+    public function testValidValuesExact(int|string $value)
     {
         $constraint = new Length(4);
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getThreeCharactersWithWhitespaces
-     */
+    #[DataProvider('getThreeCharactersWithWhitespaces')]
     public function testValidNormalizedValues($value)
     {
-        $constraint = new Length(['min' => 3, 'max' => 3, 'normalizer' => 'trim']);
-        $this->validator->validate($value, $constraint);
+        $constraint = new Length(min: 3, max: 3, normalizer: 'trim');
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
@@ -160,7 +155,7 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     public function testValidGraphemesValues()
     {
         $constraint = new Length(min: 1, max: 1, countUnit: Length::COUNT_GRAPHEMES);
-        $this->validator->validate("A\u{0300}", $constraint);
+        $this->validate("A\u{0300}", $constraint);
 
         $this->assertNoViolation();
     }
@@ -168,7 +163,7 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     public function testValidCodepointsValues()
     {
         $constraint = new Length(min: 2, max: 2, countUnit: Length::COUNT_CODEPOINTS);
-        $this->validator->validate("A\u{0300}", $constraint);
+        $this->validate("A\u{0300}", $constraint);
 
         $this->assertNoViolation();
     }
@@ -176,26 +171,25 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     public function testValidBytesValues()
     {
         $constraint = new Length(min: 3, max: 3, countUnit: Length::COUNT_BYTES);
-        $this->validator->validate("A\u{0300}", $constraint);
+        $this->validate("A\u{0300}", $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getThreeOrLessCharacters
-     */
-    public function testInvalidValuesMin($value, $valueLength)
+    #[DataProvider('getThreeOrLessCharacters')]
+    public function testInvalidValuesMin(int|string $value, int $valueLength)
     {
-        $constraint = new Length([
-            'min' => 4,
-            'minMessage' => 'myMessage',
-        ]);
+        $constraint = new Length(
+            min: 4,
+            minMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ min }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -203,18 +197,17 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getThreeOrLessCharacters
-     */
-    public function testInvalidValuesMinNamed($value, $valueLength)
+    #[DataProvider('getThreeOrLessCharacters')]
+    public function testInvalidValuesMinNamed(int|string $value, int $valueLength)
     {
         $constraint = new Length(min: 4, minMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ min }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -222,21 +215,20 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreCharacters
-     */
-    public function testInvalidValuesMax($value, $valueLength)
+    #[DataProvider('getFiveOrMoreCharacters')]
+    public function testInvalidValuesMax(int|string $value, int $valueLength)
     {
-        $constraint = new Length([
-            'max' => 4,
-            'maxMessage' => 'myMessage',
-        ]);
+        $constraint = new Length(
+            max: 4,
+            maxMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ max }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -244,18 +236,17 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreCharacters
-     */
-    public function testInvalidValuesMaxNamed($value, $valueLength)
+    #[DataProvider('getFiveOrMoreCharacters')]
+    public function testInvalidValuesMaxNamed(int|string $value, int $valueLength)
     {
         $constraint = new Length(max: 4, maxMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ max }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -263,22 +254,22 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getThreeOrLessCharacters
-     */
-    public function testInvalidValuesExactLessThanFour($value, $valueLength)
+    #[DataProvider('getThreeOrLessCharacters')]
+    public function testInvalidValuesExactLessThanFour(int|string $value, int $valueLength)
     {
-        $constraint = new Length([
-            'min' => 4,
-            'max' => 4,
-            'exactMessage' => 'myMessage',
-        ]);
+        $constraint = new Length(
+            min: 4,
+            max: 4,
+            exactMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ min }}', 4)
+            ->setParameter('{{ max }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -286,18 +277,18 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getThreeOrLessCharacters
-     */
-    public function testInvalidValuesExactLessThanFourNamed($value, $valueLength)
+    #[DataProvider('getThreeOrLessCharacters')]
+    public function testInvalidValuesExactLessThanFourNamed(int|string $value, int $valueLength)
     {
         $constraint = new Length(exactly: 4, exactMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ min }}', 4)
+            ->setParameter('{{ max }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -305,22 +296,22 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreCharacters
-     */
-    public function testInvalidValuesExactMoreThanFour($value, $valueLength)
+    #[DataProvider('getFiveOrMoreCharacters')]
+    public function testInvalidValuesExactMoreThanFour(int|string $value, int $valueLength)
     {
-        $constraint = new Length([
-            'min' => 4,
-            'max' => 4,
-            'exactMessage' => 'myMessage',
-        ]);
+        $constraint = new Length(
+            min: 4,
+            max: 4,
+            exactMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$value.'"')
             ->setParameter('{{ limit }}', 4)
+            ->setParameter('{{ min }}', 4)
+            ->setParameter('{{ max }}', 4)
             ->setParameter('{{ value_length }}', $valueLength)
             ->setInvalidValue($value)
             ->setPlural(4)
@@ -328,19 +319,17 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getOneCharset
-     */
+    #[DataProvider('getOneCharset')]
     public function testOneCharset($value, $charset, $isValid)
     {
-        $constraint = new Length([
-            'min' => 1,
-            'max' => 1,
-            'charset' => $charset,
-            'charsetMessage' => 'myMessage',
-        ]);
+        $constraint = new Length(
+            min: 1,
+            max: 1,
+            charset: $charset,
+            charsetMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         if ($isValid) {
             $this->assertNoViolation();
@@ -358,11 +347,13 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     {
         $constraint = new Length(min: 1, max: 1, exactMessage: 'myMessage');
 
-        $this->validator->validate("A\u{0300}", $constraint);
+        $this->validate("A\u{0300}", $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'."A\u{0300}".'"')
             ->setParameter('{{ limit }}', 1)
+            ->setParameter('{{ min }}', 1)
+            ->setParameter('{{ max }}', 1)
             ->setParameter('{{ value_length }}', 2)
             ->setInvalidValue("A\u{0300}")
             ->setPlural(1)
@@ -374,11 +365,13 @@ class LengthValidatorTest extends ConstraintValidatorTestCase
     {
         $constraint = new Length(min: 1, max: 1, countUnit: Length::COUNT_BYTES, exactMessage: 'myMessage');
 
-        $this->validator->validate("A\u{0300}", $constraint);
+        $this->validate("A\u{0300}", $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'."A\u{0300}".'"')
             ->setParameter('{{ limit }}', 1)
+            ->setParameter('{{ min }}', 1)
+            ->setParameter('{{ max }}', 1)
             ->setParameter('{{ value_length }}', 3)
             ->setInvalidValue("A\u{0300}")
             ->setPlural(1)

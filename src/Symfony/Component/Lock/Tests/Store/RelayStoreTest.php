@@ -11,16 +11,14 @@
 
 namespace Store;
 
-use PHPUnit\Framework\SkippedTestSuiteError;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Relay\Relay;
 use Symfony\Component\Lock\Tests\Store\AbstractRedisStoreTestCase;
 use Symfony\Component\Lock\Tests\Store\SharedLockStoreTestTrait;
 
-/**
- * @requires extension relay
- *
- * @group integration
- */
+#[RequiresPhpExtension('relay')]
+#[Group('integration')]
 class RelayStoreTest extends AbstractRedisStoreTestCase
 {
     use SharedLockStoreTestTrait;
@@ -30,7 +28,7 @@ class RelayStoreTest extends AbstractRedisStoreTestCase
         try {
             new Relay(...explode(':', getenv('REDIS_HOST')));
         } catch (\Relay\Exception $e) {
-            throw new SkippedTestSuiteError($e->getMessage());
+            self::markTestSkipped($e->getMessage());
         }
     }
 

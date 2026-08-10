@@ -11,21 +11,20 @@
 
 namespace Symfony\Component\Translation\Bridge\Phrase\Tests;
 
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\HttpClientTrait;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\HttpClient\Response\MockResponse;
-use Symfony\Component\Translation\Bridge\Phrase\Config\ReadConfig;
-use Symfony\Component\Translation\Bridge\Phrase\Config\WriteConfig;
 use Symfony\Component\Translation\Bridge\Phrase\PhraseProvider;
 use Symfony\Component\Translation\Dumper\XliffFileDumper;
 use Symfony\Component\Translation\Exception\ProviderExceptionInterface;
 use Symfony\Component\Translation\Loader\LoaderInterface;
-use Symfony\Component\Translation\LoggingTranslator;
 use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\Provider\ProviderInterface;
 use Symfony\Component\Translation\TranslatorBag;
@@ -41,26 +40,24 @@ class PhraseProviderTest extends TestCase
     }
 
     private MockHttpClient $httpClient;
-    private MockObject&LoggerInterface $logger;
-    private MockObject&LoaderInterface $loader;
-    private MockObject&XliffFileDumper $xliffFileDumper;
-    private MockObject&CacheItemPoolInterface $cache;
+    private LoggerInterface $logger;
+    private LoaderInterface $loader;
+    private XliffFileDumper $xliffFileDumper;
+    private CacheItemPoolInterface $cache;
     private string $defaultLocale;
     private string $endpoint;
-    private MockObject&ReadConfig $readConfig;
-    private MockObject&WriteConfig $writeConfig;
+    private array $readConfig;
+    private array $writeConfig;
 
-    /**
-     * @dataProvider toStringProvider
-     */
-    public function testToString(ProviderInterface $provider, string $expected)
+    #[DataProvider('toStringProvider')]
+    public function testToString(?string $endpoint, string $expected)
     {
+        $provider = $this->createProvider(endpoint: $endpoint);
+
         self::assertSame($expected, (string) $provider);
     }
 
-    /**
-     * @dataProvider readProvider
-     */
+    #[DataProvider('readProvider')]
     public function testRead(string $locale, string $localeId, string $domain, string $responseContent, TranslatorBag $expectedTranslatorBag)
     {
         $item = $this->createMock(CacheItemInterface::class);
@@ -77,8 +74,9 @@ class PhraseProviderTest extends TestCase
                 return true;
             }));
 
+        $this->cache = $this->createMock(CacheItemPoolInterface::class);
         $this->getCache()
-            ->expects(self::once())
+            ->expects($this->once())
             ->method('getItem')
             ->with(self::callback(function ($v) use ($locale, $domain) {
                 $this->assertStringStartsWith($locale.'.'.$domain.'.', $v);
@@ -87,15 +85,12 @@ class PhraseProviderTest extends TestCase
             }))
             ->willReturn($item);
 
-        $this->readConfigWithDefaultValues($domain);
-
         $responses = [
             'init locales' => $this->getInitLocaleResponseMock(),
             'download locale' => $this->getDownloadLocaleResponseMock($domain, $localeId, $responseContent),
         ];
 
         $this->getLoader()
-            ->expects($this->once())
             ->method('load')
             ->willReturn($expectedTranslatorBag->getCatalogue($locale));
 
@@ -112,9 +107,7 @@ class PhraseProviderTest extends TestCase
         $this->assertSame($expectedTranslatorBag->getCatalogues(), $translatorBag->getCatalogues());
     }
 
-    /**
-     * @dataProvider readProvider
-     */
+    #[DataProvider('readProvider')]
     public function testReadCached(string $locale, string $localeId, string $domain, string $responseContent, TranslatorBag $expectedTranslatorBag)
     {
         $item = $this->createMock(CacheItemInterface::class);
@@ -134,6 +127,7 @@ class PhraseProviderTest extends TestCase
                 return true;
             }));
 
+        $this->cache = $this->createMock(CacheItemPoolInterface::class);
         $this->getCache()
             ->expects(self::once())
             ->method('getItem')
@@ -149,8 +143,6 @@ class PhraseProviderTest extends TestCase
             ->method('save')
             ->with($item);
 
-        $this->readConfigWithDefaultValues($domain);
-
         $responses = [
             'init locales' => $this->getInitLocaleResponseMock(),
             'download locale' => function (string $method, string $url, array $options = []): ResponseInterface {
@@ -165,7 +157,6 @@ class PhraseProviderTest extends TestCase
         ];
 
         $this->getLoader()
-            ->expects($this->once())
             ->method('load')
             ->willReturn($expectedTranslatorBag->getCatalogue($locale));
 
@@ -185,7 +176,6 @@ class PhraseProviderTest extends TestCase
     public function testReadFallbackLocale()
     {
         $locale = 'en_GB';
-        $localeId = '13604ec993beefcdaba732812cdb828c';
         $domain = 'messages';
 
         $bag = new TranslatorBag();
@@ -215,6 +205,7 @@ class PhraseProviderTest extends TestCase
         $item->expects(self::once())->method('isHit')->willReturn(false);
         $item->expects(self::never())->method('set');
 
+        $this->cache = $this->createMock(CacheItemPoolInterface::class);
         $this->getCache()
             ->expects(self::once())
             ->method('getItem')
@@ -226,27 +217,13 @@ class PhraseProviderTest extends TestCase
             ->willReturn($item);
 
         $this->getCache()->expects(self::never())->method('save');
-
-        $this->getReadConfig()
-            ->method('getOptions')
-            ->willReturn([
-                'file_format' => 'symfony_xliff',
-                'include_empty_translations' => '1',
-                'tags' => $domain,
-                'format_options' => [
-                    'enclose_in_cdata' => '1',
-                ],
-                'fallback_locale_id' => 'de',
-            ]);
-
-        $this->getReadConfig()->expects(self::once())->method('setTag')->with($domain)->willReturnSelf();
-        $this->getReadConfig()->expects(self::once())->method('setFallbackLocale')->with('de')->willReturnSelf();
-        $this->getReadConfig()->expects(self::exactly(2))->method('isFallbackLocaleEnabled')->willReturn(true);
+        $this->loader = $this->createMock(LoaderInterface::class);
         $this->getLoader()->expects($this->once())->method('load')->willReturn($bag->getCatalogue($locale));
 
         $responses = [
             'init locales' => $this->getInitLocaleResponseMock(),
-            'download locale' => function (string $method, string $url, array $options) use ($localeId): ResponseInterface {
+            'download locale' => function (string $method, string $url, array $options): ResponseInterface {
+                $localeId = '13604ec993beefcdaba732812cdb828c';
                 $query = [
                     'file_format' => 'symfony_xliff',
                     'include_empty_translations' => '1',
@@ -275,24 +252,16 @@ class PhraseProviderTest extends TestCase
                 'Authorization' => 'token API_TOKEN',
                 'User-Agent' => 'myProject',
             ],
-        ]), endpoint: 'api.phrase.com/api/v2');
+        ]), endpoint: 'api.phrase.com/api/v2', isFallbackLocaleEnabled: true);
 
         $provider->read([$domain], [$locale]);
     }
 
-    /**
-     * @dataProvider cacheKeyProvider
-     */
+    #[DataProvider('cacheKeyProvider')]
     public function testCacheKeyOptionsSort(array $options, string $expectedKey)
     {
+        $this->cache = $this->createMock(CacheItemPoolInterface::class);
         $this->getCache()->expects(self::once())->method('getItem')->with($expectedKey);
-        $this->getReadConfig()->method('getOptions')->willReturn($options);
-
-        $this->getReadConfig()->expects(self::once())
-            ->method('setTag')
-            ->with('messages')
-            ->willReturnSelf();
-
         $this->getLoader()->method('load')->willReturn(new MessageCatalogue('en'));
 
         $responses = [
@@ -318,9 +287,7 @@ class PhraseProviderTest extends TestCase
         $provider->read(['messages'], ['en_GB']);
     }
 
-    /**
-     * @dataProvider cacheItemProvider
-     */
+    #[DataProvider('cacheItemProvider')]
     public function testGetCacheItem(mixed $cachedValue, bool $hasMatchHeader)
     {
         $item = $this->createMock(CacheItemInterface::class);
@@ -328,7 +295,6 @@ class PhraseProviderTest extends TestCase
         $item->method('get')->willReturn($cachedValue);
 
         $this->getCache()
-            ->expects(self::once())
             ->method('getItem')
             ->willReturn($item);
 
@@ -361,32 +327,22 @@ class PhraseProviderTest extends TestCase
         $provider->read(['messages'], ['en_GB']);
     }
 
-    public function cacheItemProvider(): \Generator
+    public static function cacheItemProvider(): \Generator
     {
         yield 'null value' => [
-            'cached_value' => null,
-            'has_header' => false,
+            'cachedValue' => null,
+            'hasMatchHeader' => false,
         ];
 
         $item = ['etag' => 'W\Foo', 'modified' => 'foo', 'content' => 'bar'];
 
         yield 'correct value' => [
-            'cached_value' => $item,
-            'has_header' => true,
+            'cachedValue' => $item,
+            'hasMatchHeader' => true,
         ];
     }
 
-    public function testTranslatorBagAssert()
-    {
-        $this->expectExceptionMessage('assert($translatorBag instanceof TranslatorBag)');
-
-        $trans = $this->createMock(LoggingTranslator::class);
-        $provider = $this->createProvider();
-
-        $provider->write($trans);
-    }
-
-    public function cacheKeyProvider(): \Generator
+    public static function cacheKeyProvider(): \Generator
     {
         yield 'sortorder one' => [
             'options' => [
@@ -397,7 +353,7 @@ class PhraseProviderTest extends TestCase
                     'enclose_in_cdata' => '1',
                 ],
             ],
-            'expected_key' => 'en_GB.messages.d8c311727922efc26536fc843bfee3e464850205',
+            'expectedKey' => 'en_GB.messages.099584009f94b788bd46580c17f49c0b22c55e16',
         ];
 
         yield 'sortorder two' => [
@@ -409,19 +365,14 @@ class PhraseProviderTest extends TestCase
                 ],
                 'tags' => [],
             ],
-            'expected_key' => 'en_GB.messages.d8c311727922efc26536fc843bfee3e464850205',
+            'expectedKey' => 'en_GB.messages.099584009f94b788bd46580c17f49c0b22c55e16',
         ];
     }
 
-    /**
-     * @dataProvider readProviderExceptionsProvider
-     */
+    #[DataProvider('readProviderExceptionsProvider')]
     public function testReadProviderExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
     {
-        $this->expectException(ProviderExceptionInterface::class);
-        $this->expectExceptionCode(0);
-        $this->expectExceptionMessage($expectedExceptionMessage);
-
+        $this->logger = $this->createMock(LoggerInterface::class);
         $this->getLogger()
             ->expects(self::once())
             ->method('error')
@@ -446,18 +397,17 @@ class PhraseProviderTest extends TestCase
             ],
         ]), endpoint: 'api.phrase.com/api/v2');
 
-        $provider->read(['messages'], ['en_GB']);
-    }
-
-    /**
-     * @dataProvider initLocalesExceptionsProvider
-     */
-    public function testInitLocalesExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
-    {
         $this->expectException(ProviderExceptionInterface::class);
         $this->expectExceptionCode(0);
         $this->expectExceptionMessage($expectedExceptionMessage);
 
+        $provider->read(['messages'], ['en_GB']);
+    }
+
+    #[DataProvider('initLocalesExceptionsProvider')]
+    public function testInitLocalesExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
+    {
+        $this->logger = $this->createMock(LoggerInterface::class);
         $this->getLogger()
             ->expects(self::once())
             ->method('error')
@@ -481,13 +431,15 @@ class PhraseProviderTest extends TestCase
             ],
         ]), endpoint: 'api.phrase.com/api/v2');
 
+        $this->expectException(ProviderExceptionInterface::class);
+        $this->expectExceptionCode(0);
+        $this->expectExceptionMessage($expectedExceptionMessage);
+
         $provider->read(['messages'], ['en_GB']);
     }
 
     public function testInitLocalesPaginated()
     {
-        $this->readConfigWithDefaultValues('messages');
-
         $this->getLoader()->method('load')->willReturn(new MessageCatalogue('en'));
 
         $responses = [
@@ -495,14 +447,14 @@ class PhraseProviderTest extends TestCase
                 $this->assertSame('GET', $method);
                 $this->assertSame('https://api.phrase.com/api/v2/projects/1/locales?per_page=100&page=1', $url);
 
-                return new MockResponse(json_encode([
+                return new JsonMockResponse([
                     [
                         'id' => '5fea6ed5c21767730918a9400e420832',
                         'name' => 'de',
                         'code' => 'de',
                         'fallback_locale' => null,
                     ],
-                ], \JSON_THROW_ON_ERROR), [
+                ], [
                     'http_code' => 200,
                     'response_headers' => [
                         'pagination' => '{"total_count":31,"current_page":1,"current_per_page":25,"previous_page":null,"next_page":2}',
@@ -513,14 +465,14 @@ class PhraseProviderTest extends TestCase
                 $this->assertSame('GET', $method);
                 $this->assertSame('https://api.phrase.com/api/v2/projects/1/locales?per_page=100&page=2', $url);
 
-                return new MockResponse(json_encode([
+                return new JsonMockResponse([
                     [
                         'id' => '5fea6ed5c21767730918a9400e420832',
                         'name' => 'de',
                         'code' => 'de',
                         'fallback_locale' => null,
                     ],
-                ], \JSON_THROW_ON_ERROR), [
+                ], [
                     'http_code' => 200,
                     'response_headers' => [
                         'pagination' => '{"total_count":31,"current_page":2,"current_per_page":25,"previous_page":null,"next_page":null}',
@@ -543,8 +495,6 @@ class PhraseProviderTest extends TestCase
 
     public function testCreateUnknownLocale()
     {
-        $this->readConfigWithDefaultValues('messages');
-
         $this->getLoader()->method('load')->willReturn(new MessageCatalogue('en'));
 
         $responses = [
@@ -556,12 +506,12 @@ class PhraseProviderTest extends TestCase
                 $this->assertArrayHasKey('body', $options);
                 $this->assertSame('name=nl-NL&code=nl-NL&default=0', $options['body']);
 
-                return new MockResponse(json_encode([
+                return new JsonMockResponse([
                     'id' => 'zWlsCvkeSK0EBgBVmGpZ4cySWbQ0s1Dk4',
                     'name' => 'nl-NL',
                     'code' => 'nl-NL',
                     'fallback_locale' => null,
-                ], \JSON_THROW_ON_ERROR), ['http_code' => 201]);
+                ], ['http_code' => 201]);
             },
             'download locale' => $this->getDownloadLocaleResponseMock('messages', 'zWlsCvkeSK0EBgBVmGpZ4cySWbQ0s1Dk4', ''),
         ];
@@ -577,15 +527,10 @@ class PhraseProviderTest extends TestCase
         $provider->read(['messages'], ['nl_NL']);
     }
 
-    /**
-     * @dataProvider createLocalesExceptionsProvider
-     */
+    #[DataProvider('createLocalesExceptionsProvider')]
     public function testCreateLocaleExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
     {
-        $this->expectException(ProviderExceptionInterface::class);
-        $this->expectExceptionCode(0);
-        $this->expectExceptionMessage($expectedExceptionMessage);
-
+        $this->logger = $this->createMock(LoggerInterface::class);
         $this->getLogger()
             ->expects(self::once())
             ->method('error')
@@ -609,6 +554,10 @@ class PhraseProviderTest extends TestCase
                 'User-Agent' => 'myProject',
             ],
         ]), endpoint: 'api.phrase.com/api/v2');
+
+        $this->expectException(ProviderExceptionInterface::class);
+        $this->expectExceptionCode(0);
+        $this->expectExceptionMessage($expectedExceptionMessage);
 
         $provider->read(['messages'], ['nl_NL']);
     }
@@ -665,15 +614,10 @@ class PhraseProviderTest extends TestCase
         $provider->delete($bag);
     }
 
-    /**
-     * @dataProvider deleteExceptionsProvider
-     */
+    #[DataProvider('deleteExceptionsProvider')]
     public function testDeleteProviderExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
     {
-        $this->expectException(ProviderExceptionInterface::class);
-        $this->expectExceptionCode(0);
-        $this->expectExceptionMessage($expectedExceptionMessage);
-
+        $this->logger = $this->createMock(LoggerInterface::class);
         $this->getLogger()
             ->expects(self::once())
             ->method('error')
@@ -704,15 +648,17 @@ class PhraseProviderTest extends TestCase
             ],
         ]));
 
+        $this->expectException(ProviderExceptionInterface::class);
+        $this->expectExceptionCode(0);
+        $this->expectExceptionMessage($expectedExceptionMessage);
+
         $provider->delete($bag);
     }
 
-    /**
-     * @dataProvider writeProvider
-     */
+    #[DataProvider('writeProvider')]
     public function testWrite(string $locale, string $localeId, string $domain, string $content, TranslatorBag $bag)
     {
-        $this->writeConfigWithDefaultValues($domain, $localeId);
+        $this->getWriteConfig($domain, $localeId);
 
         $responses = [
             'init locales' => $this->getInitLocaleResponseMock(),
@@ -736,7 +682,7 @@ class PhraseProviderTest extends TestCase
                     }
 
                     if (str_starts_with($part, '<?xml')) {
-                        $this->assertSame($content, $part);
+                        $this->assertStringMatchesFormat($content, $part);
                         $testedContent = true;
                     }
 
@@ -783,15 +729,10 @@ class PhraseProviderTest extends TestCase
         $provider->write($bag);
     }
 
-    /**
-     * @dataProvider writeExceptionsProvider
-     */
+    #[DataProvider('writeExceptionsProvider')]
     public function testWriteProviderExceptions(int $statusCode, string $expectedExceptionMessage, string $expectedLoggerMessage)
     {
-        $this->expectException(ProviderExceptionInterface::class);
-        $this->expectExceptionCode(0);
-        $this->expectExceptionMessage($expectedExceptionMessage);
-
+        $this->logger = $this->createMock(LoggerInterface::class);
         $this->getLogger()
             ->expects(self::once())
             ->method('error')
@@ -827,32 +768,36 @@ class PhraseProviderTest extends TestCase
             ],
         ]));
 
+        $this->expectException(ProviderExceptionInterface::class);
+        $this->expectExceptionCode(0);
+        $this->expectExceptionMessage($expectedExceptionMessage);
+
         $provider->write($bag);
     }
 
-    public function writeProvider(): \Generator
+    public static function writeProvider(): \Generator
     {
         $expectedEnglishXliff = <<<'XLIFF'
-<?xml version="1.0" encoding="utf-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
-  <file source-language="en-GB" target-language="en-GB" datatype="plaintext" original="file.ext">
-    <header>
-      <tool tool-id="symfony" tool-name="Symfony"/>
-    </header>
-    <body>
-      <trans-unit id="qdGDk9Z" resname="general.back">
-        <source>general.back</source>
-        <target><![CDATA[back &!]]></target>
-      </trans-unit>
-      <trans-unit id="0ESGki9" resname="general.cancel">
-        <source>general.cancel</source>
-        <target>Cancel</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
+            <?xml version="1.0" encoding="utf-8"?>
+            <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+              <file source-language="en-GB" target-language="en-GB" datatype="plaintext" original="file.ext">
+                <header>
+                  <tool tool-id="symfony" tool-name="Symfony"/>
+                </header>
+                <body>
+                  <trans-unit id="%s" resname="general.back">
+                    <source>general.back</source>
+                    <target><![CDATA[back &!]]></target>
+                  </trans-unit>
+                  <trans-unit id="%s" resname="general.cancel">
+                    <source>general.cancel</source>
+                    <target>Cancel</target>
+                  </trans-unit>
+                </body>
+              </file>
+            </xliff>
 
-XLIFF;
+            XLIFF;
 
         $bag = new TranslatorBag();
         $bag->addCatalogue(new MessageCatalogue('en_GB', [
@@ -868,31 +813,31 @@ XLIFF;
             'locale' => 'en_GB',
             'localeId' => '13604ec993beefcdaba732812cdb828c',
             'domain' => 'messages',
-            'responseContent' => $expectedEnglishXliff,
+            'content' => $expectedEnglishXliff,
             'bag' => $bag,
         ];
 
         $expectedGermanXliff = <<<'XLIFF'
-<?xml version="1.0" encoding="utf-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
-  <file source-language="en-GB" target-language="de" datatype="plaintext" original="file.ext">
-    <header>
-      <tool tool-id="symfony" tool-name="Symfony"/>
-    </header>
-    <body>
-      <trans-unit id="qdGDk9Z" resname="general.back">
-        <source>general.back</source>
-        <target>zurück</target>
-      </trans-unit>
-      <trans-unit id="0ESGki9" resname="general.cancel">
-        <source>general.cancel</source>
-        <target>Abbrechen</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
+            <?xml version="1.0" encoding="utf-8"?>
+            <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+              <file source-language="en-GB" target-language="de" datatype="plaintext" original="file.ext">
+                <header>
+                  <tool tool-id="symfony" tool-name="Symfony"/>
+                </header>
+                <body>
+                  <trans-unit id="%s" resname="general.back">
+                    <source>general.back</source>
+                    <target>zurück</target>
+                  </trans-unit>
+                  <trans-unit id="%s" resname="general.cancel">
+                    <source>general.cancel</source>
+                    <target>Abbrechen</target>
+                  </trans-unit>
+                </body>
+              </file>
+            </xliff>
 
-XLIFF;
+            XLIFF;
 
         $bag = new TranslatorBag();
         $bag->addCatalogue(new MessageCatalogue('de', [
@@ -907,89 +852,71 @@ XLIFF;
             'locale' => 'de',
             'localeId' => '5fea6ed5c21767730918a9400e420832',
             'domain' => 'validators',
-            'responseContent' => $expectedGermanXliff,
+            'content' => $expectedGermanXliff,
             'bag' => $bag,
         ];
     }
 
-    public function toStringProvider(): \Generator
+    public static function toStringProvider(): \Generator
     {
         yield 'default endpoint' => [
-            'provider' => $this->createProvider(httpClient: $this->getHttpClient()->withOptions([
-                'base_uri' => 'https://api.phrase.com/api/v2/projects/PROJECT_ID/',
-                'headers' => [
-                    'Authorization' => 'token API_TOKEN',
-                    'User-Agent' => 'myProject',
-                ],
-            ])),
+            'endpoint' => null,
             'expected' => 'phrase://api.phrase.com',
         ];
 
         yield 'custom endpoint' => [
-            'provider' => $this->createProvider(httpClient: $this->getHttpClient()->withOptions([
-                'base_uri' => 'https://api.us.app.phrase.com/api/v2/projects/PROJECT_ID/',
-                'headers' => [
-                    'Authorization' => 'token API_TOKEN',
-                    'User-Agent' => 'myProject',
-                ],
-            ]), endpoint: 'api.us.app.phrase.com'),
+            'endpoint' => 'api.us.app.phrase.com',
             'expected' => 'phrase://api.us.app.phrase.com',
         ];
 
         yield 'custom endpoint with port' => [
-            'provider' => $this->createProvider(httpClient: $this->getHttpClient()->withOptions([
-                'base_uri' => 'https://api.us.app.phrase.com:8080/api/v2/projects/PROJECT_ID/',
-                'headers' => [
-                    'Authorization' => 'token API_TOKEN',
-                    'User-Agent' => 'myProject',
-                ],
-            ]), endpoint: 'api.us.app.phrase.com:8080'),
+            'endpoint' => 'api.us.app.phrase.com:8080',
             'expected' => 'phrase://api.us.app.phrase.com:8080',
         ];
     }
 
-    public function deleteExceptionsProvider(): array
+    public static function deleteExceptionsProvider(): array
     {
-        return $this->getExceptionResponses(
+        return self::getExceptionResponses(
             exceptionMessage: 'Unable to delete key in phrase.',
             loggerMessage: 'Unable to delete key "key.to.delete" in phrase: "provider error".',
             statusCode: 500
         );
     }
 
-    public function writeExceptionsProvider(): array
+    public static function writeExceptionsProvider(): array
     {
-        return $this->getExceptionResponses(
+        return self::getExceptionResponses(
             exceptionMessage: 'Unable to upload translations to phrase.',
             loggerMessage: 'Unable to upload translations for domain "messages" to phrase: "provider error".'
         );
     }
 
-    public function createLocalesExceptionsProvider(): array
+    public static function createLocalesExceptionsProvider(): array
     {
-        return $this->getExceptionResponses(
+        return self::getExceptionResponses(
             exceptionMessage: 'Unable to create locale phrase.',
             loggerMessage: 'Unable to create locale "nl-NL" in phrase: "provider error".'
         );
     }
 
-    public function initLocalesExceptionsProvider(): array
+    public static function initLocalesExceptionsProvider(): array
     {
-        return $this->getExceptionResponses(
+        return self::getExceptionResponses(
             exceptionMessage: 'Unable to get locales from phrase.',
             loggerMessage: 'Unable to get locales from phrase: "provider error".'
         );
     }
 
-    public function readProviderExceptionsProvider(): array
+    public static function readProviderExceptionsProvider(): array
     {
-        return $this->getExceptionResponses(
+        return self::getExceptionResponses(
             exceptionMessage: 'Unable to get translations from phrase.',
             loggerMessage: 'Unable to get translations for locale "en_GB" from phrase: "provider error".'
         );
     }
 
-    public function readProvider(): \Generator
+    public static function readProvider(): \Generator
     {
         $bag = new TranslatorBag();
         $catalogue = new MessageCatalogue('en_GB', [
@@ -1016,27 +943,27 @@ XLIFF;
 
         yield [
             'locale' => 'en_GB',
-            'locale_id' => '13604ec993beefcdaba732812cdb828c',
+            'localeId' => '13604ec993beefcdaba732812cdb828c',
             'domain' => 'messages',
-            'content' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
-  <file original="global" datatype="plaintext" source-language="de" target-language="en-GB">
-    <body>
-      <trans-unit id="general.back" resname="general.back">
-        <source xml:lang="de"><![CDATA[zurück </rant >]]></source>
-        <target xml:lang="en" state="signed-off"><![CDATA[back  {{ placeholder }} </rant >]]></target>
-        <note>this should have a cdata section</note>
-      </trans-unit>
-      <trans-unit id="general.cancel" resname="general.cancel">
-        <source xml:lang="de">Abbrechen</source>
-        <target xml:lang="en" state="translated">Cancel</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF,
-            'expected bag' => $bag,
+            'responseContent' => <<<'XLIFF'
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+                  <file original="global" datatype="plaintext" source-language="de" target-language="en-GB">
+                    <body>
+                      <trans-unit id="general.back" resname="general.back">
+                        <source xml:lang="de"><![CDATA[zurück </rant >]]></source>
+                        <target xml:lang="en" state="signed-off"><![CDATA[back  {{ placeholder }} </rant >]]></target>
+                        <note>this should have a cdata section</note>
+                      </trans-unit>
+                      <trans-unit id="general.cancel" resname="general.cancel">
+                        <source xml:lang="de">Abbrechen</source>
+                        <target xml:lang="en" state="translated">Cancel</target>
+                      </trans-unit>
+                    </body>
+                  </file>
+                </xliff>
+                XLIFF,
+            'expectedTranslatorBag' => $bag,
         ];
 
         $bag = new TranslatorBag();
@@ -1064,47 +991,47 @@ XLIFF,
 
         yield [
             'locale' => 'de',
-            'locale_id' => '5fea6ed5c21767730918a9400e420832',
+            'localeId' => '5fea6ed5c21767730918a9400e420832',
             'domain' => 'validators',
-            'content' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
-  <file original="file.ext" datatype="plaintext" source-language="de" target-language="de">
-    <body>
-      <trans-unit id="A PHP extension caused the upload to fail." resname="A PHP extension caused the upload to fail.">
-        <source xml:lang="de">Eine PHP-Erweiterung verhinderte den Upload.</source>
-        <target xml:lang="de" state="signed-off">Eine PHP-Erweiterung verhinderte den Upload.</target>
-      </trans-unit>
-      <trans-unit id="An empty file is not allowed." resname="An empty file is not allowed.">
-        <source xml:lang="de">Eine leere Datei ist nicht erlaubt.</source>
-        <target xml:lang="de" state="signed-off">Eine leere Datei ist nicht erlaubt.</target>
-        <note>be sure not to allow an empty file</note>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF,
-            'expected bag' => $bag,
+            'responseContent' => <<<'XLIFF'
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+                  <file original="file.ext" datatype="plaintext" source-language="de" target-language="de">
+                    <body>
+                      <trans-unit id="A PHP extension caused the upload to fail." resname="A PHP extension caused the upload to fail.">
+                        <source xml:lang="de">Eine PHP-Erweiterung verhinderte den Upload.</source>
+                        <target xml:lang="de" state="signed-off">Eine PHP-Erweiterung verhinderte den Upload.</target>
+                      </trans-unit>
+                      <trans-unit id="An empty file is not allowed." resname="An empty file is not allowed.">
+                        <source xml:lang="de">Eine leere Datei ist nicht erlaubt.</source>
+                        <target xml:lang="de" state="signed-off">Eine leere Datei ist nicht erlaubt.</target>
+                        <note>be sure not to allow an empty file</note>
+                      </trans-unit>
+                    </body>
+                  </file>
+                </xliff>
+                XLIFF,
+            'expectedTranslatorBag' => $bag,
         ];
     }
 
-    private function getExceptionResponses(string $exceptionMessage, string $loggerMessage, int $statusCode = 400): array
+    private static function getExceptionResponses(string $exceptionMessage, string $loggerMessage, int $statusCode = 400): array
     {
         return [
             'bad request' => [
                 'statusCode' => $statusCode,
-                'exceptionMessage' => $exceptionMessage,
-                'loggerMessage' => $loggerMessage,
+                'expectedExceptionMessage' => $exceptionMessage,
+                'expectedLoggerMessage' => $loggerMessage,
             ],
             'rate limit exceeded' => [
                 'statusCode' => 429,
-                'exceptionMessage' => 'Rate limit exceeded (1000). please wait 60 seconds.',
-                'loggerMessage' => $loggerMessage,
+                'expectedExceptionMessage' => 'Rate limit exceeded (1000). please wait 60 seconds.',
+                'expectedLoggerMessage' => $loggerMessage,
             ],
             'server unavailable' => [
                 'statusCode' => 503,
-                'exceptionMessage' => 'Provider server error.',
-                'loggerMessage' => $loggerMessage,
+                'expectedExceptionMessage' => 'Provider server error.',
+                'expectedLoggerMessage' => $loggerMessage,
             ],
         ];
     }
@@ -1141,7 +1068,7 @@ XLIFF,
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.phrase.com/api/v2/projects/1/locales?per_page=100&page=1', $url);
 
-            return new MockResponse(json_encode([
+            return new JsonMockResponse([
                 [
                     'id' => '5fea6ed5c21767730918a9400e420832',
                     'name' => 'de',
@@ -1158,11 +1085,11 @@ XLIFF,
                         'code' => 'de',
                     ],
                 ],
-            ], \JSON_THROW_ON_ERROR));
+            ]);
         };
     }
 
-    private function createProvider(MockHttpClient $httpClient = null, string $endpoint = null, XliffFileDumper $dumper = null): ProviderInterface
+    private function createProvider(?MockHttpClient $httpClient = null, ?string $endpoint = null, ?XliffFileDumper $dumper = null, bool $isFallbackLocaleEnabled = false): ProviderInterface
     {
         return new PhraseProvider(
             $httpClient ?? $this->getHttpClient(),
@@ -1173,7 +1100,8 @@ XLIFF,
             $this->getDefaultLocale(),
             $endpoint ?? $this->getEndpoint(),
             $this->getReadConfig(),
-            $this->getWriteConfig()
+            $this->getWriteConfig(),
+            $isFallbackLocaleEnabled,
         );
     }
 
@@ -1182,24 +1110,24 @@ XLIFF,
         return $this->httpClient ??= new MockHttpClient();
     }
 
-    private function getLogger(): MockObject&LoggerInterface
+    private function getLogger(): LoggerInterface
     {
-        return $this->logger ??= $this->createMock(LoggerInterface::class);
+        return $this->logger ??= new NullLogger();
     }
 
-    private function getLoader(): MockObject&LoaderInterface
+    private function getLoader(): LoaderInterface
     {
-        return $this->loader ??= $this->createMock(LoaderInterface::class);
+        return $this->loader ??= $this->createStub(LoaderInterface::class);
     }
 
-    private function getXliffFileDumper(): XliffFileDumper&MockObject
+    private function getXliffFileDumper(): XliffFileDumper
     {
-        return $this->xliffFileDumper ??= $this->createMock(XliffFileDumper::class);
+        return $this->xliffFileDumper ??= $this->createStub(XliffFileDumper::class);
     }
 
-    private function getCache(): MockObject&CacheItemPoolInterface
+    private function getCache(): CacheItemPoolInterface
     {
-        return $this->cache ??= $this->createMock(CacheItemPoolInterface::class);
+        return $this->cache ??= $this->createStub(CacheItemPoolInterface::class);
     }
 
     private function getDefaultLocale(): string
@@ -1212,51 +1140,25 @@ XLIFF,
         return $this->endpoint ??= 'api.phrase.com';
     }
 
-    private function getReadConfig(): ReadConfig&MockObject
+    private function getReadConfig(): array
     {
-        return $this->readConfig ??= $this->createMock(ReadConfig::class);
+        return $this->readConfig ??= [
+            'file_format' => 'symfony_xliff',
+            'include_empty_translations' => '1',
+            'tags' => [],
+            'format_options' => [
+                'enclose_in_cdata' => '1',
+            ],
+        ];
     }
 
-    private function getWriteConfig(): WriteConfig&MockObject
+    private function getWriteConfig(string $domain = 'messages', string $phraseLocale = 'en_GB'): array
     {
-        return $this->writeConfig ??= $this->createMock(WriteConfig::class);
-    }
-
-    private function readConfigWithDefaultValues(string $domain): void
-    {
-        $this->getReadConfig()
-            ->method('getOptions')
-            ->willReturn([
-                'file_format' => 'symfony_xliff',
-                'include_empty_translations' => '1',
-                'tags' => $domain,
-                'format_options' => [
-                    'enclose_in_cdata' => '1',
-                ],
-            ]);
-    }
-
-    private function writeConfigWithDefaultValues(string $domain, string $phraseLocale): void
-    {
-        $this->getWriteConfig()
-            ->method('getOptions')
-            ->willReturn([
-                'file_format' => 'symfony_xliff',
-                'update_translations' => '1',
-                'tags' => $domain,
-                'locale_id' => $phraseLocale,
-            ]);
-
-        $this->getWriteConfig()
-            ->expects(self::once())
-            ->method('setTag')
-            ->with($domain)
-            ->willReturnSelf();
-
-        $this->getWriteConfig()
-            ->expects(self::once())
-            ->method('setLocale')
-            ->with($phraseLocale)
-            ->willReturnSelf();
+        return $this->writeConfig ??= [
+            'file_format' => 'symfony_xliff',
+            'update_translations' => '1',
+            'tags' => $domain,
+            'locale_id' => $phraseLocale,
+        ];
     }
 }

@@ -18,7 +18,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Kernel;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 
 class FlexStyleMicroKernel extends Kernel
@@ -64,12 +64,12 @@ class FlexStyleMicroKernel extends Kernel
         return \dirname((new \ReflectionObject($this))->getFileName(), 2);
     }
 
-    public function __sleep(): array
+    public function __serialize(): array
     {
         throw new \BadMethodCallException('Cannot serialize '.__CLASS__);
     }
 
-    public function __wakeup(): void
+    public function __unserialize(array $data): void
     {
         throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
     }
@@ -100,10 +100,6 @@ class FlexStyleMicroKernel extends Kernel
                 ->factory([$this, 'createHalloween'])
                 ->arg('$halloween', '%halloween%');
 
-        $c->extension('framework', [
-            'annotations' => false,
-            'http_method_override' => false,
-            'router' => ['utf8' => true],
-        ]);
+        $c->extension('framework', []);
     }
 }

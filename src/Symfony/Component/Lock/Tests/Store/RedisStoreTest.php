@@ -11,17 +11,16 @@
 
 namespace Symfony\Component\Lock\Tests\Store;
 
-use PHPUnit\Framework\SkippedTestSuiteError;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Symfony\Component\Lock\Exception\InvalidTtlException;
 use Symfony\Component\Lock\Store\RedisStore;
 
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
- *
- * @requires extension redis
- *
- * @group integration
  */
+#[RequiresPhpExtension('redis')]
+#[Group('integration')]
 class RedisStoreTest extends AbstractRedisStoreTestCase
 {
     use SharedLockStoreTestTrait;
@@ -31,7 +30,7 @@ class RedisStoreTest extends AbstractRedisStoreTestCase
         try {
             (new \Redis())->connect(...explode(':', getenv('REDIS_HOST')));
         } catch (\Exception $e) {
-            throw new SkippedTestSuiteError($e->getMessage());
+            self::markTestSkipped($e->getMessage());
         }
     }
 

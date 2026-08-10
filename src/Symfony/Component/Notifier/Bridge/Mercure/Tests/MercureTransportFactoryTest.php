@@ -15,17 +15,17 @@ use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\HubRegistry;
 use Symfony\Component\Notifier\Bridge\Mercure\MercureTransportFactory;
 use Symfony\Component\Notifier\Exception\IncompleteDsnException;
-use Symfony\Component\Notifier\Test\TransportFactoryTestCase;
+use Symfony\Component\Notifier\Test\AbstractTransportFactoryTestCase;
 use Symfony\Component\Notifier\Transport\Dsn;
 
 /**
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
  */
-final class MercureTransportFactoryTest extends TransportFactoryTestCase
+final class MercureTransportFactoryTest extends AbstractTransportFactoryTestCase
 {
     public function createFactory(): MercureTransportFactory
     {
-        $hub = $this->createMock(HubInterface::class);
+        $hub = $this->createStub(HubInterface::class);
         $hubRegistry = new HubRegistry($hub, ['hubId' => $hub]);
 
         return new MercureTransportFactory($hubRegistry);
@@ -62,7 +62,7 @@ final class MercureTransportFactoryTest extends TransportFactoryTestCase
 
     public function testNotFoundHubThrows()
     {
-        $hub = $this->createMock(HubInterface::class);
+        $hub = $this->createStub(HubInterface::class);
         $hubRegistry = new HubRegistry($hub, ['hubId' => $hub, 'anotherHubId' => $hub]);
         $factory = new MercureTransportFactory($hubRegistry);
 

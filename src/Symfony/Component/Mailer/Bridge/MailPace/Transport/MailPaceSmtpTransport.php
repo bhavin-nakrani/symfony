@@ -25,7 +25,7 @@ use Symfony\Component\Mime\RawMessage;
  */
 final class MailPaceSmtpTransport extends EsmtpTransport
 {
-    public function __construct(string $id, EventDispatcherInterface $dispatcher = null, LoggerInterface $logger = null)
+    public function __construct(#[\SensitiveParameter] string $id, ?EventDispatcherInterface $dispatcher = null, ?LoggerInterface $logger = null)
     {
         parent::__construct('smtp.mailpace.com', 587, false, $dispatcher, $logger);
 
@@ -33,9 +33,10 @@ final class MailPaceSmtpTransport extends EsmtpTransport
         $this->setPassword($id);
     }
 
-    public function send(RawMessage $message, Envelope $envelope = null): ?SentMessage
+    public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
     {
         if ($message instanceof Message) {
+            $message = clone $message;
             $this->addMailPaceHeaders($message);
         }
 

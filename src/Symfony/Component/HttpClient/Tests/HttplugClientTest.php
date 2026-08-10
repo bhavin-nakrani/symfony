@@ -16,6 +16,7 @@ use Http\Client\Exception\NetworkException;
 use Http\Client\Exception\RequestException;
 use Http\Promise\FulfilledPromise;
 use Http\Promise\Promise;
+use PHPUnit\Framework\Attributes\RequiresFunction;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\HttpClient\Exception\TransportException;
@@ -23,6 +24,7 @@ use Symfony\Component\HttpClient\HttplugClient;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\NativeHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Tests\Fixtures\UnknownSizeStream;
 use Symfony\Contracts\HttpClient\Test\TestHttpServer;
 
 class HttplugClientTest extends TestCase
@@ -32,6 +34,7 @@ class HttplugClientTest extends TestCase
         TestHttpServer::start();
     }
 
+    #[RequiresFunction('ob_gzhandler')]
     public function testSendRequest()
     {
         $client = new HttplugClient(new NativeHttpClient());
@@ -46,6 +49,7 @@ class HttplugClientTest extends TestCase
         $this->assertSame('HTTP/1.1', $body['SERVER_PROTOCOL']);
     }
 
+    #[RequiresFunction('ob_gzhandler')]
     public function testSendAsyncRequest()
     {
         $client = new HttplugClient(new NativeHttpClient());
@@ -53,11 +57,11 @@ class HttplugClientTest extends TestCase
         $promise = $client->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8057'));
         $successCallableCalled = false;
         $failureCallableCalled = false;
-        $promise->then(function (ResponseInterface $response) use (&$successCallableCalled) {
+        $promise->then(static function (ResponseInterface $response) use (&$successCallableCalled) {
             $successCallableCalled = true;
 
             return $response;
-        }, function (\Exception $exception) use (&$failureCallableCalled) {
+        }, static function (\Exception $exception) use (&$failureCallableCalled) {
             $failureCallableCalled = true;
 
             throw $exception;
@@ -85,11 +89,11 @@ class HttplugClientTest extends TestCase
         $successCallableCalled = false;
         $failureCallableCalled = false;
         $client->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8057/timeout-body'))
-            ->then(function (ResponseInterface $response) use (&$successCallableCalled) {
+            ->then(static function (ResponseInterface $response) use (&$successCallableCalled) {
                 $successCallableCalled = true;
 
                 return $response;
-            }, function (\Exception $exception) use (&$failureCallableCalled) {
+            }, static function (\Exception $exception) use (&$failureCallableCalled) {
                 $failureCallableCalled = true;
 
                 throw $exception;
@@ -116,6 +120,20 @@ class HttplugClientTest extends TestCase
         $this->assertSame(['foo' => '0123456789', 'REQUEST_METHOD' => 'POST'], $body);
     }
 
+    public function testRequestWithEmptyUnknownSizeBodyDoesNotPassAStreamingBody()
+    {
+        $client = new HttplugClient(new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
+            $this->assertSame('TRACE', $method);
+            $this->assertSame('', $options['body']);
+
+            return new MockResponse();
+        }));
+        $body = new UnknownSizeStream('', seekable: false);
+        $body->getContents();
+
+        $client->sendRequest($client->createRequest('TRACE', 'http://localhost')->withBody($body));
+    }
+
     public function testNetworkException()
     {
         $client = new HttplugClient(new NativeHttpClient());
@@ -131,11 +149,11 @@ class HttplugClientTest extends TestCase
         $promise = $client->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8058'));
         $successCallableCalled = false;
         $failureCallableCalled = false;
-        $promise->then(function (ResponseInterface $response) use (&$successCallableCalled) {
+        $promise->then(static function (ResponseInterface $response) use (&$successCallableCalled) {
             $successCallableCalled = true;
 
             return $response;
-        }, function (\Exception $exception) use (&$failureCallableCalled) {
+        }, static function (\Exception $exception) use (&$failureCallableCalled) {
             $failureCallableCalled = true;
 
             throw $exception;
@@ -174,7 +192,7 @@ class HttplugClientTest extends TestCase
 
                     return $client->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8057'));
                 },
-                function (\Exception $exception) use (&$failureCallableCalled) {
+                static function (\Exception $exception) use (&$failureCallableCalled) {
                     $failureCallableCalled = true;
 
                     throw $exception;
@@ -198,7 +216,7 @@ class HttplugClientTest extends TestCase
 
         $promise = $client
             ->sendAsyncRequest($client->createRequest('GET', 'http://localhost:8057/chunked-broken'))
-            ->then(function (ResponseInterface $response) use (&$successCallableCalled) {
+            ->then(static function (ResponseInterface $response) use (&$successCallableCalled) {
                 $successCallableCalled = true;
 
                 return $response;
@@ -223,7 +241,7 @@ class HttplugClientTest extends TestCase
         $isFirstRequest = true;
         $errorMessage = 'Error occurred before making the actual request.';
 
-        $client = new HttplugClient(new MockHttpClient(function () use (&$isFirstRequest, $errorMessage) {
+        $client = new HttplugClient(new MockHttpClient(static function () use (&$isFirstRequest, $errorMessage) {
             if ($isFirstRequest) {
                 $isFirstRequest = false;
                 throw new TransportException($errorMessage);
@@ -240,7 +258,7 @@ class HttplugClientTest extends TestCase
         $promise = $client
             ->sendAsyncRequest($request)
             ->then(
-                function (ResponseInterface $response) use (&$successCallableCalled) {
+                static function (ResponseInterface $response) use (&$successCallableCalled) {
                     $successCallableCalled = true;
 
                     return $response;
@@ -251,7 +269,7 @@ class HttplugClientTest extends TestCase
                     $failureCallableCalled = true;
 
                     // Ensure arbitrary levels of promises work.
-                    return (new FulfilledPromise(null))->then(fn () => (new GuzzleFulfilledPromise(null))->then(fn () => $client->sendAsyncRequest($request)));
+                    return (new FulfilledPromise(null))->then(static fn () => (new GuzzleFulfilledPromise(null))->then(static fn () => $client->sendAsyncRequest($request)));
                 }
             )
         ;
@@ -280,5 +298,49 @@ class HttplugClientTest extends TestCase
 
         $resultResponse = $client->sendRequest($request);
         $this->assertCount(1, $resultResponse->getHeaders());
+    }
+
+    public function testResponseReasonPhrase()
+    {
+        $responseHeaders = [
+            'HTTP/1.1 103 Very Early Hints',
+        ];
+        $response = new MockResponse('body', ['response_headers' => $responseHeaders]);
+
+        $client = new HttplugClient(new MockHttpClient($response));
+        $request = $client->createRequest('POST', 'http://localhost:8057/post')
+            ->withBody($client->createStream('foo=0123456789'));
+
+        $resultResponse = $client->sendRequest($request);
+        $this->assertSame('Very Early Hints', $resultResponse->getReasonPhrase());
+    }
+
+    public function testAutoUpgradeHttpVersion()
+    {
+        $clientWithoutOption = new HttplugClient(new MockHttpClient(static fn (string $method, string $url, array $options) => new MockResponse(json_encode([
+            'SERVER_PROTOCOL' => 'HTTP/'.$options['http_version'] ?? '',
+        ]), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ])));
+        $clientWithOptionFalse = $clientWithoutOption->withOptions(['auto_upgrade_http_version' => false]);
+
+        foreach (['1.0', '1.1', '2.0', '3.0'] as $httpVersion) {
+            $request = $clientWithoutOption->createRequest('GET', 'http://localhost:8057')
+                ->withProtocolVersion($httpVersion);
+
+            $responseWithoutOption = $clientWithoutOption->sendRequest($request);
+            $bodyWithoutOption = json_decode((string) $responseWithoutOption->getBody(), true);
+            if ('1.0' === $httpVersion) {
+                $this->assertSame('HTTP/1.0', $bodyWithoutOption['SERVER_PROTOCOL']);
+            } else {
+                $this->assertSame('HTTP/', $bodyWithoutOption['SERVER_PROTOCOL']);
+            }
+
+            $responseWithOptionFalse = $clientWithOptionFalse->sendRequest($request);
+            $bodyWithOptionFalse = json_decode((string) $responseWithOptionFalse->getBody(), true);
+            $this->assertSame('HTTP/'.$httpVersion, $bodyWithOptionFalse['SERVER_PROTOCOL']);
+        }
     }
 }

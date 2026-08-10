@@ -11,9 +11,12 @@
 
 namespace Symfony\Component\HttpKernel\Tests\Controller;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Controller\ControllerResolver;
 
 class ControllerResolverTest extends TestCase
@@ -33,7 +36,7 @@ class ControllerResolverTest extends TestCase
         $resolver = $this->createControllerResolver();
 
         $request = Request::create('/');
-        $request->attributes->set('_controller', $lambda = function () {});
+        $request->attributes->set('_controller', $lambda = static function () {});
         $controller = $resolver->getController($request);
         $this->assertSame($lambda, $controller);
     }
@@ -116,7 +119,7 @@ class ControllerResolverTest extends TestCase
     {
         $resolver = $this->createControllerResolver();
 
-        $closure = fn () => 'test';
+        $closure = static fn () => 'test';
 
         $request = Request::create('/');
         $request->attributes->set('_controller', $closure);
@@ -125,9 +128,7 @@ class ControllerResolverTest extends TestCase
         $this->assertSame('test', $controller());
     }
 
-    /**
-     * @dataProvider getStaticControllers
-     */
+    #[DataProvider('getStaticControllers')]
     public function testGetControllerWithStaticController($staticController, $returnValue)
     {
         $resolver = $this->createControllerResolver();
@@ -149,9 +150,7 @@ class ControllerResolverTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider getUndefinedControllers
-     */
+    #[DataProvider('getUndefinedControllers')]
     public function testGetControllerWithUndefinedController($controller, $exceptionName = null, $exceptionMessage = null)
     {
         $resolver = $this->createControllerResolver();
@@ -185,12 +184,77 @@ class ControllerResolverTest extends TestCase
         ];
     }
 
-    protected function createControllerResolver(LoggerInterface $logger = null)
+    public function testAllowedControllerTypes()
+    {
+        $resolver = $this->createControllerResolver();
+
+        $request = Request::create('/');
+        $controller = new ControllerTest();
+        $request->attributes->set('_controller', [$controller, 'publicAction']);
+        $request->attributes->set('_check_controller_is_allowed', true);
+
+        try {
+            $resolver->getController($request);
+            $this->expectException(BadRequestException::class);
+        } catch (BadRequestException) {
+            // expected
+        }
+
+        $resolver->allowControllers([ControllerTest::class]);
+
+        $this->assertSame([$controller, 'publicAction'], $resolver->getController($request));
+
+        $request->attributes->set('_controller', $action = $controller->publicAction(...));
+        $this->assertSame($action, $resolver->getController($request));
+    }
+
+    public function testAllowedControllerAttributes()
+    {
+        $resolver = $this->createControllerResolver();
+
+        $request = Request::create('/');
+        $controller = some_controller_function(...);
+        $request->attributes->set('_controller', $controller);
+        $request->attributes->set('_check_controller_is_allowed', true);
+
+        try {
+            $resolver->getController($request);
+            $this->expectException(BadRequestException::class);
+        } catch (BadRequestException) {
+            // expected
+        }
+
+        $resolver->allowControllers([], [DummyController::class]);
+
+        $this->assertSame($controller, $resolver->getController($request));
+
+        $controller = some_controller_function::class;
+        $request->attributes->set('_controller', $controller);
+        $this->assertSame($controller, $resolver->getController($request));
+    }
+
+    public function testAllowedAsControllerAttribute()
+    {
+        $resolver = $this->createControllerResolver();
+
+        $request = Request::create('/');
+        $controller = new InvokableController();
+        $request->attributes->set('_controller', [$controller, '__invoke']);
+        $request->attributes->set('_check_controller_is_allowed', true);
+
+        $this->assertSame([$controller, '__invoke'], $resolver->getController($request));
+
+        $request->attributes->set('_controller', $controller);
+        $this->assertSame($controller, $resolver->getController($request));
+    }
+
+    protected function createControllerResolver(?LoggerInterface $logger = null)
     {
         return new ControllerResolver($logger);
     }
 }
 
+#[DummyController]
 function some_controller_function($foo, $foobar)
 {
 }
@@ -223,6 +287,7 @@ class ControllerTest
     }
 }
 
+#[AsController]
 class InvokableController
 {
     public function __invoke($foo, $bar = null)

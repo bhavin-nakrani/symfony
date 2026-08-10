@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\HttpFoundation;
 
+use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\Exception\ConflictingHeadersException;
 use Symfony\Component\HttpFoundation\Exception\JsonException;
 use Symfony\Component\HttpFoundation\Exception\SessionNotFoundException;
@@ -61,158 +62,7 @@ class Request
     public const METHOD_OPTIONS = 'OPTIONS';
     public const METHOD_TRACE = 'TRACE';
     public const METHOD_CONNECT = 'CONNECT';
-
-    /**
-     * @var string[]
-     */
-    protected static $trustedProxies = [];
-
-    /**
-     * @var string[]
-     */
-    protected static $trustedHostPatterns = [];
-
-    /**
-     * @var string[]
-     */
-    protected static $trustedHosts = [];
-
-    protected static $httpMethodParameterOverride = false;
-
-    /**
-     * Custom parameters.
-     *
-     * @var ParameterBag
-     */
-    public $attributes;
-
-    /**
-     * Request body parameters ($_POST).
-     *
-     * @see getPayload() for portability between content types
-     *
-     * @var InputBag
-     */
-    public $request;
-
-    /**
-     * Query string parameters ($_GET).
-     *
-     * @var InputBag
-     */
-    public $query;
-
-    /**
-     * Server and execution environment parameters ($_SERVER).
-     *
-     * @var ServerBag
-     */
-    public $server;
-
-    /**
-     * Uploaded files ($_FILES).
-     *
-     * @var FileBag
-     */
-    public $files;
-
-    /**
-     * Cookies ($_COOKIE).
-     *
-     * @var InputBag
-     */
-    public $cookies;
-
-    /**
-     * Headers (taken from the $_SERVER).
-     *
-     * @var HeaderBag
-     */
-    public $headers;
-
-    /**
-     * @var string|resource|false|null
-     */
-    protected $content;
-
-    /**
-     * @var string[]
-     */
-    protected $languages;
-
-    /**
-     * @var string[]
-     */
-    protected $charsets;
-
-    /**
-     * @var string[]
-     */
-    protected $encodings;
-
-    /**
-     * @var string[]
-     */
-    protected $acceptableContentTypes;
-
-    /**
-     * @var string
-     */
-    protected $pathInfo;
-
-    /**
-     * @var string
-     */
-    protected $requestUri;
-
-    /**
-     * @var string
-     */
-    protected $baseUrl;
-
-    /**
-     * @var string
-     */
-    protected $basePath;
-
-    /**
-     * @var string
-     */
-    protected $method;
-
-    /**
-     * @var string
-     */
-    protected $format;
-
-    /**
-     * @var SessionInterface|callable(): SessionInterface
-     */
-    protected $session;
-
-    /**
-     * @var string|null
-     */
-    protected $locale;
-
-    /**
-     * @var string
-     */
-    protected $defaultLocale = 'en';
-
-    /**
-     * @var array<string, string[]>
-     */
-    protected static $formats;
-
-    protected static $requestFactory;
-
-    private ?string $preferredFormat = null;
-    private bool $isHostValid = true;
-    private bool $isForwardedValid = true;
-    private bool $isSafeContentPreferred;
-
-    private static int $trustedHeaderSet = -1;
+    public const METHOD_QUERY = 'QUERY';
 
     private const FORWARDED_PARAMS = [
         self::HEADER_X_FORWARDED_FOR => 'for',
@@ -240,6 +90,193 @@ class Request
     ];
 
     /**
+     * This mapping is used when no exact MIME match is found in $formats.
+     *
+     * It enables mappings like application/soap+xml -> xml.
+     *
+     * @see https://datatracker.ietf.org/doc/html/rfc6839
+     * @see https://datatracker.ietf.org/doc/html/rfc7303
+     * @see https://www.iana.org/assignments/media-types/media-types.xhtml
+     */
+    private const STRUCTURED_SUFFIX_FORMATS = [
+        'json' => 'json',
+        'xml' => 'xml',
+        'xhtml' => 'html',
+        'cbor' => 'cbor',
+        'zip' => 'zip',
+        'ber' => 'asn1',
+        'der' => 'asn1',
+        'tlv' => 'tlv',
+        'wbxml' => 'xml',
+        'yaml' => 'yaml',
+    ];
+
+    /**
+     * Custom parameters.
+     */
+    public ParameterBag $attributes {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "attributes" of "%s" is deprecated; pass attributes as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->attributes = $value;
+        }
+    }
+
+    /**
+     * Request body parameters ($_POST).
+     *
+     * @see getPayload() for portability between content types
+     */
+    public InputBag $request {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "request" of "%s" is deprecated; pass the POST data as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->request = $value;
+        }
+    }
+
+    /**
+     * Query string parameters ($_GET).
+     *
+     * @var InputBag<string>
+     */
+    public InputBag $query {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "query" of "%s" is deprecated; pass query parameters as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->query = $value;
+        }
+    }
+
+    /**
+     * Server and execution environment parameters ($_SERVER).
+     */
+    public ServerBag $server {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "server" of "%s" is deprecated; pass server parameters as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->server = $value;
+        }
+    }
+
+    /**
+     * Uploaded files ($_FILES).
+     */
+    public FileBag $files {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "files" of "%s" is deprecated; pass files as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->files = $value;
+        }
+    }
+
+    /**
+     * Cookies ($_COOKIE).
+     *
+     * @var InputBag<string>
+     */
+    public InputBag $cookies {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "cookies" of "%s" is deprecated; pass cookies as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->cookies = $value;
+        }
+    }
+
+    /**
+     * Headers (taken from the $_SERVER).
+     */
+    public HeaderBag $headers {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "headers" of "%s" is deprecated; pass header parameters as a constructor argument or call "initialize()" instead.', static::class);
+
+            $this->headers = $value;
+        }
+    }
+
+    /**
+     * @var string|resource|false|null
+     */
+    protected $content;
+
+    /**
+     * @var string[]|null
+     */
+    protected ?array $languages = null;
+
+    /**
+     * @var string[]|null
+     */
+    protected ?array $charsets = null;
+
+    /**
+     * @var string[]|null
+     */
+    protected ?array $encodings = null;
+
+    /**
+     * @var string[]|null
+     */
+    protected ?array $acceptableContentTypes = null;
+
+    protected ?string $pathInfo = null;
+    protected ?string $requestUri = null;
+    protected ?string $baseUrl = null;
+    protected ?string $basePath = null;
+    protected ?string $method = null;
+    protected ?string $format = null;
+    protected SessionInterface|\Closure|null $session = null;
+    protected ?string $locale = null;
+    protected string $defaultLocale = 'en';
+
+    /**
+     * @var array<string, string[]>|null
+     */
+    protected static ?array $formats = null;
+
+    /**
+     * @var string[]
+     */
+    protected static array $trustedProxies = [];
+
+    /**
+     * @var string[]
+     */
+    protected static array $trustedHostPatterns = [];
+
+    /**
+     * @var string[]
+     *
+     * @deprecated since Symfony 8.2, this property is never populated anymore
+     */
+    protected static array $trustedHosts = [];
+
+    protected static bool $httpMethodParameterOverride = false;
+
+    /**
+     * The HTTP methods that can be overridden.
+     *
+     * @var uppercase-string[]|null
+     */
+    protected static ?array $allowedHttpMethodOverride = null;
+
+    protected static ?\Closure $requestFactory = null;
+
+    private ?string $preferredFormat = null;
+
+    private bool $isHostValid = true;
+    private bool $isForwardedValid = true;
+    private bool $isSafeContentPreferred;
+
+    private array $trustedValuesCache = [];
+
+    private static int $trustedHeaderSet = -1;
+
+    private static ?string $trustedHostsRegexp = null;
+
+    private bool $isIisRewrite = false;
+
+    /**
      * @param array                $query      The GET parameters
      * @param array                $request    The POST parameters
      * @param array                $attributes The request attributes (parameters parsed from the PATH_INFO, ...)
@@ -265,30 +302,28 @@ class Request
      * @param array                $files      The FILES parameters
      * @param array                $server     The SERVER parameters
      * @param string|resource|null $content    The raw body data
-     *
-     * @return void
      */
-    public function initialize(array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function initialize(array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null): void
     {
-        $this->request = new InputBag($request);
-        $this->query = new InputBag($query);
-        $this->attributes = new ParameterBag($attributes);
-        $this->cookies = new InputBag($cookies);
-        $this->files = new FileBag($files);
-        $this->server = new ServerBag($server);
-        $this->headers = new HeaderBag($this->server->getHeaders());
+        self::setProperty($this, 'request', new InputBag($request));
+        self::setProperty($this, 'query', new InputBag($query));
+        self::setProperty($this, 'attributes', new ParameterBag($attributes));
+        self::setProperty($this, 'cookies', new InputBag($cookies));
+        self::setProperty($this, 'files', new FileBag($files));
+        self::setProperty($this, 'server', new ServerBag($server));
+        self::setProperty($this, 'headers', new HeaderBag($this->server->getHeaders()));
 
         $this->content = $content;
-        unset($this->languages);
-        unset($this->charsets);
-        unset($this->encodings);
-        unset($this->acceptableContentTypes);
-        unset($this->pathInfo);
-        unset($this->requestUri);
-        unset($this->baseUrl);
-        unset($this->basePath);
-        unset($this->method);
-        unset($this->format);
+        $this->languages = null;
+        $this->charsets = null;
+        $this->encodings = null;
+        $this->acceptableContentTypes = null;
+        $this->pathInfo = null;
+        $this->requestUri = null;
+        $this->baseUrl = null;
+        $this->basePath = null;
+        $this->method = null;
+        $this->format = null;
     }
 
     /**
@@ -296,16 +331,18 @@ class Request
      */
     public static function createFromGlobals(): static
     {
-        $request = self::createRequestFromFactory($_GET, $_POST, [], $_COOKIE, $_FILES, $_SERVER);
-
-        if (str_starts_with($request->headers->get('CONTENT_TYPE', ''), 'application/x-www-form-urlencoded')
-            && \in_array(strtoupper($request->server->get('REQUEST_METHOD', 'GET')), ['PUT', 'DELETE', 'PATCH'])
-        ) {
-            parse_str($request->getContent(), $data);
-            $request->request = new InputBag($data);
+        if (!\in_array($_SERVER['REQUEST_METHOD'] ?? null, ['PUT', 'DELETE', 'PATCH', 'QUERY'], true)) {
+            return self::createRequestFromFactory($_GET, $_POST, [], $_COOKIE, $_FILES, $_SERVER);
         }
 
-        return $request;
+        try {
+            [$post, $files] = request_parse_body();
+        } catch (\RequestParseBodyException) {
+            $post = $_POST;
+            $files = $_FILES;
+        }
+
+        return self::createRequestFromFactory($_GET, $post, [], $_COOKIE, $files, $_SERVER);
     }
 
     /**
@@ -321,6 +358,8 @@ class Request
      * @param array                $files      The request files ($_FILES)
      * @param array                $server     The server parameters ($_SERVER)
      * @param string|resource|null $content    The raw body data
+     *
+     * @throws BadRequestException When the URI is invalid
      */
     public static function create(string $uri, string $method = 'GET', array $parameters = [], array $cookies = [], array $files = [], array $server = [], $content = null): static
     {
@@ -343,11 +382,31 @@ class Request
         $server['PATH_INFO'] = '';
         $server['REQUEST_METHOD'] = strtoupper($method);
 
-        $components = parse_url($uri);
-        if (false === $components) {
-            trigger_deprecation('symfony/http-foundation', '6.3', 'Calling "%s()" with an invalid URI is deprecated.', __METHOD__);
-            $components = [];
+        if (($i = strcspn($uri, ':/?#')) && ':' === ($uri[$i] ?? null) && (strspn($uri, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-.') !== $i || strcspn($uri, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'))) {
+            throw new BadRequestException('Invalid URI: Scheme is malformed.');
         }
+        if (false === $components = parse_url(\strlen($uri) !== strcspn($uri, '?#') ? $uri : $uri.'#')) {
+            throw new BadRequestException('Invalid URI.');
+        }
+
+        $part = ($components['user'] ?? '').':'.($components['pass'] ?? '');
+
+        if (':' !== $part && \strlen($part) !== strcspn($part, '[]')) {
+            throw new BadRequestException('Invalid URI: Userinfo is malformed.');
+        }
+        if (($part = $components['host'] ?? '') && !self::isHostValid($part)) {
+            throw new BadRequestException('Invalid URI: Host is malformed.');
+        }
+        if (false !== ($i = strpos($uri, '\\')) && $i < strcspn($uri, '?#')) {
+            throw new BadRequestException('Invalid URI: A URI cannot contain a backslash.');
+        }
+        if (\strlen($uri) !== strcspn($uri, "\r\n\t")) {
+            throw new BadRequestException('Invalid URI: A URI cannot contain CR/LF/TAB characters.');
+        }
+        if ('' !== $uri && (\ord($uri[0]) <= 32 || \ord($uri[-1]) <= 32)) {
+            throw new BadRequestException('Invalid URI: A URI must not start nor end with ASCII control characters or spaces.');
+        }
+
         if (isset($components['host'])) {
             $server['SERVER_NAME'] = $components['host'];
             $server['HTTP_HOST'] = $components['host'];
@@ -376,14 +435,23 @@ class Request
             $server['PHP_AUTH_PW'] = $components['pass'];
         }
 
-        if (!isset($components['path'])) {
+        if ('' === $path = $components['path'] ?? '') {
             $components['path'] = '/';
+        } elseif (!isset($components['scheme']) && !isset($components['host']) && '/' !== $path[0]) {
+            if (false !== $pos = strpos($path, '/')) {
+                $path = substr($path, 0, $pos);
+            }
+
+            if (str_contains($path, ':')) {
+                throw new BadRequestException('Invalid URI: Path is malformed.');
+            }
         }
 
         switch (strtoupper($method)) {
             case 'POST':
             case 'PUT':
             case 'DELETE':
+            case 'QUERY':
                 if (!isset($server['CONTENT_TYPE'])) {
                     $server['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
                 }
@@ -425,12 +493,10 @@ class Request
      * This is mainly useful when you need to override the Request class
      * to keep BC with an existing system. It should not be used for any
      * other purpose.
-     *
-     * @return void
      */
-    public static function setFactory(?callable $callable)
+    public static function setFactory(?callable $callable): void
     {
-        self::$requestFactory = $callable;
+        self::$requestFactory = null === $callable ? null : $callable(...);
     }
 
     /**
@@ -443,41 +509,41 @@ class Request
      * @param array|null $files      The FILES parameters
      * @param array|null $server     The SERVER parameters
      */
-    public function duplicate(array $query = null, array $request = null, array $attributes = null, array $cookies = null, array $files = null, array $server = null): static
+    public function duplicate(?array $query = null, ?array $request = null, ?array $attributes = null, ?array $cookies = null, ?array $files = null, ?array $server = null): static
     {
         $dup = clone $this;
         if (null !== $query) {
-            $dup->query = new InputBag($query);
+            self::setProperty($dup, 'query', new InputBag($query));
         }
         if (null !== $request) {
-            $dup->request = new InputBag($request);
+            self::setProperty($dup, 'request', new InputBag($request));
         }
         if (null !== $attributes) {
-            $dup->attributes = new ParameterBag($attributes);
+            self::setProperty($dup, 'attributes', new ParameterBag($attributes));
         }
         if (null !== $cookies) {
-            $dup->cookies = new InputBag($cookies);
+            self::setProperty($dup, 'cookies', new InputBag($cookies));
         }
         if (null !== $files) {
-            $dup->files = new FileBag($files);
+            self::setProperty($dup, 'files', new FileBag($files));
         }
         if (null !== $server) {
-            $dup->server = new ServerBag($server);
-            $dup->headers = new HeaderBag($dup->server->getHeaders());
+            self::setProperty($dup, 'server', new ServerBag($server));
+            self::setProperty($dup, 'headers', new HeaderBag($dup->server->getHeaders()));
         }
-        unset($dup->languages);
-        unset($dup->charsets);
-        unset($dup->encodings);
-        unset($dup->acceptableContentTypes);
-        unset($dup->pathInfo);
-        unset($dup->requestUri);
-        unset($dup->baseUrl);
-        unset($dup->basePath);
-        unset($dup->method);
-        unset($dup->format);
+        $dup->languages = null;
+        $dup->charsets = null;
+        $dup->encodings = null;
+        $dup->acceptableContentTypes = null;
+        $dup->pathInfo = null;
+        $dup->requestUri = null;
+        $dup->baseUrl = null;
+        $dup->basePath = null;
+        $dup->method = null;
+        $dup->format = null;
 
-        if (!$dup->get('_format') && $this->get('_format')) {
-            $dup->attributes->set('_format', $this->get('_format'));
+        if (!$dup->attributes->has('_format') && $this->attributes->has('_format')) {
+            $dup->attributes->set('_format', $this->attributes->get('_format'));
         }
 
         if (!$dup->getRequestFormat(null)) {
@@ -495,13 +561,13 @@ class Request
      */
     public function __clone()
     {
-        $this->query = clone $this->query;
-        $this->request = clone $this->request;
-        $this->attributes = clone $this->attributes;
-        $this->cookies = clone $this->cookies;
-        $this->files = clone $this->files;
-        $this->server = clone $this->server;
-        $this->headers = clone $this->headers;
+        self::setProperty($this, 'query', clone $this->query);
+        self::setProperty($this, 'request', clone $this->request);
+        self::setProperty($this, 'attributes', clone $this->attributes);
+        self::setProperty($this, 'cookies', clone $this->cookies);
+        self::setProperty($this, 'files', clone $this->files);
+        self::setProperty($this, 'server', clone $this->server);
+        self::setProperty($this, 'headers', clone $this->headers);
     }
 
     public function __toString(): string
@@ -520,7 +586,7 @@ class Request
         }
 
         return
-            sprintf('%s %s %s', $this->getMethod(), $this->getRequestUri(), $this->server->get('SERVER_PROTOCOL'))."\r\n".
+            \sprintf('%s %s %s', $this->getMethod(), $this->getRequestUri(), $this->server->get('SERVER_PROTOCOL'))."\r\n".
             $this->headers.
             $cookieHeader."\r\n".
             $content;
@@ -531,10 +597,8 @@ class Request
      *
      * It overrides $_GET, $_POST, $_REQUEST, $_SERVER, $_COOKIE.
      * $_FILES is never overridden, see rfc1867
-     *
-     * @return void
      */
-    public function overrideGlobals()
+    public function overrideGlobals(): void
     {
         $this->server->set('QUERY_STRING', static::normalizeQueryString(http_build_query($this->query->all(), '', '&')));
 
@@ -571,22 +635,26 @@ class Request
      *
      * You should only list the reverse proxies that you manage directly.
      *
-     * @param array $proxies          A list of trusted proxies, the string 'REMOTE_ADDR' will be replaced with $_SERVER['REMOTE_ADDR']
-     * @param int   $trustedHeaderSet A bit field of Request::HEADER_*, to set which headers to trust from your proxies
-     *
-     * @return void
+     * @param array                          $proxies          A list of trusted proxies, the string 'REMOTE_ADDR' will be replaced with $_SERVER['REMOTE_ADDR'] and 'PRIVATE_SUBNETS' by IpUtils::PRIVATE_SUBNETS
+     * @param int-mask-of<Request::HEADER_*> $trustedHeaderSet A bit field to set which headers to trust from your proxies
      */
-    public static function setTrustedProxies(array $proxies, int $trustedHeaderSet)
+    public static function setTrustedProxies(array $proxies, int $trustedHeaderSet): void
     {
-        self::$trustedProxies = array_reduce($proxies, function ($proxies, $proxy) {
-            if ('REMOTE_ADDR' !== $proxy) {
-                $proxies[] = $proxy;
-            } elseif (isset($_SERVER['REMOTE_ADDR'])) {
-                $proxies[] = $_SERVER['REMOTE_ADDR'];
+        if (false !== $i = array_search('REMOTE_ADDR', $proxies, true)) {
+            if (isset($_SERVER['REMOTE_ADDR'])) {
+                $proxies[$i] = $_SERVER['REMOTE_ADDR'];
+            } else {
+                unset($proxies[$i]);
+                $proxies = array_values($proxies);
             }
+        }
 
-            return $proxies;
-        }, []);
+        if (false !== ($i = array_search('PRIVATE_SUBNETS', $proxies, true)) || false !== ($i = array_search('private_ranges', $proxies, true))) {
+            unset($proxies[$i]);
+            $proxies = array_merge($proxies, IpUtils::PRIVATE_SUBNETS);
+        }
+
+        self::$trustedProxies = $proxies;
         self::$trustedHeaderSet = $trustedHeaderSet;
     }
 
@@ -616,14 +684,12 @@ class Request
      * You should only list the hosts you manage using regexs.
      *
      * @param array $hostPatterns A list of trusted host patterns
-     *
-     * @return void
      */
-    public static function setTrustedHosts(array $hostPatterns)
+    public static function setTrustedHosts(array $hostPatterns): void
     {
-        self::$trustedHostPatterns = array_map(fn ($hostPattern) => sprintf('{%s}i', $hostPattern), $hostPatterns);
-        // we need to reset trusted hosts on trusted host patterns change
-        self::$trustedHosts = [];
+        self::$trustedHostPatterns = array_map(static fn ($hostPattern) => \sprintf('{%s}i', $hostPattern), $hostPatterns);
+        // the branch reset group keeps capturing groups, back references and inline modifiers local to each pattern
+        self::$trustedHostsRegexp = $hostPatterns ? \sprintf('{(?|(?:%s))}i', implode(')|(?:', $hostPatterns)) : null;
     }
 
     /**
@@ -664,10 +730,8 @@ class Request
      * If these methods are not protected against CSRF, this presents a possible vulnerability.
      *
      * The HTTP method can only be overridden when the real HTTP method is POST.
-     *
-     * @return void
      */
-    public static function enableHttpMethodParameterOverride()
+    public static function enableHttpMethodParameterOverride(): void
     {
         self::$httpMethodParameterOverride = true;
     }
@@ -681,31 +745,31 @@ class Request
     }
 
     /**
-     * Gets a "parameter" value from any bag.
+     * Sets the list of HTTP methods that can be overridden.
      *
-     * This method is mainly useful for libraries that want to provide some flexibility. If you don't need the
-     * flexibility in controllers, it is better to explicitly get request parameters from the appropriate
-     * public property instead (attributes, query, request).
+     * Set to null to allow all methods to be overridden (default). Set to an
+     * empty array to disallow overrides entirely. Otherwise, provide the list
+     * of uppercased method names that are allowed.
      *
-     * Order of precedence: PATH (routing placeholders or custom attributes), GET, POST
-     *
-     * @internal use explicit input sources instead
+     * @param uppercase-string[]|null $methods
      */
-    public function get(string $key, mixed $default = null): mixed
+    public static function setAllowedHttpMethodOverride(?array $methods): void
     {
-        if ($this !== $result = $this->attributes->get($key, $this)) {
-            return $result;
+        if (array_intersect($methods ?? [], ['GET', 'HEAD', 'CONNECT', 'TRACE'])) {
+            throw new \InvalidArgumentException('The HTTP methods "GET", "HEAD", "CONNECT", and "TRACE" cannot be overridden.');
         }
 
-        if ($this->query->has($key)) {
-            return $this->query->all()[$key];
-        }
+        self::$allowedHttpMethodOverride = $methods;
+    }
 
-        if ($this->request->has($key)) {
-            return $this->request->all()[$key];
-        }
-
-        return $default;
+    /**
+     * Gets the list of HTTP methods that can be overridden.
+     *
+     * @return uppercase-string[]|null
+     */
+    public static function getAllowedHttpMethodOverride(): ?array
+    {
+        return self::$allowedHttpMethodOverride;
     }
 
     /**
@@ -751,10 +815,7 @@ class Request
         return null !== $this->session && (!$skipIfUninitialized || $this->session instanceof SessionInterface);
     }
 
-    /**
-     * @return void
-     */
-    public function setSession(SessionInterface $session)
+    public function setSession(SessionInterface $session): void
     {
         $this->session = $session;
     }
@@ -800,18 +861,12 @@ class Request
      * being the original client, and each successive proxy that passed the request
      * adding the IP address where it received the request from.
      *
-     * If your reverse proxy uses a different header name than "X-Forwarded-For",
-     * ("Client-Ip" for instance), configure it via the $trustedHeaderSet
-     * argument of the Request::setTrustedProxies() method instead.
-     *
      * @see getClientIps()
      * @see https://wikipedia.org/wiki/X-Forwarded-For
      */
     public function getClientIp(): ?string
     {
-        $ipAddresses = $this->getClientIps();
-
-        return $ipAddresses[0];
+        return $this->getClientIps()[0];
     }
 
     /**
@@ -829,7 +884,7 @@ class Request
      *
      * Suppose this request is instantiated from /mysite on localhost:
      *
-     *  * http://localhost/mysite              returns an empty string
+     *  * http://localhost/mysite              returns '/'
      *  * http://localhost/mysite/about        returns '/about'
      *  * http://localhost/mysite/enco%20ded   returns '/enco%20ded'
      *  * http://localhost/mysite/about?var=1  returns '/about'
@@ -1107,7 +1162,7 @@ class Request
 
         $https = $this->server->get('HTTPS');
 
-        return !empty($https) && 'off' !== strtolower($https);
+        return $https && (!\is_string($https) || 'off' !== strtolower($https));
     }
 
     /**
@@ -1124,49 +1179,41 @@ class Request
     {
         if ($this->isFromTrustedProxy() && $host = $this->getTrustedValues(self::HEADER_X_FORWARDED_HOST)) {
             $host = $host[0];
-        } elseif (!$host = $this->headers->get('HOST')) {
-            if (!$host = $this->server->get('SERVER_NAME')) {
-                $host = $this->server->get('SERVER_ADDR', '');
-            }
+        } else {
+            $host = $this->headers->get('HOST') ?: $this->server->get('SERVER_NAME') ?: $this->server->get('SERVER_ADDR', '');
         }
 
         // trim and remove port number from host
         // host is lowercase as per RFC 952/2181
         $host = strtolower(preg_replace('/:\d+$/', '', trim($host)));
 
-        // as the host can come from the user (HTTP_HOST and depending on the configuration, SERVER_NAME too can come from the user)
-        // check that it does not contain forbidden characters (see RFC 952 and RFC 2181)
-        // use preg_replace() instead of preg_match() to prevent DoS attacks with long host names
-        if ($host && '' !== preg_replace('/(?:^\[)?[a-zA-Z0-9-:\]_]+\.?/', '', $host)) {
+        // the host can come from the user (HTTP_HOST and depending on the configuration, SERVER_NAME too can come from the user)
+        if ($host && !self::isHostValid($host)) {
             if (!$this->isHostValid) {
                 return '';
             }
             $this->isHostValid = false;
 
-            throw new SuspiciousOperationException(sprintf('Invalid Host "%s".', $host));
+            throw new SuspiciousOperationException(\sprintf('Invalid Host "%s".', $host));
         }
 
-        if (\count(self::$trustedHostPatterns) > 0) {
+        if (self::$trustedHostsRegexp) {
             // to avoid host header injection attacks, you should provide a list of trusted host patterns
 
-            if (\in_array($host, self::$trustedHosts)) {
+            if (self::$trustedHosts) {
+                trigger_deprecation('symfony/http-foundation', '8.2', 'Populating the "%s::$trustedHosts" property is deprecated; it has no effect anymore.', self::class);
+            }
+
+            if (preg_match(self::$trustedHostsRegexp, $host)) {
                 return $host;
             }
 
-            foreach (self::$trustedHostPatterns as $pattern) {
-                if (preg_match($pattern, $host)) {
-                    self::$trustedHosts[] = $host;
-
-                    return $host;
-                }
-            }
-
             if (!$this->isHostValid) {
                 return '';
             }
             $this->isHostValid = false;
 
-            throw new SuspiciousOperationException(sprintf('Untrusted Host "%s".', $host));
+            throw new SuspiciousOperationException(\sprintf('Untrusted Host "%s".', $host));
         }
 
         return $host;
@@ -1174,12 +1221,10 @@ class Request
 
     /**
      * Sets the request method.
-     *
-     * @return void
      */
-    public function setMethod(string $method)
+    public function setMethod(string $method): void
     {
-        unset($this->method);
+        $this->method = null;
         $this->server->set('REQUEST_METHOD', $method);
     }
 
@@ -1198,13 +1243,13 @@ class Request
      */
     public function getMethod(): string
     {
-        if (isset($this->method)) {
+        if (null !== $this->method) {
             return $this->method;
         }
 
         $this->method = strtoupper($this->server->get('REQUEST_METHOD', 'GET'));
 
-        if ('POST' !== $this->method) {
+        if ('POST' !== $this->method || !(self::$allowedHttpMethodOverride ?? true)) {
             return $this->method;
         }
 
@@ -1220,12 +1265,16 @@ class Request
 
         $method = strtoupper($method);
 
-        if (\in_array($method, ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'PATCH', 'PURGE', 'TRACE'], true)) {
-            return $this->method = $method;
+        if (\in_array($method, ['GET', 'HEAD', 'CONNECT', 'TRACE'], true)) {
+            return $this->method;
         }
 
-        if (!preg_match('/^[A-Z]++$/D', $method)) {
-            throw new SuspiciousOperationException(sprintf('Invalid method override "%s".', $method));
+        if (self::$allowedHttpMethodOverride && !\in_array($method, self::$allowedHttpMethodOverride, true)) {
+            return $this->method;
+        }
+
+        if (\strlen($method) !== strspn($method, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')) {
+            throw new SuspiciousOperationException('Invalid HTTP method override.');
         }
 
         return $this->method = $method;
@@ -1246,7 +1295,7 @@ class Request
      */
     public function getMimeType(string $format): ?string
     {
-        if (!isset(static::$formats)) {
+        if (null === static::$formats) {
             static::initializeFormats();
         }
 
@@ -1260,7 +1309,7 @@ class Request
      */
     public static function getMimeTypes(string $format): array
     {
-        if (!isset(static::$formats)) {
+        if (null === static::$formats) {
             static::initializeFormats();
         }
 
@@ -1269,24 +1318,64 @@ class Request
 
     /**
      * Gets the format associated with the mime type.
+     *
+     *  Resolution order:
+     *   1) Exact match on the full MIME type (e.g. "application/json").
+     *   2) Match on the canonical MIME type (i.e. before the first ";" parameter).
+     *   3) If the type is "application/*+suffix", use the structured syntax suffix
+     *      mapping (e.g. "application/foo+json" → "json"), when available.
+     *   4) If $subtypeFallback is true and no match was found:
+     *      - return the MIME subtype (without "x-" prefix), provided it does not
+     *        contain a "+" (e.g. "application/x-yaml" → "yaml", "text/csv" → "csv").
+     *
+     * @param string|null $mimeType        The mime type to check
+     * @param bool        $subtypeFallback Whether to fall back to the subtype if no exact match is found
      */
-    public function getFormat(?string $mimeType): ?string
+    public function getFormat(?string $mimeType, bool $subtypeFallback = false): ?string
     {
         $canonicalMimeType = null;
         if ($mimeType && false !== $pos = strpos($mimeType, ';')) {
             $canonicalMimeType = trim(substr($mimeType, 0, $pos));
         }
 
-        if (!isset(static::$formats)) {
+        if (null === static::$formats) {
             static::initializeFormats();
         }
 
+        $exactFormat = null;
+        $canonicalFormat = null;
+
         foreach (static::$formats as $format => $mimeTypes) {
-            if (\in_array($mimeType, (array) $mimeTypes)) {
-                return $format;
+            if (\in_array($mimeType, $mimeTypes, true)) {
+                $exactFormat = $format;
             }
-            if (null !== $canonicalMimeType && \in_array($canonicalMimeType, (array) $mimeTypes)) {
-                return $format;
+            if (null !== $canonicalMimeType && \in_array($canonicalMimeType, $mimeTypes, true)) {
+                $canonicalFormat = $format;
+            }
+        }
+
+        if ($format = $exactFormat ?? $canonicalFormat) {
+            return $format;
+        }
+
+        if (!$canonicalMimeType ??= $mimeType) {
+            return null;
+        }
+
+        if (str_starts_with($canonicalMimeType, 'application/') && str_contains($canonicalMimeType, '+')) {
+            $suffix = substr(strrchr($canonicalMimeType, '+'), 1);
+            if (isset(self::STRUCTURED_SUFFIX_FORMATS[$suffix])) {
+                return self::STRUCTURED_SUFFIX_FORMATS[$suffix];
+            }
+        }
+
+        if ($subtypeFallback && str_contains($canonicalMimeType, '/')) {
+            [, $subtype] = explode('/', $canonicalMimeType, 2);
+            if (str_starts_with($subtype, 'x-')) {
+                $subtype = substr($subtype, 2);
+            }
+            if (!str_contains($subtype, '+')) {
+                return $subtype;
             }
         }
 
@@ -1297,16 +1386,14 @@ class Request
      * Associates a format with mime types.
      *
      * @param string|string[] $mimeTypes The associated mime types (the preferred one must be the first as it will be used as the content type)
-     *
-     * @return void
      */
-    public function setFormat(?string $format, string|array $mimeTypes)
+    public function setFormat(string $format, string|array $mimeTypes): void
     {
-        if (!isset(static::$formats)) {
+        if (null === static::$formats) {
             static::initializeFormats();
         }
 
-        static::$formats[$format] = \is_array($mimeTypes) ? $mimeTypes : [$mimeTypes];
+        static::$formats[$format] = (array) $mimeTypes;
     }
 
     /**
@@ -1329,24 +1416,10 @@ class Request
 
     /**
      * Sets the request format.
-     *
-     * @return void
      */
-    public function setRequestFormat(?string $format)
+    public function setRequestFormat(?string $format): void
     {
         $this->format = $format;
-    }
-
-    /**
-     * Gets the usual name of the format associated with the request's media type (provided in the Content-Type header).
-     *
-     * @deprecated since Symfony 6.2, use getContentTypeFormat() instead
-     */
-    public function getContentType(): ?string
-    {
-        trigger_deprecation('symfony/http-foundation', '6.2', 'The "%s()" method is deprecated, use "getContentTypeFormat()" instead.', __METHOD__);
-
-        return $this->getContentTypeFormat();
     }
 
     /**
@@ -1361,10 +1434,8 @@ class Request
 
     /**
      * Sets the default locale.
-     *
-     * @return void
      */
-    public function setDefaultLocale(string $locale)
+    public function setDefaultLocale(string $locale): void
     {
         $this->defaultLocale = $locale;
 
@@ -1383,10 +1454,8 @@ class Request
 
     /**
      * Sets the locale.
-     *
-     * @return void
      */
-    public function setLocale(string $locale)
+    public function setLocale(string $locale): void
     {
         $this->setPhpDefaultLocale($this->locale = $locale);
     }
@@ -1416,7 +1485,7 @@ class Request
      */
     public function isMethodSafe(): bool
     {
-        return \in_array($this->getMethod(), ['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+        return \in_array($this->getMethod(), ['GET', 'HEAD', 'OPTIONS', 'TRACE', 'QUERY'], true);
     }
 
     /**
@@ -1424,7 +1493,7 @@ class Request
      */
     public function isMethodIdempotent(): bool
     {
-        return \in_array($this->getMethod(), ['HEAD', 'GET', 'PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PURGE']);
+        return \in_array($this->getMethod(), ['HEAD', 'GET', 'PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PURGE', 'QUERY'], true);
     }
 
     /**
@@ -1434,7 +1503,7 @@ class Request
      */
     public function isMethodCacheable(): bool
     {
-        return \in_array($this->getMethod(), ['GET', 'HEAD']);
+        return \in_array($this->getMethod(), ['GET', 'HEAD', 'QUERY'], true);
     }
 
     /**
@@ -1449,7 +1518,7 @@ class Request
     public function getProtocolVersion(): ?string
     {
         if ($this->isFromTrustedProxy()) {
-            preg_match('~^(HTTP/)?([1-9]\.[0-9]) ~', $this->headers->get('Via') ?? '', $matches);
+            preg_match('~^(HTTP/)?([1-9]\.[0-9])\b~', $this->headers->get('Via') ?? '', $matches);
 
             if ($matches) {
                 return 'HTTP/'.$matches[2];
@@ -1470,10 +1539,8 @@ class Request
      */
     public function getContent(bool $asResource = false)
     {
-        $currentContentIsResource = \is_resource($this->content);
-
-        if (true === $asResource) {
-            if ($currentContentIsResource) {
+        if ($asResource) {
+            if (\is_resource($this->content)) {
                 rewind($this->content);
 
                 return $this->content;
@@ -1493,7 +1560,7 @@ class Request
             return fopen('php://input', 'r');
         }
 
-        if ($currentContentIsResource) {
+        if (\is_resource($this->content)) {
             rewind($this->content);
 
             return stream_get_contents($this->content);
@@ -1528,7 +1595,7 @@ class Request
         }
 
         if (!\is_array($content)) {
-            throw new JsonException(sprintf('JSON content was expected to decode to an array, "%s" returned.', get_debug_type($content)));
+            throw new JsonException(\sprintf('JSON content was expected to decode to an array, "%s" returned.', get_debug_type($content)));
         }
 
         return new InputBag($content);
@@ -1554,7 +1621,7 @@ class Request
         }
 
         if (!\is_array($content)) {
-            throw new JsonException(sprintf('JSON content was expected to decode to an array, "%s" returned.', get_debug_type($content)));
+            throw new JsonException(\sprintf('JSON content was expected to decode to an array, "%s" returned.', get_debug_type($content)));
         }
 
         return $content;
@@ -1583,13 +1650,17 @@ class Request
      */
     public function getPreferredFormat(?string $default = 'html'): ?string
     {
-        if (isset($this->preferredFormat) || null !== $preferredFormat = $this->getRequestFormat(null)) {
-            return $this->preferredFormat ??= $preferredFormat;
+        if (!isset($this->preferredFormat) && null !== $preferredFormat = $this->getRequestFormat(null)) {
+            $this->preferredFormat = $preferredFormat;
+        }
+
+        if ($this->preferredFormat ?? null) {
+            return $this->preferredFormat;
         }
 
         foreach ($this->getAcceptableContentTypes() as $mimeType) {
-            if ($preferredFormat = $this->getFormat($mimeType)) {
-                return $this->preferredFormat = $preferredFormat;
+            if ($this->preferredFormat = $this->getFormat($mimeType)) {
+                return $this->preferredFormat;
             }
         }
 
@@ -1601,32 +1672,29 @@ class Request
      *
      * @param string[] $locales An array of ordered available locales
      */
-    public function getPreferredLanguage(array $locales = null): ?string
+    public function getPreferredLanguage(?array $locales = null): ?string
     {
         $preferredLanguages = $this->getLanguages();
 
-        if (empty($locales)) {
+        if (!$locales) {
             return $preferredLanguages[0] ?? null;
         }
 
+        $locales = array_map($this->formatLocale(...), $locales);
         if (!$preferredLanguages) {
             return $locales[0];
         }
 
-        $extendedPreferredLanguages = [];
-        foreach ($preferredLanguages as $language) {
-            $extendedPreferredLanguages[] = $language;
-            if (false !== $position = strpos($language, '_')) {
-                $superLanguage = substr($language, 0, $position);
-                if (!\in_array($superLanguage, $preferredLanguages)) {
-                    $extendedPreferredLanguages[] = $superLanguage;
+        $combinations = array_merge(...array_map($this->getLanguageCombinations(...), $preferredLanguages));
+        foreach ($combinations as $combination) {
+            foreach ($locales as $locale) {
+                if (str_starts_with($locale, $combination)) {
+                    return $locale;
                 }
             }
         }
 
-        $preferredLanguages = array_values(array_intersect($extendedPreferredLanguages, $locales));
-
-        return $preferredLanguages[0] ?? $locales[0];
+        return $locales[0];
     }
 
     /**
@@ -1636,7 +1704,7 @@ class Request
      */
     public function getLanguages(): array
     {
-        if (isset($this->languages)) {
+        if (null !== $this->languages) {
             return $this->languages;
         }
 
@@ -1644,30 +1712,89 @@ class Request
         $this->languages = [];
         foreach ($languages as $acceptHeaderItem) {
             $lang = $acceptHeaderItem->getValue();
-            if (str_contains($lang, '-')) {
-                $codes = explode('-', $lang);
-                if ('i' === $codes[0]) {
-                    // Language not listed in ISO 639 that are not variants
-                    // of any listed language, which can be registered with the
-                    // i-prefix, such as i-cherokee
-                    if (\count($codes) > 1) {
-                        $lang = $codes[1];
-                    }
-                } else {
-                    for ($i = 0, $max = \count($codes); $i < $max; ++$i) {
-                        if (0 === $i) {
-                            $lang = strtolower($codes[0]);
-                        } else {
-                            $lang .= '_'.strtoupper($codes[$i]);
-                        }
-                    }
-                }
-            }
-
-            $this->languages[] = $lang;
+            $this->languages[] = self::formatLocale($lang);
         }
+        $this->languages = array_unique($this->languages);
 
         return $this->languages;
+    }
+
+    /**
+     * Strips the locale to only keep the canonicalized language value.
+     *
+     * Depending on the $locale value, this method can return values like :
+     * - language_Script_REGION: "fr_Latn_FR", "zh_Hans_TW"
+     * - language_Script: "fr_Latn", "zh_Hans"
+     * - language_REGION: "fr_FR", "zh_TW"
+     * - language: "fr", "zh"
+     *
+     * Invalid locale values are returned as is.
+     *
+     * @see https://wikipedia.org/wiki/IETF_language_tag
+     * @see https://datatracker.ietf.org/doc/html/rfc5646
+     */
+    private static function formatLocale(string $locale): string
+    {
+        [$language, $script, $region] = self::getLanguageComponents($locale);
+
+        return implode('_', array_filter([$language, $script, $region]));
+    }
+
+    /**
+     * Returns an array of all possible combinations of the language components.
+     *
+     * For instance, if the locale is "fr_Latn_FR", this method will return:
+     * - "fr_Latn_FR"
+     * - "fr_Latn"
+     * - "fr_FR"
+     * - "fr"
+     *
+     * @return string[]
+     */
+    private static function getLanguageCombinations(string $locale): array
+    {
+        [$language, $script, $region] = self::getLanguageComponents($locale);
+
+        return array_unique([
+            implode('_', array_filter([$language, $script, $region])),
+            implode('_', array_filter([$language, $script])),
+            implode('_', array_filter([$language, $region])),
+            $language,
+        ]);
+    }
+
+    /**
+     * Returns an array with the language components of the locale.
+     *
+     * For example:
+     * - If the locale is "fr_Latn_FR", this method will return "fr", "Latn", "FR"
+     * - If the locale is "fr_FR", this method will return "fr", null, "FR"
+     * - If the locale is "zh_Hans", this method will return "zh", "Hans", null
+     *
+     * @see https://wikipedia.org/wiki/IETF_language_tag
+     * @see https://datatracker.ietf.org/doc/html/rfc5646
+     *
+     * @return array{string, string|null, string|null}
+     */
+    private static function getLanguageComponents(string $locale): array
+    {
+        $locale = str_replace('_', '-', strtolower($locale));
+        $pattern = '/^([a-zA-Z]{2,3}|i-[a-zA-Z]{5,})(?:-([a-zA-Z]{4}))?(?:-([a-zA-Z]{2}))?(?:-(.+))?$/';
+        if (!preg_match($pattern, $locale, $matches)) {
+            return [$locale, null, null];
+        }
+        if (str_starts_with($matches[1], 'i-')) {
+            // Language not listed in ISO 639 that are not variants
+            // of any listed language, which can be registered with the
+            // i-prefix, such as i-cherokee
+            $matches[1] = substr($matches[1], 2);
+        }
+
+        return [
+            $matches[1],
+            isset($matches[2]) ? ucfirst(strtolower($matches[2])) : null,
+            isset($matches[3]) ? strtoupper($matches[3]) : null,
+        ];
     }
 
     /**
@@ -1740,18 +1867,14 @@ class Request
      * Copyright (c) 2005-2010 Zend Technologies USA Inc. (https://www.zend.com/)
      */
 
-    /**
-     * @return string
-     */
-    protected function prepareRequestUri()
+    protected function prepareRequestUri(): string
     {
         $requestUri = '';
 
-        if ('1' == $this->server->get('IIS_WasUrlRewritten') && '' != $this->server->get('UNENCODED_URL')) {
+        if ($this->isIisRewrite() && '' != $this->server->get('UNENCODED_URL')) {
             // IIS7 with URL Rewrite: make sure we get the unencoded URL (double slash problem)
             $requestUri = $this->server->get('UNENCODED_URL');
             $this->server->remove('UNENCODED_URL');
-            $this->server->remove('IIS_WasUrlRewritten');
         } elseif ($this->server->has('REQUEST_URI')) {
             $requestUri = $this->server->get('REQUEST_URI');
 
@@ -1840,7 +1963,7 @@ class Request
         }
 
         $basename = basename($baseUrl ?? '');
-        if (empty($basename) || !strpos(rawurldecode($truncatedRequestUri), $basename)) {
+        if (!$basename || !strpos(rawurldecode($truncatedRequestUri), $basename)) {
             // no match whatsoever; set it blank
             return '';
         }
@@ -1861,7 +1984,7 @@ class Request
     protected function prepareBasePath(): string
     {
         $baseUrl = $this->getBaseUrl();
-        if (empty($baseUrl)) {
+        if (!$baseUrl) {
             return '';
         }
 
@@ -1901,9 +2024,8 @@ class Request
         }
 
         $pathInfo = substr($requestUri, \strlen($baseUrl));
-        if (false === $pathInfo || '' === $pathInfo) {
-            // If substr() returns false then PATH_INFO is set to an empty string
-            return '/';
+        if ('' === $pathInfo || '/' !== $pathInfo[0]) {
+            return '/'.$pathInfo;
         }
 
         return $pathInfo;
@@ -1911,10 +2033,8 @@ class Request
 
     /**
      * Initializes HTTP request formats.
-     *
-     * @return void
      */
-    protected static function initializeFormats()
+    protected static function initializeFormats(): void
     {
         static::$formats = [
             'html' => ['text/html', 'application/xhtml+xml'],
@@ -1928,6 +2048,14 @@ class Request
             'atom' => ['application/atom+xml'],
             'rss' => ['application/rss+xml'],
             'form' => ['application/x-www-form-urlencoded', 'multipart/form-data'],
+            'soap' => ['application/soap+xml'],
+            'problem' => ['application/problem+json'],
+            'hal' => ['application/hal+json', 'application/hal+xml'],
+            'jsonapi' => ['application/vnd.api+json'],
+            'yaml' => ['text/yaml', 'application/x-yaml'],
+            'wbxml' => ['application/vnd.wap.wbxml'],
+            'pdf' => ['application/pdf'],
+            'csv' => ['text/csv'],
         ];
     }
 
@@ -1950,13 +2078,19 @@ class Request
      */
     private function getUrlencodedPrefix(string $string, string $prefix): ?string
     {
-        if (!str_starts_with(rawurldecode($string), $prefix)) {
+        if ($this->isIisRewrite()) {
+            // ISS with UrlRewriteModule might report SCRIPT_NAME/PHP_SELF with wrong case
+            // see https://github.com/php/php-src/issues/11981
+            if (0 !== stripos(rawurldecode($string), $prefix)) {
+                return null;
+            }
+        } elseif (!str_starts_with(rawurldecode($string), $prefix)) {
             return null;
         }
 
         $len = \strlen($prefix);
 
-        if (preg_match(sprintf('#^(%%[[:xdigit:]]{2}|.){%d}#', $len), $string, $match)) {
+        if (preg_match(\sprintf('#^(%%[[:xdigit:]]{2}|.){%d}#', $len), $string, $match)) {
             return $match[0];
         }
 
@@ -1989,8 +2123,20 @@ class Request
         return self::$trustedProxies && IpUtils::checkIp($this->server->get('REMOTE_ADDR', ''), self::$trustedProxies);
     }
 
-    private function getTrustedValues(int $type, string $ip = null): array
+    /**
+     * This method is rather heavy because it splits and merges headers, and it's called by many other methods such as
+     * getPort(), isSecure(), getHost(), getClientIps(), getBaseUrl() etc. Thus, we try to cache the results for
+     * best performance.
+     */
+    private function getTrustedValues(int $type, ?string $ip = null): array
     {
+        $cacheKey = $type."\0".((self::$trustedHeaderSet & $type) ? $this->headers->get(self::TRUSTED_HEADERS[$type]) : '');
+        $cacheKey .= "\0".$ip."\0".$this->headers->get(self::TRUSTED_HEADERS[self::HEADER_FORWARDED]);
+
+        if (isset($this->trustedValuesCache[$cacheKey])) {
+            return $this->trustedValuesCache[$cacheKey];
+        }
+
         $clientValues = [];
         $forwardedValues = [];
 
@@ -2003,7 +2149,6 @@ class Request
         if ((self::$trustedHeaderSet & self::HEADER_FORWARDED) && (isset(self::FORWARDED_PARAMS[$type])) && $this->headers->has(self::TRUSTED_HEADERS[self::HEADER_FORWARDED])) {
             $forwarded = $this->headers->get(self::TRUSTED_HEADERS[self::HEADER_FORWARDED]);
             $parts = HeaderUtils::split($forwarded, ',;=');
-            $forwardedValues = [];
             $param = self::FORWARDED_PARAMS[$type];
             foreach ($parts as $subParts) {
                 if (null === $v = HeaderUtils::combine($subParts)[$param] ?? null) {
@@ -2025,19 +2170,19 @@ class Request
         }
 
         if ($forwardedValues === $clientValues || !$clientValues) {
-            return $forwardedValues;
+            return $this->trustedValuesCache[$cacheKey] = $forwardedValues;
         }
 
         if (!$forwardedValues) {
-            return $clientValues;
+            return $this->trustedValuesCache[$cacheKey] = $clientValues;
         }
 
         if (!$this->isForwardedValid) {
-            return null !== $ip ? ['0.0.0.0', $ip] : [];
+            return $this->trustedValuesCache[$cacheKey] = null !== $ip ? ['0.0.0.0', $ip] : [];
         }
         $this->isForwardedValid = false;
 
-        throw new ConflictingHeadersException(sprintf('The request has both a trusted "%s" header and a trusted "%s" header, conflicting with each other. You should either configure your proxy to remove one of them, or configure your project to distrust the offending one.', self::TRUSTED_HEADERS[self::HEADER_FORWARDED], self::TRUSTED_HEADERS[$type]));
+        throw new ConflictingHeadersException(\sprintf('The request has both a trusted "%s" header and a trusted "%s" header, conflicting with each other. You should either configure your proxy to remove one of them, or configure your project to distrust the offending one.', self::TRUSTED_HEADERS[self::HEADER_FORWARDED], self::TRUSTED_HEADERS[$type]));
     }
 
     private function normalizeAndFilterClientIps(array $clientIps, string $ip): array
@@ -2078,5 +2223,47 @@ class Request
 
         // Now the IP chain contains only untrusted proxies and the client IP
         return $clientIps ? array_reverse($clientIps) : [$firstTrustedIp];
+    }
+
+    /**
+     * Is this IIS with UrlRewriteModule?
+     *
+     * This method consumes, caches and removed the IIS_WasUrlRewritten env var,
+     * so we don't inherit it to sub-requests.
+     */
+    private function isIisRewrite(): bool
+    {
+        if (1 === $this->server->getInt('IIS_WasUrlRewritten')) {
+            $this->isIisRewrite = true;
+            $this->server->remove('IIS_WasUrlRewritten');
+        }
+
+        return $this->isIisRewrite;
+    }
+
+    /**
+     * See https://url.spec.whatwg.org/.
+     */
+    private static function isHostValid(string $host): bool
+    {
+        if ('[' === $host[0]) {
+            return ']' === $host[-1] && filter_var(substr($host, 1, -1), \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6);
+        }
+
+        if (preg_match('/\.[0-9]++\.?$/D', $host)) {
+            return null !== filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4 | \FILTER_NULL_ON_FAILURE);
+        }
+
+        // use preg_replace() instead of preg_match() to prevent DoS attacks with long host names
+        return '' === preg_replace('/[-a-zA-Z0-9_]++\.?/', '', $host);
+    }
+
+    private static function setProperty(self $request, string $name, mixed $value): void
+    {
+        static $cache;
+
+        $r = $cache[$name] ??= new \ReflectionProperty(self::class, $name);
+
+        $r->setRawValue($request, $value);
     }
 }

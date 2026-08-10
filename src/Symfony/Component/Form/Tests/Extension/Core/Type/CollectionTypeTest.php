@@ -13,14 +13,18 @@ namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
 use Symfony\Component\Form\Exception\UnexpectedTypeException;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Form;
 use Symfony\Component\Form\Tests\Fixtures\Author;
 use Symfony\Component\Form\Tests\Fixtures\AuthorType;
 use Symfony\Component\Form\Tests\Fixtures\BlockPrefixedFooTextType;
+use Symfony\Component\Form\Tests\Fixtures\CollectionWithPreSetDataType;
+use Symfony\Component\Form\Tests\Fixtures\CollectionWithRecursiveSetDataType;
 
 class CollectionTypeTest extends BaseTypeTestCase
 {
-    public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\CollectionType';
+    public const TESTED_TYPE = CollectionType::class;
 
     public function testContainsNoChildByDefault()
     {
@@ -58,6 +62,32 @@ class CollectionTypeTest extends BaseTypeTestCase
         $this->assertEquals('foo@baz.com', $form[0]->getData());
         $formAttrs0 = $form[0]->getConfig()->getOption('attr');
         $this->assertEquals(20, $formAttrs0['maxlength']);
+    }
+
+    public function testSetDataPreservesChildrenAddedByPreSetDataListenerInChildType()
+    {
+        $form = $this->factory->create(CollectionWithPreSetDataType::class, null, [
+            'entry_type' => TextTypeTest::TESTED_TYPE,
+        ]);
+
+        $form->setData(['foo@foo.com']);
+
+        $this->assertTrue($form->has('0'));
+        $this->assertTrue($form->has('foo'));
+        $this->assertInstanceOf(TextareaType::class, $form->get('0')->getConfig()->getType()->getInnerType());
+        $this->assertSame('foo@foo.com', $form->get('0')->getData());
+    }
+
+    public function testSetDataPreservesChildrenWhenPreSetDataListenerCallsSetDataRecursively()
+    {
+        $form = $this->factory->create(CollectionWithRecursiveSetDataType::class, null, [
+            'entry_type' => TextTypeTest::TESTED_TYPE,
+        ]);
+
+        $form->setData(['foo@foo.com']);
+
+        $this->assertTrue($form->has('0'));
+        $this->assertTrue($form->has('foo'));
     }
 
     public function testThrowsExceptionIfObjectIsNotTraversable()
@@ -120,7 +150,7 @@ class CollectionTypeTest extends BaseTypeTestCase
         $form = $this->factory->create(static::TESTED_TYPE, null, [
             'entry_type' => AuthorType::class,
             'allow_delete' => true,
-            'delete_empty' => fn (Author $obj = null) => null === $obj || empty($obj->firstName),
+            'delete_empty' => static fn (?Author $obj = null) => null === $obj || !$obj->firstName,
         ]);
 
         $form->setData([new Author('Bob'), new Author('Alice')]);
@@ -141,7 +171,7 @@ class CollectionTypeTest extends BaseTypeTestCase
             'entry_options' => ['data_class' => null],
             'allow_add' => true,
             'allow_delete' => true,
-            'delete_empty' => fn ($author) => empty($author['firstName']),
+            'delete_empty' => static fn ($author) => empty($author['firstName']),
         ]);
         $form->setData([['firstName' => 'first', 'lastName' => 'last']]);
         $form->submit([

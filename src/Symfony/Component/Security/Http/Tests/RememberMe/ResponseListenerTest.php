@@ -82,14 +82,20 @@ class ResponseListenerTest extends TestCase
 
     private function getResponse()
     {
-        $response = new Response();
-        $response->headers = $this->createMock(ResponseHeaderBag::class);
+        $headers = $this->createMock(ResponseHeaderBag::class);
 
-        return $response;
+        try {
+            return new Response('', 200, $headers);
+        } catch (\TypeError) {
+            $response = new Response();
+            $response->headers = $headers;
+
+            return $response;
+        }
     }
 
     private function getEvent(Request $request, Response $response, int $type = HttpKernelInterface::MAIN_REQUEST): ResponseEvent
     {
-        return new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, $type, $response);
+        return new ResponseEvent($this->createStub(HttpKernelInterface::class), $request, $type, $response);
     }
 }

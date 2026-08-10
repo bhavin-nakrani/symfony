@@ -11,6 +11,7 @@
 
 namespace Symfony\Bundle\SecurityBundle\Tests\Debug;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\Debug\TraceableFirewallListener;
 use Symfony\Bundle\SecurityBundle\Security\FirewallMap;
@@ -19,29 +20,41 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authentication\Token\AbstractToken;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Http\Authentication\AuthenticatorManager;
+use Symfony\Component\Security\Http\Authenticator\Debug\TraceableAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Debug\TraceableAuthenticatorManagerListener;
 use Symfony\Component\Security\Http\Authenticator\InteractiveAuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
+use Symfony\Component\Security\Http\Firewall\AbstractListener;
 use Symfony\Component\Security\Http\Firewall\AuthenticatorManagerListener;
 use Symfony\Component\Security\Http\Logout\LogoutUrlGenerator;
+use Symfony\Component\VarDumper\Caster\ClassStub;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class TraceableFirewallListenerTest extends TestCase
 {
     public function testOnKernelRequestRecordsListeners()
     {
         $request = new Request();
-        $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
-        $event->setResponse($response = new Response());
-        $listener = function ($e) use ($event, &$listenerCalled) {
-            $listenerCalled += $e === $event;
+        $event = new RequestEvent($this->createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
+        $event->setResponse(new Response());
+        $listener = new class extends AbstractListener {
+            public int $callCount = 0;
+
+            public function supports(Request $request): ?bool
+            {
+                return true;
+            }
+
+            public function authenticate(RequestEvent $event): void
+            {
+                ++$this->callCount;
+            }
         };
         $firewallMap = $this->createMock(FirewallMap::class);
         $firewallMap
@@ -61,26 +74,28 @@ class TraceableFirewallListenerTest extends TestCase
 
         $listeners = $firewall->getWrappedListeners();
         $this->assertCount(1, $listeners);
-        $this->assertSame($listener, $listeners[0]['stub']);
+        $this->assertInstanceOf(ClassStub::class, $listeners[0]['stub']);
+        $this->assertSame((string) new ClassStub($listener::class), (string) $listeners[0]['stub']);
     }
 
     public function testOnKernelRequestRecordsAuthenticatorsInfo()
     {
         $request = new Request();
 
-        $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
+        $event = new RequestEvent($this->createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
         $event->setResponse($response = new Response());
 
         $supportingAuthenticator = $this->createMock(DummyAuthenticator::class);
         $supportingAuthenticator
             ->method('supports')
-            ->with($request)
-            ->willReturn(true);
+            ->willReturnMap([
+                [$request, true],
+            ]);
         $supportingAuthenticator
             ->expects($this->once())
             ->method('authenticate')
             ->with($request)
-            ->willReturn(new SelfValidatingPassport(new UserBadge('robin', function () {})));
+            ->willReturn(new SelfValidatingPassport(new UserBadge('robin', static function () {})));
         $supportingAuthenticator
             ->expects($this->once())
             ->method('onAuthenticationSuccess')
@@ -88,19 +103,19 @@ class TraceableFirewallListenerTest extends TestCase
         $supportingAuthenticator
             ->expects($this->once())
             ->method('createToken')
-            ->willReturn($this->createMock(TokenInterface::class));
+            ->willReturn(new class extends AbstractToken {});
 
         $notSupportingAuthenticator = $this->createMock(DummyAuthenticator::class);
         $notSupportingAuthenticator
+            ->expects($this->once())
             ->method('supports')
             ->with($request)
             ->willReturn(false);
 
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
         $dispatcher = new EventDispatcher();
         $authenticatorManager = new AuthenticatorManager(
-            [$notSupportingAuthenticator, $supportingAuthenticator],
-            $tokenStorage,
+            [new TraceableAuthenticator($notSupportingAuthenticator), new TraceableAuthenticator($supportingAuthenticator)],
+            new TokenStorage(),
             $dispatcher,
             'main'
         );

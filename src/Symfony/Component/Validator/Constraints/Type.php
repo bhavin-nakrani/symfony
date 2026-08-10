@@ -12,10 +12,10 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\MissingOptionsException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is of a specific data type.
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
@@ -28,34 +28,22 @@ class Type extends Constraint
         self::INVALID_TYPE_ERROR => 'INVALID_TYPE_ERROR',
     ];
 
+    public string $message = 'This value should be of type {{ type }}.';
+    public string|array|null $type = null;
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param string|list<string>|null $type   The type(s) to enforce on the value
+     * @param string[]|null            $groups
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $message = 'This value should be of type {{ type }}.';
-    public $type;
-
-    public function __construct(string|array|null $type, string $message = null, array $groups = null, mixed $payload = null, array $options = [])
+    public function __construct(string|array|null $type, ?string $message = null, ?array $groups = null, mixed $payload = null)
     {
-        if (\is_array($type) && \is_string(key($type))) {
-            $options = array_merge($type, $options);
-        } elseif (null !== $type) {
-            $options['value'] = $type;
+        if (null === $type) {
+            throw new MissingOptionsException(\sprintf('The options "type" must be set for constraint "%s".', self::class), ['type']);
         }
 
-        parent::__construct($options, $groups, $payload);
+        parent::__construct(null, $groups, $payload);
 
         $this->message = $message ?? $this->message;
-    }
-
-    public function getDefaultOption(): ?string
-    {
-        return 'type';
-    }
-
-    public function getRequiredOptions(): array
-    {
-        return ['type'];
+        $this->type = $type;
     }
 }

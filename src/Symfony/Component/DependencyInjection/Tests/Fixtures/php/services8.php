@@ -37,19 +37,20 @@ class ProjectServiceContainer extends Container
 
     public function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
     {
-        if (!(isset($this->parameters[$name]) || isset($this->loadedDynamicParameters[$name]) || \array_key_exists($name, $this->parameters))) {
+        if (isset($this->loadedDynamicParameters[$name])) {
+            $value = $this->loadedDynamicParameters[$name] ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
+        } elseif (\array_key_exists($name, $this->parameters) && '.' !== ($name[0] ?? '')) {
+            $value = $this->parameters[$name];
+        } else {
             throw new ParameterNotFoundException($name);
         }
-        if (isset($this->loadedDynamicParameters[$name])) {
-            return $this->loadedDynamicParameters[$name] ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
-        }
 
-        return $this->parameters[$name];
+        return $value;
     }
 
     public function hasParameter(string $name): bool
     {
-        return isset($this->parameters[$name]) || isset($this->loadedDynamicParameters[$name]) || \array_key_exists($name, $this->parameters);
+        return \array_key_exists($name, $this->parameters) || isset($this->loadedDynamicParameters[$name]);
     }
 
     public function setParameter(string $name, $value): void
@@ -64,7 +65,7 @@ class ProjectServiceContainer extends Container
             foreach ($this->loadedDynamicParameters as $name => $loaded) {
                 $parameters[$name] = $loaded ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
             }
-            $this->parameterBag = new FrozenParameterBag($parameters);
+            $this->parameterBag = new FrozenParameterBag($parameters, []);
         }
 
         return $this->parameterBag;
@@ -98,7 +99,7 @@ class ProjectServiceContainer extends Container
             'utf-8 valid string' => 'ָ›ב­–	test',
             'binary' => 'ננננ',
             'binary-control-char' => 'This is a Bell char ',
-            'console banner' => '[37;44m#StandWith[30;43mUkraine[0m',
+            'console banner' => '[37;44mHello[30;43mWorld[0m',
             'null string' => 'null',
             'string of digits' => '123',
             'string of digits prefixed with minus character' => '-123',

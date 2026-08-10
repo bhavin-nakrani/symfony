@@ -151,7 +151,7 @@ final class SocketStream extends AbstractStream
 
         $timeout = $this->getTimeout();
         set_error_handler(function ($type, $msg) {
-            throw new TransportException(sprintf('Connection could not be established with host "%s": ', $this->url).$msg);
+            throw new TransportException(\sprintf('Connection could not be established with host "%s": ', $this->url).$msg);
         });
         try {
             $this->stream = stream_socket_client($this->url, $errno, $errstr, $timeout, \STREAM_CLIENT_CONNECT, $streamContext);
@@ -160,14 +160,14 @@ final class SocketStream extends AbstractStream
         }
 
         stream_set_blocking($this->stream, true);
-        stream_set_timeout($this->stream, $timeout);
+        stream_set_timeout($this->stream, (int) $timeout, (int) (($timeout - (int) $timeout) * 1000000));
         $this->in = &$this->stream;
         $this->out = &$this->stream;
     }
 
     public function startTLS(): bool
     {
-        set_error_handler(function ($type, $msg) {
+        set_error_handler(static function ($type, $msg) {
             throw new TransportException('Unable to connect with STARTTLS: '.$msg);
         });
         try {

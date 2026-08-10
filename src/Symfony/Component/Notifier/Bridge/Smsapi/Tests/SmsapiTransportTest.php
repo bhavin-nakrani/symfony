@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Notifier\Bridge\Smsapi\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Smsapi\SmsapiTransport;
@@ -23,7 +24,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final class SmsapiTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null, string $from = '', bool $fast = false, bool $test = false): SmsapiTransport
+    public static function createTransport(?HttpClientInterface $client = null, string $from = '', bool $fast = false, bool $test = false): SmsapiTransport
     {
         return (new SmsapiTransport('testToken', $from, $client ?? new MockHttpClient()))->setHost('test.host')->setFast($fast)->setTest($test);
     }
@@ -72,9 +73,7 @@ final class SmsapiTransportTest extends TransportTestCase
         }
     }
 
-    /**
-     * @dataProvider responseProvider
-     */
+    #[DataProvider('responseProvider')]
     public function testThrowExceptionWhenMessageWasNotSent(int $statusCode, string $content, string $errorMessage)
     {
         $client = $this->createClient($statusCode, $content);

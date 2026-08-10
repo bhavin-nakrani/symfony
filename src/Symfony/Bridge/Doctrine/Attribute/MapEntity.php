@@ -11,7 +11,10 @@
 
 namespace Symfony\Bridge\Doctrine\Attribute;
 
+use Doctrine\Persistence\ObjectRepository;
 use Symfony\Bridge\Doctrine\ArgumentResolver\EntityValueResolver;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Attribute\ValueResolver;
 
 /**
@@ -20,10 +23,27 @@ use Symfony\Component\HttpKernel\Attribute\ValueResolver;
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
 class MapEntity extends ValueResolver
 {
+    /**
+     * @param class-string|null          $class         The entity class
+     * @param string|null                $objectManager Specify the object manager used to retrieve the entity
+     * @param string|\Closure<T of ObjectRepository>(Request|InputInterface, T):(object|iterable|null)|null $expr An expression or closure to fetch the entity.
+     *                                                  Any request attribute are available as a variable, and your entity repository in the 'repository' variable.
+     * @param array<string, string>|null $mapping       Configures the properties and values to use with the findOneBy() method
+     *                                                  The key is the route placeholder name and the value is the Doctrine property name.
+     *                                                  On Console commands, the placeholder name is matched against argument/option names
+     *                                                  after a kebab-case transformation (e.g. "userId" maps to "user-id")
+     * @param string[]|null              $exclude       Configures the properties that should be used in the findOneBy() method by excluding
+     *                                                  one or more properties so that not all are used
+     * @param bool|null                  $stripNull     Whether to prevent null values from being used as parameters in the query (defaults to false)
+     * @param string[]|string|null       $id            If an id option is configured and matches a route parameter, then the resolver will find by the primary key.
+     *                                                  On Console commands, the id name is matched against argument/option names after a kebab-case
+     *                                                  transformation (e.g. "userId" looks for "user-id")
+     * @param bool|null                  $evictCache    If true, forces Doctrine to always fetch the entity from the database instead of cache (defaults to false)
+     */
     public function __construct(
         public ?string $class = null,
         public ?string $objectManager = null,
-        public ?string $expr = null,
+        public string|\Closure|null $expr = null,
         public ?array $mapping = null,
         public ?array $exclude = null,
         public ?bool $stripNull = null,
@@ -31,14 +51,16 @@ class MapEntity extends ValueResolver
         public ?bool $evictCache = null,
         bool $disabled = false,
         string $resolver = EntityValueResolver::class,
+        public ?string $message = null,
     ) {
         parent::__construct($resolver, $disabled);
+        $this->selfValidate();
     }
 
     public function withDefaults(self $defaults, ?string $class): static
     {
         $clone = clone $this;
-        $clone->class ??= class_exists($class ?? '') ? $class : null;
+        $clone->class ??= class_exists($class ?? '') || interface_exists($class ?? '', false) ? $class : null;
         $clone->objectManager ??= $defaults->objectManager;
         $clone->expr ??= $defaults->expr;
         $clone->mapping ??= $defaults->mapping;
@@ -46,7 +68,24 @@ class MapEntity extends ValueResolver
         $clone->stripNull ??= $defaults->stripNull ?? false;
         $clone->id ??= $defaults->id;
         $clone->evictCache ??= $defaults->evictCache ?? false;
+        $clone->message ??= $defaults->message;
+
+        $clone->selfValidate();
 
         return $clone;
+    }
+
+    private function selfValidate(): void
+    {
+        if (!$this->id) {
+            return;
+        }
+        if ($this->mapping) {
+            throw new \LogicException('The "id" and "mapping" options cannot be used together on #[MapEntity] attributes.');
+        }
+        if ($this->exclude) {
+            throw new \LogicException('The "id" and "exclude" options cannot be used together on #[MapEntity] attributes.');
+        }
+        $this->mapping = [];
     }
 }

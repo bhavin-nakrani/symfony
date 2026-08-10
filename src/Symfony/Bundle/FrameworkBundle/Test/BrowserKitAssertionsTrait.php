@@ -16,6 +16,9 @@ use PHPUnit\Framework\Constraint\LogicalAnd;
 use PHPUnit\Framework\Constraint\LogicalNot;
 use PHPUnit\Framework\ExpectationFailedException;
 use Symfony\Component\BrowserKit\AbstractBrowser;
+use Symfony\Component\BrowserKit\History;
+use Symfony\Component\BrowserKit\Request as BrowserKitRequest;
+use Symfony\Component\BrowserKit\Response as BrowserKitResponse;
 use Symfony\Component\BrowserKit\Test\Constraint as BrowserKitConstraint;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,26 +31,35 @@ use Symfony\Component\HttpFoundation\Test\Constraint as ResponseConstraint;
  */
 trait BrowserKitAssertionsTrait
 {
-    public static function assertResponseIsSuccessful(string $message = ''): void
+    private static bool $defaultVerboseMode = true;
+
+    public static function setBrowserKitAssertionsAsVerbose(bool $verbose): void
     {
-        self::assertThatForResponse(new ResponseConstraint\ResponseIsSuccessful(), $message);
+        self::$defaultVerboseMode = $verbose;
     }
 
-    public static function assertResponseStatusCodeSame(int $expectedCode, string $message = ''): void
+    public static function assertResponseIsSuccessful(string $message = '', ?bool $verbose = null): void
     {
-        self::assertThatForResponse(new ResponseConstraint\ResponseStatusCodeSame($expectedCode), $message);
+        self::assertThatForResponse(new ResponseConstraint\ResponseIsSuccessful($verbose ?? self::$defaultVerboseMode), $message);
     }
 
-    public static function assertResponseFormatSame(?string $expectedFormat, string $message = ''): void
+    public static function assertResponseStatusCodeSame(int $expectedCode, string $message = '', ?bool $verbose = null): void
     {
-        self::assertThatForResponse(new ResponseConstraint\ResponseFormatSame(self::getRequest(), $expectedFormat), $message);
+        self::assertThatForResponse(new ResponseConstraint\ResponseStatusCodeSame($expectedCode, $verbose ?? self::$defaultVerboseMode), $message);
     }
 
-    public static function assertResponseRedirects(string $expectedLocation = null, int $expectedCode = null, string $message = ''): void
+    public static function assertResponseFormatSame(?string $expectedFormat, string $message = '', ?bool $verbose = null): void
     {
-        $constraint = new ResponseConstraint\ResponseIsRedirected();
+        self::assertThatForResponse(new ResponseConstraint\ResponseFormatSame(self::getRequest(), $expectedFormat, $verbose ?? self::$defaultVerboseMode), $message);
+    }
+
+    public static function assertResponseRedirects(?string $expectedLocation = null, ?int $expectedCode = null, string $message = '', ?bool $verbose = null): void
+    {
+        $constraint = new ResponseConstraint\ResponseIsRedirected($verbose ?? self::$defaultVerboseMode);
         if ($expectedLocation) {
-            $constraint = LogicalAnd::fromConstraints($constraint, new ResponseConstraint\ResponseHeaderSame('Location', $expectedLocation));
+            $locationConstraint = new ResponseConstraint\ResponseHeaderLocationSame(self::getRequest(), $expectedLocation);
+
+            $constraint = LogicalAnd::fromConstraints($constraint, $locationConstraint);
         }
         if ($expectedCode) {
             $constraint = LogicalAnd::fromConstraints($constraint, new ResponseConstraint\ResponseStatusCodeSame($expectedCode));
@@ -76,17 +88,17 @@ trait BrowserKitAssertionsTrait
         self::assertThatForResponse(new LogicalNot(new ResponseConstraint\ResponseHeaderSame($headerName, $expectedValue)), $message);
     }
 
-    public static function assertResponseHasCookie(string $name, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertResponseHasCookie(string $name, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForResponse(new ResponseConstraint\ResponseHasCookie($name, $path, $domain), $message);
     }
 
-    public static function assertResponseNotHasCookie(string $name, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertResponseNotHasCookie(string $name, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForResponse(new LogicalNot(new ResponseConstraint\ResponseHasCookie($name, $path, $domain)), $message);
     }
 
-    public static function assertResponseCookieValueSame(string $name, string $expectedValue, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertResponseCookieValueSame(string $name, string $expectedValue, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForResponse(LogicalAnd::fromConstraints(
             new ResponseConstraint\ResponseHasCookie($name, $path, $domain),
@@ -94,22 +106,54 @@ trait BrowserKitAssertionsTrait
         ), $message);
     }
 
-    public static function assertResponseIsUnprocessable(string $message = ''): void
+    public static function assertResponseIsUnprocessable(string $message = '', ?bool $verbose = null): void
     {
-        self::assertThatForResponse(new ResponseConstraint\ResponseIsUnprocessable(), $message);
+        self::assertThatForResponse(new ResponseConstraint\ResponseIsUnprocessable($verbose ?? self::$defaultVerboseMode), $message);
     }
 
-    public static function assertBrowserHasCookie(string $name, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertBrowserHasCookie(string $name, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForClient(new BrowserKitConstraint\BrowserHasCookie($name, $path, $domain), $message);
     }
 
-    public static function assertBrowserNotHasCookie(string $name, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertBrowserNotHasCookie(string $name, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForClient(new LogicalNot(new BrowserKitConstraint\BrowserHasCookie($name, $path, $domain)), $message);
     }
 
-    public static function assertBrowserCookieValueSame(string $name, string $expectedValue, bool $raw = false, string $path = '/', string $domain = null, string $message = ''): void
+    public static function assertBrowserHistoryIsOnFirstPage(string $message = ''): void
+    {
+        if (!method_exists(History::class, 'isFirstPage')) {
+            throw new \LogicException('The `assertBrowserHistoryIsOnFirstPage` method requires symfony/browser-kit >= 7.4.');
+        }
+        self::assertThatForClient(new BrowserKitConstraint\BrowserHistoryIsOnFirstPage(), $message);
+    }
+
+    public static function assertBrowserHistoryIsNotOnFirstPage(string $message = ''): void
+    {
+        if (!method_exists(History::class, 'isFirstPage')) {
+            throw new \LogicException('The `assertBrowserHistoryIsNotOnFirstPage` method requires symfony/browser-kit >= 7.4.');
+        }
+        self::assertThatForClient(new LogicalNot(new BrowserKitConstraint\BrowserHistoryIsOnFirstPage()), $message);
+    }
+
+    public static function assertBrowserHistoryIsOnLastPage(string $message = ''): void
+    {
+        if (!method_exists(History::class, 'isLastPage')) {
+            throw new \LogicException('The `assertBrowserHistoryIsOnLastPage` method requires symfony/browser-kit >= 7.4.');
+        }
+        self::assertThatForClient(new BrowserKitConstraint\BrowserHistoryIsOnLastPage(), $message);
+    }
+
+    public static function assertBrowserHistoryIsNotOnLastPage(string $message = ''): void
+    {
+        if (!method_exists(History::class, 'isLastPage')) {
+            throw new \LogicException('The `assertBrowserHistoryIsNotOnLastPage` method requires symfony/browser-kit >= 7.4.');
+        }
+        self::assertThatForClient(new LogicalNot(new BrowserKitConstraint\BrowserHistoryIsOnLastPage()), $message);
+    }
+
+    public static function assertBrowserCookieValueSame(string $name, string $expectedValue, bool $raw = false, string $path = '/', ?string $domain = null, string $message = ''): void
     {
         self::assertThatForClient(LogicalAnd::fromConstraints(
             new BrowserKitConstraint\BrowserHasCookie($name, $path, $domain),
@@ -136,6 +180,11 @@ trait BrowserKitAssertionsTrait
         self::assertThat(self::getRequest(), $constraint, $message);
     }
 
+    public static function assertSessionHasFlashMessage(string $messageType, string|array $messages = ''): void
+    {
+        static::assertThat(self::getRequest(), new ResponseConstraint\SessionHasFlashMessage($messageType, $messages));
+    }
+
     public static function assertThatForResponse(Constraint $constraint, string $message = ''): void
     {
         try {
@@ -156,7 +205,7 @@ trait BrowserKitAssertionsTrait
         self::assertThat(self::getClient(), $constraint, $message);
     }
 
-    private static function getClient(AbstractBrowser $newClient = null): ?AbstractBrowser
+    protected static function getClient(?AbstractBrowser $newClient = null): ?AbstractBrowser
     {
         static $client;
 
@@ -165,7 +214,7 @@ trait BrowserKitAssertionsTrait
         }
 
         if (!$client instanceof AbstractBrowser) {
-            static::fail(sprintf('A client must be set to make assertions on it. Did you forget to call "%s::createClient()"?', __CLASS__));
+            static::fail(\sprintf('A client must be set to make assertions on it. Did you forget to call "%s::createClient()"?', __CLASS__));
         }
 
         return $client;
@@ -177,6 +226,14 @@ trait BrowserKitAssertionsTrait
             static::fail('A client must have an HTTP Response to make assertions. Did you forget to make an HTTP request?');
         }
 
+        if ($response instanceof BrowserKitResponse) {
+            return new Response(
+                $response->getContent(),
+                $response->getStatusCode(),
+                $response->getHeaders()
+            );
+        }
+
         return $response;
     }
 
@@ -184,6 +241,18 @@ trait BrowserKitAssertionsTrait
     {
         if (!$request = self::getClient()->getRequest()) {
             static::fail('A client must have an HTTP Request to make assertions. Did you forget to make an HTTP request?');
+        }
+
+        if ($request instanceof BrowserKitRequest) {
+            return Request::create(
+                $request->getUri(),
+                $request->getMethod(),
+                $request->getParameters(),
+                $request->getCookies(),
+                $request->getFiles(),
+                $request->getServer(),
+                $request->getContent()
+            );
         }
 
         return $request;

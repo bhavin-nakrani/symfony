@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraints\Isin;
 use Symfony\Component\Validator\Constraints\IsinValidator;
 use Symfony\Component\Validator\Constraints\Luhn;
@@ -25,24 +26,22 @@ class IsinValidatorTest extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Isin());
+        $this->validate(null, new Isin());
 
         $this->assertNoViolation();
     }
 
     public function testEmptyStringIsValid()
     {
-        $this->validator->validate('', new Isin());
+        $this->validate('', new Isin());
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getValidIsin
-     */
+    #[DataProvider('getValidIsin')]
     public function testValidIsin($isin)
     {
-        $this->validator->validate($isin, new Isin());
+        $this->validate($isin, new Isin());
         $this->expectViolationsAt(0, $isin, new Luhn());
         $this->assertNoViolation();
     }
@@ -63,9 +62,7 @@ class IsinValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getIsinWithInvalidLenghFormat
-     */
+    #[DataProvider('getIsinWithInvalidLenghFormat')]
     public function testIsinWithInvalidFormat($isin)
     {
         $this->assertViolationRaised($isin, Isin::INVALID_LENGTH_ERROR);
@@ -88,9 +85,7 @@ class IsinValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getIsinWithInvalidPattern
-     */
+    #[DataProvider('getIsinWithInvalidPattern')]
     public function testIsinWithInvalidPattern($isin)
     {
         $this->assertViolationRaised($isin, Isin::INVALID_PATTERN_ERROR);
@@ -106,9 +101,7 @@ class IsinValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getIsinWithValidFormatButIncorrectChecksum
-     */
+    #[DataProvider('getIsinWithValidFormatButIncorrectChecksum')]
     public function testIsinWithValidFormatButIncorrectChecksum($isin)
     {
         $this->expectViolationsAt(0, $isin, new Luhn());
@@ -130,11 +123,9 @@ class IsinValidatorTest extends ConstraintValidatorTestCase
 
     private function assertViolationRaised($isin, $code)
     {
-        $constraint = new Isin([
-            'message' => 'myMessage',
-        ]);
+        $constraint = new Isin(message: 'myMessage');
 
-        $this->validator->validate($isin, $constraint);
+        $this->validate($isin, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$isin.'"')

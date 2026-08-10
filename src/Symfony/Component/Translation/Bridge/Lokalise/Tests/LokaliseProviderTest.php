@@ -11,9 +11,12 @@
 
 namespace Symfony\Component\Translation\Bridge\Lokalise\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Translation\Bridge\Lokalise\LokaliseProvider;
 use Symfony\Component\Translation\Exception\ProviderException;
@@ -30,7 +33,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class LokaliseProviderTest extends ProviderTestCase
 {
-    public static function createProvider(HttpClientInterface $client, LoaderInterface $loader, LoggerInterface $logger, string $defaultLocale, string $endpoint, TranslatorBagInterface $translatorBag = null): ProviderInterface
+    public static function createProvider(HttpClientInterface $client, LoaderInterface $loader, LoggerInterface $logger, string $defaultLocale, string $endpoint, ?TranslatorBagInterface $translatorBag = null): ProviderInterface
     {
         return new LokaliseProvider($client, $loader, $logger, $defaultLocale, $endpoint);
     }
@@ -68,7 +71,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
 
-            return new MockResponse(json_encode(['languages' => []]));
+            return new JsonMockResponse(['languages' => []]);
         };
 
         $createLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -98,7 +101,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $getKeysIdsForValidatorsDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -113,7 +116,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $createKeysForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -135,12 +138,12 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('POST', $method);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => [
+            return new JsonMockResponse(['keys' => [
                 [
                     'key_name' => ['web' => 'young_dog'],
                     'key_id' => 29,
                 ],
-            ]]));
+            ]]);
         };
 
         $createKeysForValidatorsDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -162,12 +165,12 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('POST', $method);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => [
+            return new JsonMockResponse(['keys' => [
                 [
                     'key_name' => ['web' => 'post.num_comments'],
                     'key_id' => 92,
                 ],
-            ]]));
+            ]]);
         };
         $updateProcessed = false;
         $updateTranslationsResponse = function (string $method, string $url, array $options = []) use (&$updateProcessed): ResponseInterface {
@@ -250,6 +253,56 @@ class LokaliseProviderTest extends ProviderTestCase
         $this->assertTrue($updateProcessed, 'Translations update was not called.');
     }
 
+    public function testUpdateProcessWhenLocalTranslationsMatchLokaliseTranslations()
+    {
+        $getLanguagesResponse = function (string $method, string $url): ResponseInterface {
+            $this->assertSame('GET', $method);
+            $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
+
+            return new MockResponse(json_encode([
+                'languages' => [
+                    ['lang_iso' => 'en'],
+                    ['lang_iso' => 'fr'],
+                ],
+            ]));
+        };
+
+        $failOnPutRequest = function (string $method, string $url, array $options = []): void {
+            $this->assertSame('PUT', $method);
+            $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys', $url);
+            $this->assertSame(json_encode(['keys' => []]), $options['body']);
+
+            $this->fail('PUT request is invalid: an empty `keys` array was provided, resulting in a Lokalise API error');
+        };
+
+        $mockHttpClient = (new MockHttpClient([
+            $getLanguagesResponse,
+            $failOnPutRequest,
+        ]))->withOptions([
+            'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
+            'headers' => ['X-Api-Token' => 'API_KEY'],
+        ]);
+
+        $provider = self::createProvider(
+            $mockHttpClient,
+            $this->getLoader(),
+            $this->getLogger(),
+            $this->getDefaultLocale(),
+            'api.lokalise.com'
+        );
+
+        // TranslatorBag with catalogues that do not store any message to mimic the behaviour of
+        // Symfony\Component\Translation\Command\TranslationPushCommand when local translations and Lokalise
+        // translations match without any changes in both translation sets
+        $translatorBag = new TranslatorBag();
+        $translatorBag->addCatalogue(new MessageCatalogue('en', []));
+        $translatorBag->addCatalogue(new MessageCatalogue('fr', []));
+
+        $provider->write($translatorBag);
+
+        $this->assertSame(1, $mockHttpClient->getRequestsCount());
+    }
+
     public function testWriteGetLanguageServerError()
     {
         $getLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -283,7 +336,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
 
-            return new MockResponse(json_encode(['languages' => []]));
+            return new JsonMockResponse(['languages' => []]);
         };
 
         $createLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -325,7 +378,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
 
-            return new MockResponse(json_encode(['languages' => []]));
+            return new JsonMockResponse(['languages' => []]);
         };
 
         $createLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -339,7 +392,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $getKeysIdsForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -383,7 +436,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
 
-            return new MockResponse(json_encode(['languages' => []]));
+            return new JsonMockResponse(['languages' => []]);
         };
 
         $createLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -397,7 +450,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $getKeysIdsForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -412,7 +465,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $createKeysForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -464,7 +517,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('GET', $method);
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
 
-            return new MockResponse(json_encode(['languages' => []]));
+            return new JsonMockResponse(['languages' => []]);
         };
 
         $createLanguagesResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -478,7 +531,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/languages', $url);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $getKeysIdsForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -493,7 +546,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => []]));
+            return new JsonMockResponse(['keys' => []]);
         };
 
         $createKeysForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -515,12 +568,12 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('POST', $method);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode(['keys' => [
+            return new JsonMockResponse(['keys' => [
                 [
                     'key_name' => ['web' => 'young_dog'],
                     'key_id' => 29,
                 ],
-            ]]));
+            ]]);
         };
 
         $updateTranslationsResponse = function (string $method, string $url, array $options = []) use (&$updateProcessed): ResponseInterface {
@@ -551,16 +604,13 @@ class LokaliseProviderTest extends ProviderTestCase
         $provider->write($translatorBag);
     }
 
-    /**
-     * @dataProvider getResponsesForOneLocaleAndOneDomain
-     */
+    #[DataProvider('getResponsesForOneLocaleAndOneDomain')]
     public function testReadForOneLocaleAndOneDomain(string $locale, string $domain, string $responseContent, TranslatorBag $expectedTranslatorBag)
     {
         $response = function (string $method, string $url, array $options = []) use ($locale, $domain, $responseContent): ResponseInterface {
             $expectedBody = json_encode([
                 'format' => 'symfony_xliff',
                 'original_filenames' => true,
-                'directory_prefix' => '%LANG_ISO%',
                 'filter_langs' => [$locale],
                 'filter_filenames' => [$domain.'.xliff'],
                 'export_empty_as' => 'skip',
@@ -571,7 +621,7 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/files/export', $url);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return new MockResponse(json_encode([
+            return new JsonMockResponse([
                 'files' => [
                     $locale => [
                         $domain.'.xliff' => [
@@ -579,18 +629,13 @@ class LokaliseProviderTest extends ProviderTestCase
                         ],
                     ],
                 ],
-            ]));
+            ]);
         };
-
-        $loader = $this->getLoader();
-        $loader->expects($this->once())
-            ->method('load')
-            ->willReturn((new XliffFileLoader())->load($responseContent, $locale, $domain));
 
         $provider = self::createProvider((new MockHttpClient($response))->withOptions([
             'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
             'headers' => ['X-Api-Token' => 'API_KEY'],
-        ]), $loader, $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
+        ]), new XliffFileLoader(), $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
         $translatorBag = $provider->read([$domain], [$locale]);
 
         // We don't want to assert equality of metadata here, due to the ArrayLoader usage.
@@ -601,16 +646,14 @@ class LokaliseProviderTest extends ProviderTestCase
         $this->assertEquals($expectedTranslatorBag->getCatalogues(), $translatorBag->getCatalogues());
     }
 
-    /**
-     * @dataProvider getResponsesForManyLocalesAndManyDomains
-     */
+    #[DataProvider('getResponsesForManyLocalesAndManyDomains')]
     public function testReadForManyLocalesAndManyDomains(array $locales, array $domains, array $responseContents, TranslatorBag $expectedTranslatorBag)
     {
         $consecutiveLoadArguments = [];
         $consecutiveLoadReturns = [];
-        $response = new MockResponse(json_encode([
-            'files' => array_reduce($locales, function ($carry, $locale) use ($domains, $responseContents, &$consecutiveLoadArguments, &$consecutiveLoadReturns) {
-                $carry[$locale] = array_reduce($domains, function ($carry, $domain) use ($locale, $responseContents, &$consecutiveLoadArguments, &$consecutiveLoadReturns) {
+        $response = new JsonMockResponse([
+            'files' => array_reduce($locales, static function ($carry, $locale) use ($domains, $responseContents, &$consecutiveLoadArguments, &$consecutiveLoadReturns) {
+                $carry[$locale] = array_reduce($domains, static function ($carry, $domain) use ($locale, $responseContents, &$consecutiveLoadArguments, &$consecutiveLoadReturns) {
                     $carry[$domain.'.xliff'] = [
                         'content' => $responseContents[$locale][$domain],
                     ];
@@ -623,9 +666,9 @@ class LokaliseProviderTest extends ProviderTestCase
 
                 return $carry;
             }, []),
-        ]));
+        ]);
 
-        $loader = $this->getLoader();
+        $loader = $this->createMock(LoaderInterface::class);
         $loader->expects($this->exactly(\count($consecutiveLoadArguments)))
             ->method('load')
             ->willReturnCallback(function (...$args) use (&$consecutiveLoadArguments, &$consecutiveLoadReturns) {
@@ -652,6 +695,131 @@ class LokaliseProviderTest extends ProviderTestCase
         }
     }
 
+    public function testReadReturnsEmptyBagWhenLokaliseHasNoKeys()
+    {
+        $response = static fn (): ResponseInterface => new JsonMockResponse(
+            ['error' => ['code' => 406, 'message' => 'No keys for export with current export settings']],
+            ['http_code' => 406],
+        );
+
+        $provider = self::createProvider((new MockHttpClient($response))->withOptions([
+            'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
+            'headers' => ['X-Api-Token' => 'API_KEY'],
+        ]), new XliffFileLoader(), $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
+
+        $translatorBag = $provider->read(['messages'], ['en']);
+
+        $this->assertSame([], $translatorBag->getCatalogues());
+    }
+
+    public function testReadSendsFilterFilenamesAsJsonArray()
+    {
+        $response = function (string $method, string $url, array $options = []): ResponseInterface {
+            $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/files/export', $url);
+
+            $body = json_decode($options['body'], true);
+
+            $this->assertSame(['validators.xliff'], $body['filter_filenames']);
+            $this->assertSame(['en'], $body['filter_langs']);
+
+            return new JsonMockResponse(['files' => []]);
+        };
+
+        $provider = self::createProvider((new MockHttpClient($response))->withOptions([
+            'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
+            'headers' => ['X-Api-Token' => 'API_KEY'],
+        ]), new XliffFileLoader(), $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
+
+        // FilteringProvider narrows domains and locales with array_intersect(), which preserves the original keys.
+        $provider->read([1 => 'validators'], [1 => 'en']);
+    }
+
+    #[RequiresPhpExtension('zip')]
+    public function testReadWithExportAsync()
+    {
+        $zipLocation = __DIR__.\DIRECTORY_SEPARATOR.'Fixtures'.\DIRECTORY_SEPARATOR.'Symfony-locale.zip';
+        $firstResponse = static fn (): ResponseInterface => new JsonMockResponse(
+            ['error' => ['code' => 413, 'message' => 'test']],
+            ['http_code' => 413],
+        );
+        $secondResponse = function (string $method, string $url, array $options = []): ResponseInterface {
+            $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/files/async-download', $url);
+
+            $body = json_decode($options['body'], true);
+
+            $this->assertSame(['foo.xliff'], $body['filter_filenames']);
+            $this->assertSame(['baz'], $body['filter_langs']);
+
+            return new JsonMockResponse(['process_id' => 123]);
+        };
+        $thirdResponse = static fn (): ResponseInterface => new JsonMockResponse(
+            ['process' => ['status' => 'finished', 'details' => ['download_url' => 'https://api.lokalise.com/Symfony-locale.zip']]],
+        );
+        $fourResponse = function (string $method, string $url, array $options = []) use ($zipLocation): ResponseInterface {
+            $this->assertSame('GET', $method);
+            $this->assertSame('https://api.lokalise.com/Symfony-locale.zip', $url);
+            $this->assertFalse($options['buffer']);
+
+            return new MockResponse(file_get_contents($zipLocation));
+        };
+
+        $provider = self::createProvider((new MockHttpClient([$firstResponse, $secondResponse, $thirdResponse, $fourResponse]))->withOptions([
+            'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
+            'headers' => ['X-Api-Token' => 'API_KEY'],
+        ]), new XliffFileLoader(), $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
+        // FilteringProvider narrows domains and locales with array_intersect(), which preserves the original keys.
+        $translatorBag = $provider->read([1 => 'foo'], [1 => 'baz']);
+
+        // We don't want to assert equality of metadata here, due to the ArrayLoader usage.
+        /** @var MessageCatalogue $catalogue */
+        foreach ($translatorBag->getCatalogues() as $catalogue) {
+            $catalogue->deleteMetadata('', '');
+        }
+
+        $arrayLoader = new ArrayLoader();
+        $expectedTranslatorBag = new TranslatorBag();
+        $expectedTranslatorBag->addCatalogue($arrayLoader->load(
+            [
+                'how are you' => 'How are you?',
+                'welcome_header' => 'Hello world!',
+            ],
+            'en',
+            'no_filename'
+        ));
+        $expectedTranslatorBag->addCatalogue($arrayLoader->load(
+            [
+                'how are you' => 'Como estas?',
+                'welcome_header' => 'Hola mundo!',
+            ],
+            'es',
+            'no_filename'
+        ));
+        $this->assertEquals($expectedTranslatorBag->getCatalogues(), $translatorBag->getCatalogues());
+    }
+
+    #[RequiresPhpExtension('zip')]
+    public function testReadWithExportAsyncFailedProcess()
+    {
+        $firstResponse = static fn (): ResponseInterface => new JsonMockResponse(
+            ['error' => ['code' => 413, 'message' => 'test']],
+            ['http_code' => 413],
+        );
+        $secondResponse = static fn (): ResponseInterface => new JsonMockResponse(
+            ['process_id' => 123],
+        );
+        $thirdResponse = static fn (): ResponseInterface => new JsonMockResponse(
+            ['process' => ['status' => 'failed']],
+        );
+
+        $provider = self::createProvider((new MockHttpClient([$firstResponse, $secondResponse, $thirdResponse]))->withOptions([
+            'base_uri' => 'https://api.lokalise.com/api2/projects/PROJECT_ID/',
+            'headers' => ['X-Api-Token' => 'API_KEY'],
+        ]), new XliffFileLoader(), $this->getLogger(), $this->getDefaultLocale(), 'api.lokalise.com');
+
+        $this->expectException(ProviderException::class);
+        $provider->read(['foo'], ['baz']);
+    }
+
     public function testDeleteProcess()
     {
         $getKeysIdsForMessagesDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -666,12 +834,12 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => [
+            return new JsonMockResponse(['keys' => [
                 [
                     'key_name' => ['web' => 'a'],
                     'key_id' => 29,
                 ],
-            ]]));
+            ]]);
         };
 
         $getKeysIdsForValidatorsDomainResponse = function (string $method, string $url, array $options = []): ResponseInterface {
@@ -686,12 +854,12 @@ class LokaliseProviderTest extends ProviderTestCase
             $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys?'.http_build_query($expectedQuery), $url);
             $this->assertSame($expectedQuery, $options['query']);
 
-            return new MockResponse(json_encode(['keys' => [
+            return new JsonMockResponse(['keys' => [
                 [
                     'key_name' => ['web' => 'post.num_comments'],
                     'key_id' => 92,
                 ],
-            ]]));
+            ]]);
         };
 
         $deleteResponse = function (string $method, string $url, array $options = []): MockResponse {
@@ -728,6 +896,38 @@ class LokaliseProviderTest extends ProviderTestCase
         $provider->delete($translatorBag);
     }
 
+    public function testDeleteProcessWhenLocalTranslationsMatchLokaliseTranslations()
+    {
+        $failOnDeleteRequest = function (string $method, string $url, array $options = []): void {
+            $this->assertSame('DELETE', $method);
+            $this->assertSame('https://api.lokalise.com/api2/projects/PROJECT_ID/keys', $url);
+            $this->assertSame(json_encode(['keys' => []]), $options['body']);
+
+            $this->fail('DELETE request is invalid: an empty `keys` array was provided, resulting in a Lokalise API error');
+        };
+
+        // TranslatorBag with catalogues that do not store any message to mimic the behaviour of
+        // Symfony\Component\Translation\Command\TranslationPushCommand when local translations and Lokalise
+        // translations match without any changes in both translation sets
+        $translatorBag = new TranslatorBag();
+        $translatorBag->addCatalogue(new MessageCatalogue('en', []));
+        $translatorBag->addCatalogue(new MessageCatalogue('fr', []));
+
+        $mockHttpClient = new MockHttpClient([$failOnDeleteRequest], 'https://api.lokalise.com/api2/projects/PROJECT_ID/');
+
+        $provider = self::createProvider(
+            $mockHttpClient,
+            $this->getLoader(),
+            $this->getLogger(),
+            $this->getDefaultLocale(),
+            'api.lokalise.com'
+        );
+
+        $provider->delete($translatorBag);
+
+        $this->assertSame(0, $mockHttpClient->getRequestsCount());
+    }
+
     public static function getResponsesForOneLocaleAndOneDomain(): \Generator
     {
         $arrayLoader = new ArrayLoader();
@@ -739,27 +939,55 @@ class LokaliseProviderTest extends ProviderTestCase
         ], 'en'));
 
         yield ['en', 'messages', <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="index.greetings" resname="index.greetings">
-        <source>index.greetings</source>
-        <target>Welcome, {firstname}!</target>
-      </trans-unit>
-      <trans-unit id="index.hello" resname="index.hello">
-        <source>index.hello</source>
-        <target>Hello</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-            ,
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+              <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
+                <header>
+                  <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                </header>
+                <body>
+                  <trans-unit id="index.greetings" resname="index.greetings">
+                    <source>index.greetings</source>
+                    <target>Welcome, {firstname}!</target>
+                  </trans-unit>
+                  <trans-unit id="index.hello" resname="index.hello">
+                    <source>index.hello</source>
+                    <target>Hello</target>
+                  </trans-unit>
+                </body>
+              </file>
+            </xliff>
+            XLIFF,
             $expectedTranslatorBagEn,
+        ];
+
+        $expectedTranslatorBagEnUS = new TranslatorBag();
+        $expectedTranslatorBagEnUS->addCatalogue($arrayLoader->load([
+            'index.hello' => 'Hello',
+            'index.greetings' => 'Welcome, {firstname}!',
+        ], 'en_US'));
+
+        yield ['en_US', 'messages', <<<'XLIFF'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+              <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en-US">
+                <header>
+                  <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                </header>
+                <body>
+                  <trans-unit id="index.greetings" resname="index.greetings">
+                    <source>index.greetings</source>
+                    <target>Welcome, {firstname}!</target>
+                  </trans-unit>
+                  <trans-unit id="index.hello" resname="index.hello">
+                    <source>index.hello</source>
+                    <target>Hello</target>
+                  </trans-unit>
+                </body>
+              </file>
+            </xliff>
+            XLIFF,
+            $expectedTranslatorBagEnUS,
         ];
 
         $expectedTranslatorBagFr = new TranslatorBag();
@@ -769,26 +997,25 @@ XLIFF
         ], 'fr'));
 
         yield ['fr', 'messages', <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="index.greetings" resname="index.greetings">
-        <source>index.greetings</source>
-        <target>Bienvenue, {firstname} !</target>
-      </trans-unit>
-      <trans-unit id="index.hello" resname="index.hello">
-        <source>index.hello</source>
-        <target>Bonjour</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-            ,
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+              <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
+                <header>
+                  <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                </header>
+                <body>
+                  <trans-unit id="index.greetings" resname="index.greetings">
+                    <source>index.greetings</source>
+                    <target>Bienvenue, {firstname} !</target>
+                  </trans-unit>
+                  <trans-unit id="index.hello" resname="index.hello">
+                    <source>index.hello</source>
+                    <target>Bonjour</target>
+                  </trans-unit>
+                </body>
+              </file>
+            </xliff>
+            XLIFF,
             $expectedTranslatorBagFr,
         ];
     }
@@ -821,91 +1048,87 @@ XLIFF
             [
                 'en' => [
                     'messages' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="index.greetings" resname="index.greetings">
-        <source>index.greetings</source>
-        <target>Welcome, {firstname}!</target>
-      </trans-unit>
-      <trans-unit id="index.hello" resname="index.hello">
-        <source>index.hello</source>
-        <target>Hello</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-                    ,
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+                          <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
+                            <header>
+                              <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                            </header>
+                            <body>
+                              <trans-unit id="index.greetings" resname="index.greetings">
+                                <source>index.greetings</source>
+                                <target>Welcome, {firstname}!</target>
+                              </trans-unit>
+                              <trans-unit id="index.hello" resname="index.hello">
+                                <source>index.hello</source>
+                                <target>Hello</target>
+                              </trans-unit>
+                            </body>
+                          </file>
+                        </xliff>
+                        XLIFF,
                     'validators' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="lastname.error" resname="lastname.error">
-        <source>lastname.error</source>
-        <target>Lastname must contains only letters.</target>
-      </trans-unit>
-      <trans-unit id="firstname.error" resname="firstname.error">
-        <source>firstname.error</source>
-        <target>Firstname must contains only letters.</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-                    ,
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+                          <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="en">
+                            <header>
+                              <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                            </header>
+                            <body>
+                              <trans-unit id="lastname.error" resname="lastname.error">
+                                <source>lastname.error</source>
+                                <target>Lastname must contains only letters.</target>
+                              </trans-unit>
+                              <trans-unit id="firstname.error" resname="firstname.error">
+                                <source>firstname.error</source>
+                                <target>Firstname must contains only letters.</target>
+                              </trans-unit>
+                            </body>
+                          </file>
+                        </xliff>
+                        XLIFF,
                 ],
                 'fr' => [
                     'messages' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="index.greetings" resname="index.greetings">
-        <source>index.greetings</source>
-        <target>Bienvenue, {firstname} !</target>
-      </trans-unit>
-      <trans-unit id="index.hello" resname="index.hello">
-        <source>index.hello</source>
-        <target>Bonjour</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-                    ,
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+                          <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
+                            <header>
+                              <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                            </header>
+                            <body>
+                              <trans-unit id="index.greetings" resname="index.greetings">
+                                <source>index.greetings</source>
+                                <target>Bienvenue, {firstname} !</target>
+                              </trans-unit>
+                              <trans-unit id="index.hello" resname="index.hello">
+                                <source>index.hello</source>
+                                <target>Bonjour</target>
+                              </trans-unit>
+                            </body>
+                          </file>
+                        </xliff>
+                        XLIFF,
                     'validators' => <<<'XLIFF'
-<?xml version="1.0" encoding="UTF-8"?>
-<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-  <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
-    <header>
-      <tool tool-id="lokalise.com" tool-name="Lokalise"/>
-    </header>
-    <body>
-      <trans-unit id="lastname.error" resname="lastname.error">
-        <source>lastname.error</source>
-        <target>Le nom de famille ne peut contenir que des lettres.</target>
-      </trans-unit>
-      <trans-unit id="firstname.error" resname="firstname.error">
-        <source>firstname.error</source>
-        <target>Le prénom ne peut contenir que des lettres.</target>
-      </trans-unit>
-    </body>
-  </file>
-</xliff>
-XLIFF
-                    ,
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+                          <file original="" datatype="plaintext" xml:space="preserve" source-language="en" target-language="fr">
+                            <header>
+                              <tool tool-id="lokalise.com" tool-name="Lokalise"/>
+                            </header>
+                            <body>
+                              <trans-unit id="lastname.error" resname="lastname.error">
+                                <source>lastname.error</source>
+                                <target>Le nom de famille ne peut contenir que des lettres.</target>
+                              </trans-unit>
+                              <trans-unit id="firstname.error" resname="firstname.error">
+                                <source>firstname.error</source>
+                                <target>Le prénom ne peut contenir que des lettres.</target>
+                              </trans-unit>
+                            </body>
+                          </file>
+                        </xliff>
+                        XLIFF,
                 ],
             ],
             $expectedTranslatorBag,

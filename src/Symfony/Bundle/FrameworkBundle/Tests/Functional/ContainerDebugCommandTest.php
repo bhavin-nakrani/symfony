@@ -11,6 +11,8 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Tests\Fixtures\BackslashClass;
 use Symfony\Bundle\FrameworkBundle\Tests\Fixtures\ContainerExcluded;
@@ -18,9 +20,7 @@ use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\Console\Tester\CommandCompletionTester;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
-/**
- * @group functional
- */
+#[Group('functional')]
 class ContainerDebugCommandTest extends AbstractWebTestCase
 {
     public function testDumpContainerIfNotExists()
@@ -53,7 +53,7 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
 
     public function testNoDumpedXML()
     {
-        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true, 'debug.container.dump' => false]);
+        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'no_dump.yml', 'debug' => true]);
 
         $application = new Application(static::$kernel);
         $application->setAutoExit(false);
@@ -62,6 +62,89 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
         $tester->run(['command' => 'debug:container']);
 
         $this->assertStringContainsString('public', $tester->getDisplay());
+    }
+
+    public function testDecorationStack()
+    {
+        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml']);
+
+        $application = new Application(static::$kernel);
+        $application->setAutoExit(false);
+
+        $tester = new ApplicationTester($application);
+
+        // Decoration stack should be displayed by default
+        $tester->run(['command' => 'debug:container', 'name' => 'original_service']);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Decoration Stack', $display);
+
+        // Check for specific stack items
+        $this->assertStringContainsString('Symfony\Bundle\FrameworkBundle\Tests\Fixtures\BackslashClass', $display);
+        $this->assertStringContainsString('Symfony\Bundle\FrameworkBundle\Tests\Fixtures\WarmedClass', $display);
+        $this->assertStringContainsString('Symfony\Bundle\FrameworkBundle\Tests\Fixtures\DeclaredClass', $display);
+
+        // Ensure the service IDs are present in the stack
+        $this->assertStringContainsString('original_service', $display);
+        $this->assertStringContainsString('decorator_1', $display);
+        $this->assertStringContainsString('decorator_2', $display);
+    }
+
+    public function testDecorationStackTxtFormat()
+    {
+        $output = $this->runDecorationStackWithFormat('txt');
+
+        $this->assertStringContainsString('Decoration Stack', $output, 'Failed asserting decoration stack in txt format');
+        $this->assertStringContainsString('original_service', $output, 'Failed asserting service name in txt format');
+    }
+
+    public function testDecorationStackJsonFormat()
+    {
+        $output = $this->runDecorationStackWithFormat('json');
+
+        $data = json_decode($output, true);
+        $this->assertIsArray($data, "Failed asserting output is valid JSON: $output");
+
+        if (isset($data[1])) {
+            $this->assertArrayHasKey('decoration_stack', $data[1], 'Failed checking for decoration_stack key in JSON output (index 1). Available keys: '.implode(', ', array_keys($data[1])));
+            $this->assertIsArray($data[1]['decoration_stack']);
+            $this->assertGreaterThan(1, \count($data[1]['decoration_stack']));
+        } else {
+            $this->assertArrayHasKey('decoration_stack', $data, 'Failed checking for decoration_stack key in JSON output. Available keys: '.implode(', ', array_keys($data)));
+            $this->assertIsArray($data['decoration_stack']);
+            $this->assertGreaterThan(1, \count($data['decoration_stack']));
+        }
+    }
+
+    public function testDecorationStackXmlFormat()
+    {
+        $output = $this->runDecorationStackWithFormat('xml');
+
+        $this->assertStringContainsString('<decoration-stack>', $output, 'Failed asserting XML tag in output');
+        $this->assertStringContainsString('id="original_service"', $output);
+    }
+
+    public function testDecorationStackMdFormat()
+    {
+        $output = $this->runDecorationStackWithFormat('md');
+
+        $this->assertStringContainsString('Decoration Stack', $output, 'Failed asserting decoration stack in md format');
+        $this->assertStringContainsString('original_service', $output, 'Failed asserting service name in md format');
+    }
+
+    public function testNoDecorationStackForNonDecoratedService()
+    {
+        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml']);
+
+        $application = new Application(static::$kernel);
+        $application->setAutoExit(false);
+
+        $tester = new ApplicationTester($application);
+        // Use a service that is not decorated
+        $tester->run(['command' => 'debug:container', 'name' => 'console.command.container_debug']);
+        $display = $tester->getDisplay();
+
+        // Decoration stack section should NOT appear for non-decorated services
+        $this->assertStringNotContainsString('Decoration Stack', $display);
     }
 
     public function testPrivateAlias()
@@ -94,10 +177,10 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
         $tester = new ApplicationTester($application);
 
         $tester->run(['command' => 'debug:container', 'name' => 'deprecated', '--format' => 'txt']);
-        $this->assertStringContainsString('[WARNING] The "deprecated" service is deprecated since foo/bar 1.9 and will be removed in 2.0', $tester->getDisplay());
+        $this->assertStringContainsString('The "deprecated" service is deprecated since foo/bar 1.9 and will be removed in 2.0', preg_replace('/\s+/', ' ', $tester->getDisplay()));
 
         $tester->run(['command' => 'debug:container', 'name' => 'deprecated_alias', '--format' => 'txt']);
-        $this->assertStringContainsString('[WARNING] The "deprecated_alias" alias is deprecated since foo/bar 1.9 and will be removed in 2.0', $tester->getDisplay());
+        $this->assertStringContainsString('The "deprecated_alias" alias is deprecated since foo/bar 1.9 and will be removed in 2.0', preg_replace('/\s+/', ' ', $tester->getDisplay()));
     }
 
     public function testExcludedService()
@@ -113,9 +196,7 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
         $this->assertStringNotContainsString(ContainerExcluded::class, $tester->getDisplay());
     }
 
-    /**
-     * @dataProvider provideIgnoreBackslashWhenFindingService
-     */
+    #[DataProvider('provideIgnoreBackslashWhenFindingService')]
     public function testIgnoreBackslashWhenFindingService(string $validServiceId)
     {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml']);
@@ -139,19 +220,90 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
         $tester->setInputs(['0']);
         $tester->run(['command' => 'debug:container', '--tag' => 'kernel.'], ['decorated' => false]);
 
-        $this->assertStringContainsString('Select one of the following tags to display its information', $tester->getDisplay());
-        $this->assertStringContainsString('[0] kernel.event_subscriber', $tester->getDisplay());
-        $this->assertStringContainsString('[1] kernel.locale_aware', $tester->getDisplay());
-        $this->assertStringContainsString('[2] kernel.cache_warmer', $tester->getDisplay());
-        $this->assertStringContainsString('[3] kernel.fragment_renderer', $tester->getDisplay());
-        $this->assertStringContainsString('[4] kernel.reset', $tester->getDisplay());
-        $this->assertStringContainsString('[5] kernel.cache_clearer', $tester->getDisplay());
-        $this->assertStringContainsString('Symfony Container Services Tagged with "kernel.event_subscriber" Tag', $tester->getDisplay());
+        $this->assertStringMatchesFormat(<<<EOTXT
+
+             Select one of the following tags to display its information:
+            %A
+              [%d] kernel.reset
+            %A
+
+            Symfony Container Services Tagged with "kernel.%a" Tag
+            %A
+            EOTXT,
+            $tester->getDisplay()
+        );
+    }
+
+    public function testDescribeUnknownParameter()
+    {
+        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
+
+        $application = new Application(static::$kernel);
+        $application->setAutoExit(false);
+
+        $tester = new ApplicationTester($application);
+        $tester->run(['command' => 'debug:container', '--parameter' => '.unknown']);
+
+        $this->assertStringContainsString('You have requested a non-existent parameter ".unknown".', $tester->getDisplay());
     }
 
     public function testDescribeEnvVars()
     {
+        $_SERVER['SYMFONY_DOTENV_VARS'] = 'APP_FOO,APP_BAR,APP_BAZ';
         putenv('REAL=value');
+        putenv('APP_FOO=foo');
+        putenv('APP_BAR=bar');
+        putenv('APP_BAZ=baz');
+
+        try {
+            $display = $this->runEnvVarsCommand()->getDisplay(true);
+
+            $this->assertMatchesRegularExpression('/Name\s+Default value\s+Real value\s+Used/', $display);
+
+            // APP_FOO has a container default and APP_BAR has nothing, but no service reads either,
+            // so both are unused; APP_BAZ is in .env and read by a service, so it is used
+            $this->assertMatchesRegularExpression('/^  APP_BAR\s+n\/a\s+"bar"\s+no\s*$/m', $display);
+            $this->assertMatchesRegularExpression('/^  APP_BAZ\s+n\/a\s+"baz"\s+yes\s*$/m', $display);
+            $this->assertMatchesRegularExpression('/^  APP_FOO\s+"foo"\s+"foo"\s+no\s*$/m', $display);
+            $this->assertMatchesRegularExpression('/^  JSON\s+"\[1, "2.5", 3\]"\s+n\/a\s+yes\s*$/m', $display);
+            $this->assertMatchesRegularExpression('/^  REAL\s+n\/a\s+"value"\s+yes\s*$/m', $display);
+            $this->assertMatchesRegularExpression('/^  UNKNOWN\s+n\/a\s+n\/a\s+yes\s*$/m', $display);
+
+            // variables the framework itself reads are listed, and are not reported as missing
+            // because their placeholder carries a "default" fallback
+            $this->assertMatchesRegularExpression('/^  SYMFONY_TRUSTED_HOSTS\s+n\/a\s+\S+\s+yes\s*$/m', $display);
+            $this->assertStringContainsString('The following variables are missing:', $display);
+            $this->assertStringContainsString('* UNKNOWN', $display);
+            $this->assertStringNotContainsString('* SYMFONY_TRUSTED_HOSTS', $display);
+            $this->assertStringNotContainsString('* APP_RUNTIME_ENV', $display);
+        } finally {
+            putenv('REAL');
+            putenv('APP_FOO');
+            putenv('APP_BAR');
+            putenv('APP_BAZ');
+            unset($_SERVER['SYMFONY_DOTENV_VARS']);
+        }
+    }
+
+    public function testDescribeEnvVarsWithoutDotenv()
+    {
+        putenv('REAL=value');
+
+        try {
+            $display = $this->runEnvVarsCommand()->getDisplay(true);
+
+            // an absent SYMFONY_DOTENV_VARS used to add a row with no name and a count of its own
+            $this->assertDoesNotMatchRegularExpression('/^\s+n\/a\s+n\/a\s+(yes|no)\s*$/m', $display);
+            $this->assertStringNotContainsString('* '.\PHP_EOL, $display);
+            $this->assertMatchesRegularExpression('/^  REAL\s+n\/a\s+"value"\s+yes\s*$/m', $display);
+            $this->assertStringNotContainsString('APP_BAR', $display);
+        } finally {
+            putenv('REAL');
+        }
+    }
+
+    private function runEnvVarsCommand(): ApplicationTester
+    {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
 
         $application = new Application(static::$kernel);
@@ -162,29 +314,7 @@ class ContainerDebugCommandTest extends AbstractWebTestCase
         $tester = new ApplicationTester($application);
         $tester->run(['command' => 'debug:container', '--env-vars' => true], ['decorated' => false]);
 
-        $this->assertStringMatchesFormat(<<<'TXT'
-
-Symfony Container Environment Variables
-=======================================
-
- --------- ----------------- ------------%w
-  Name      Default value     Real value%w
- --------- ----------------- ------------%w
-  JSON      "[1, "2.5", 3]"   n/a%w
-  REAL      n/a               "value"%w
-  UNKNOWN   n/a               n/a%w
- --------- ----------------- ------------%w
-
- // Note real values might be different between web and CLI.%w
-
- [WARNING] The following variables are missing:%w
-
- * UNKNOWN
-
-TXT
-            , $tester->getDisplay(true));
-
-        putenv('REAL');
+        return $tester;
     }
 
     public function testDescribeEnvVar()
@@ -205,15 +335,15 @@ TXT
     public function testGetDeprecation()
     {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
-        $path = sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
+        $path = \sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
         touch($path);
         file_put_contents($path, serialize([[
             'type' => 16384,
             'message' => 'The "Symfony\Bundle\FrameworkBundle\Controller\Controller" class is deprecated since Symfony 4.2, use Symfony\Bundle\FrameworkBundle\Controller\AbstractController instead.',
-            'file' => '/home/hamza/projet/contrib/sf/vendor/symfony/framework-bundle/Controller/Controller.php',
+            'file' => '/home/hamza/project/contrib/sf/vendor/symfony/framework-bundle/Controller/Controller.php',
             'line' => 17,
             'trace' => [[
-                'file' => '/home/hamza/projet/contrib/sf/src/Controller/DefaultController.php',
+                'file' => '/home/hamza/project/contrib/sf/src/Controller/DefaultController.php',
                 'line' => 9,
                 'function' => 'spl_autoload_call',
             ]],
@@ -229,13 +359,13 @@ TXT
 
         $tester->assertCommandIsSuccessful();
         $this->assertStringContainsString('Symfony\Bundle\FrameworkBundle\Controller\Controller', $tester->getDisplay());
-        $this->assertStringContainsString('/home/hamza/projet/contrib/sf/vendor/symfony/framework-bundle/Controller/Controller.php', $tester->getDisplay());
+        $this->assertStringContainsString('/home/hamza/project/contrib/sf/vendor/symfony/framework-bundle/Controller/Controller.php', $tester->getDisplay());
     }
 
     public function testGetDeprecationNone()
     {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
-        $path = sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
+        $path = \sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
         touch($path);
         file_put_contents($path, serialize([]));
 
@@ -254,7 +384,7 @@ TXT
     public function testGetDeprecationNoFile()
     {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
-        $path = sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
+        $path = \sprintf('%s/%sDeprecations.log', static::$kernel->getContainer()->getParameter('kernel.build_dir'), static::$kernel->getContainer()->getParameter('kernel.container_class'));
         @unlink($path);
 
         $application = new Application(static::$kernel);
@@ -269,7 +399,7 @@ TXT
         $this->assertStringContainsString('[WARNING] The deprecation file does not exist', $tester->getDisplay());
     }
 
-    public static function provideIgnoreBackslashWhenFindingService()
+    public static function provideIgnoreBackslashWhenFindingService(): array
     {
         return [
             [BackslashClass::class],
@@ -278,9 +408,7 @@ TXT
         ];
     }
 
-    /**
-     * @dataProvider provideCompletionSuggestions
-     */
+    #[DataProvider('provideCompletionSuggestions')]
     public function testComplete(array $input, array $expectedSuggestions, array $notExpectedSuggestions = [])
     {
         static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml', 'debug' => true]);
@@ -297,7 +425,7 @@ TXT
         }
     }
 
-    public static function provideCompletionSuggestions()
+    public static function provideCompletionSuggestions(): iterable
     {
         $serviceId = 'console.command.container_debug';
         $hiddenServiceId = '.console.command.container_debug.lazy';
@@ -340,5 +468,18 @@ TXT
             ['--format', ''],
             ['txt', 'xml', 'json', 'md'],
         ];
+    }
+
+    private function runDecorationStackWithFormat(string $format): string
+    {
+        static::bootKernel(['test_case' => 'ContainerDebug', 'root_config' => 'config.yml']);
+
+        $application = new Application(static::$kernel);
+        $application->setAutoExit(false);
+
+        $tester = new ApplicationTester($application);
+        $tester->run(['command' => 'debug:container', 'name' => 'original_service', '--format' => $format]);
+
+        return $tester->getDisplay();
     }
 }

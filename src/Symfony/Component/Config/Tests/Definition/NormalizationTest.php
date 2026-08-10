@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Config\Tests\Definition;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
@@ -18,9 +19,7 @@ use Symfony\Component\Config\Definition\NodeInterface;
 
 class NormalizationTest extends TestCase
 {
-    /**
-     * @dataProvider getEncoderTests
-     */
+    #[DataProvider('getEncoderTests')]
     public function testNormalizeEncoders($denormalized)
     {
         $tb = new TreeBuilder('root_name', 'array');
@@ -31,7 +30,7 @@ class NormalizationTest extends TestCase
                     ->node('encoders', 'array')
                         ->useAttributeAsKey('class')
                         ->prototype('array')
-                            ->beforeNormalization()->ifString()->then(fn ($v) => ['algorithm' => $v])->end()
+                            ->beforeNormalization()->ifString()->then(static fn ($v) => ['algorithm' => $v])->end()
                             ->children()
                                 ->node('algorithm', 'scalar')->end()
                             ->end()
@@ -88,12 +87,10 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(fn ($v) => [$v], $configs);
+        return array_map(static fn ($v) => [$v], $configs);
     }
 
-    /**
-     * @dataProvider getAnonymousKeysTests
-     */
+    #[DataProvider('getAnonymousKeysTests')]
     public function testAnonymousKeysArray($denormalized)
     {
         $tb = new TreeBuilder('root', 'array');
@@ -134,12 +131,10 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(fn ($v) => [$v], $configs);
+        return array_map(static fn ($v) => [$v], $configs);
     }
 
-    /**
-     * @dataProvider getNumericKeysTests
-     */
+    #[DataProvider('getNumericKeysTests')]
     public function testNumericKeysAsAttributes($denormalized)
     {
         $normalized = [
@@ -165,18 +160,19 @@ class NormalizationTest extends TestCase
             ],
         ];
 
-        return array_map(fn ($v) => [$v], $configs);
+        return array_map(static fn ($v) => [$v], $configs);
     }
 
     public function testNonAssociativeArrayThrowsExceptionIfAttributeNotSet()
     {
-        $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('The attribute "id" must be set for path "root.thing".');
         $denormalized = [
             'thing' => [
                 ['foo', 'bar'], ['baz', 'qux'],
             ],
         ];
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('The attribute "id" must be set for path "root.thing".');
 
         $this->assertNormalized($this->getNumericKeysTestTree(), $denormalized, []);
     }

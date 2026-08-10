@@ -506,9 +506,13 @@ return [
             'SHP',
             'Keramatly Ýelena adasynyň funty',
         ],
+        'SLE' => [
+            'SLE',
+            'Sýerra-Leone leony',
+        ],
         'SLL' => [
             'SLL',
-            'Sýerra-Leone leony',
+            'Sýerra-Leone leony (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -622,6 +626,10 @@ return [
             'EC$',
             'Gündogar karib dollary',
         ],
+        'XCG' => [
+            'Kg.',
+            'karib guldeni',
+        ],
         'XOF' => [
             'F CFA',
             'KFA BCEAO franky',
@@ -641,6 +649,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Zambiýa kwaçasy',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabwe altyny',
         ],
     ],
 ];

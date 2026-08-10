@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Argument\BoundArgument;
 use Symfony\Component\DependencyInjection\Compiler\AnalyzeServiceReferencesPass;
@@ -41,7 +42,6 @@ class CheckExceptionOnInvalidReferenceBehaviorPassTest extends TestCase
 
     public function testProcessThrowsExceptionOnInvalidReference()
     {
-        $this->expectException(ServiceNotFoundException::class);
         $container = new ContainerBuilder();
 
         $container
@@ -49,12 +49,13 @@ class CheckExceptionOnInvalidReferenceBehaviorPassTest extends TestCase
             ->addArgument(new Reference('b'))
         ;
 
+        $this->expectException(ServiceNotFoundException::class);
+
         $this->process($container);
     }
 
     public function testProcessThrowsExceptionOnInvalidReferenceFromInlinedDefinition()
     {
-        $this->expectException(ServiceNotFoundException::class);
         $container = new ContainerBuilder();
 
         $def = new Definition();
@@ -64,6 +65,8 @@ class CheckExceptionOnInvalidReferenceBehaviorPassTest extends TestCase
             ->register('a', '\stdClass')
             ->addArgument($def)
         ;
+
+        $this->expectException(ServiceNotFoundException::class);
 
         $this->process($container);
     }
@@ -82,36 +85,46 @@ class CheckExceptionOnInvalidReferenceBehaviorPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function testWithErroredServiceLocator()
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function testWithErroredServiceLocator(bool $inline)
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The service "foo" in the container provided to "bar" has a dependency on a non-existent service "baz".');
         $container = new ContainerBuilder();
 
         ServiceLocatorTagPass::register($container, ['foo' => new Reference('baz')], 'bar');
 
         (new AnalyzeServiceReferencesPass())->process($container);
-        (new InlineServiceDefinitionsPass())->process($container);
+        if ($inline) {
+            (new InlineServiceDefinitionsPass())->process($container);
+        }
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The service "foo" in the container provided to "bar" has a dependency on a non-existent service "baz".');
+
         $this->process($container);
     }
 
-    public function testWithErroredHiddenService()
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function testWithErroredHiddenService(bool $inline)
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The service "bar" has a dependency on a non-existent service "foo".');
         $container = new ContainerBuilder();
 
         ServiceLocatorTagPass::register($container, ['foo' => new Reference('foo')], 'bar');
 
         (new AnalyzeServiceReferencesPass())->process($container);
-        (new InlineServiceDefinitionsPass())->process($container);
+        if ($inline) {
+            (new InlineServiceDefinitionsPass())->process($container);
+        }
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The service "bar" has a dependency on a non-existent service "foo".');
+
         $this->process($container);
     }
 
     public function testProcessThrowsExceptionOnInvalidReferenceWithAlternatives()
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The service "a" has a dependency on a non-existent service "@ccc". Did you mean this: "ccc"?');
         $container = new ContainerBuilder();
 
         $container
@@ -121,18 +134,21 @@ class CheckExceptionOnInvalidReferenceBehaviorPassTest extends TestCase
         $container
             ->register('ccc', '\stdClass');
 
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The service "a" has a dependency on a non-existent service "@ccc". Did you mean this: "ccc"?');
+
         $this->process($container);
     }
 
     public function testCurrentIdIsExcludedFromAlternatives()
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The service "app.my_service" has a dependency on a non-existent service "app.my_service2".');
-
         $container = new ContainerBuilder();
         $container
             ->register('app.my_service', \stdClass::class)
             ->addArgument(new Reference('app.my_service2'));
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The service "app.my_service" has a dependency on a non-existent service "app.my_service2".');
 
         $this->process($container);
     }

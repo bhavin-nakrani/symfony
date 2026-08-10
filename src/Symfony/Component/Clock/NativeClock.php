@@ -20,18 +20,17 @@ final class NativeClock implements ClockInterface
 {
     private \DateTimeZone $timezone;
 
-    public function __construct(\DateTimeZone|string $timezone = null)
+    /**
+     * @throws \DateInvalidTimeZoneException When $timezone is invalid
+     */
+    public function __construct(\DateTimeZone|string|null $timezone = null)
     {
-        if (\is_string($timezone ??= date_default_timezone_get())) {
-            $this->timezone = new \DateTimeZone($timezone);
-        } else {
-            $this->timezone = $timezone;
-        }
+        $this->timezone = \is_string($timezone ??= date_default_timezone_get()) ? $this->withTimeZone($timezone)->timezone : $timezone;
     }
 
-    public function now(): \DateTimeImmutable
+    public function now(): DatePoint
     {
-        return new \DateTimeImmutable('now', $this->timezone);
+        return DatePoint::createFromInterface(new \DateTimeImmutable('now', $this->timezone));
     }
 
     public function sleep(float|int $seconds): void
@@ -45,10 +44,17 @@ final class NativeClock implements ClockInterface
         }
     }
 
+    /**
+     * @throws \DateInvalidTimeZoneException When $timezone is invalid
+     */
     public function withTimeZone(\DateTimeZone|string $timezone): static
     {
+        if (\is_string($timezone)) {
+            $timezone = new \DateTimeZone($timezone);
+        }
+
         $clone = clone $this;
-        $clone->timezone = \is_string($timezone) ? new \DateTimeZone($timezone) : $timezone;
+        $clone->timezone = $timezone;
 
         return $clone;
     }

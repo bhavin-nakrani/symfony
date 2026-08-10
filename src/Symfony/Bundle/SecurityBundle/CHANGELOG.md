@@ -1,12 +1,100 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add `allowed_time_drift` option to the OIDC token handler configuration
+ * Allow disabling the redirection on successful logout by passing `null` to the `target` option
+ * Deprecate the `remember_me` option of the `form_login`, `json_login`, `login_link`, and `access_token` authenticators, as it has no effect
+ * Add the `ldap_users_only` option to the LDAP authenticators, to bind only `LdapUser` instances against the LDAP server
+ * Show the deauthentication reason and the responsible user providers in the security profiler panel
+ * Serve the CSRF token id of a firewall through the `csrf_token_manager` it configures, so that `csrf_token()` no longer mints a token the firewall rejects
+ * Add `path`, `enable_csrf`, `csrf_token_id`, `csrf_parameter` and `csrf_token_manager` options to the `switch_user` firewall configuration to restrict user switching to a dedicated (POST-only) route protected by a CSRF token
+
+8.1
+---
+
+ * Add support for the `clientHints`, `prefetchCache`, and `prerenderCache` `ClearSite-Data` directives
+ * Add support for `#[AsTaggedItem]` attribute to configure voter priority
+ * Add `enforce_key_usage_verification` option to the OIDC token handler discovery configuration to opt out of filtering keys without explicit signature usage
+ * Deprecate the `security.erase_credentials` configuration option and the `security.authentication.manager.erase_credentials` container parameter, as the `eraseCredentials()` method was removed in Symfony 8.0
+
+8.0
+---
+
+ * Remove the deprecated `hide_user_not_found` configuration option, use `expose_security_errors` instead
+ * Remove the deprecated `algorithm` and `key` options from the OIDC token handler configuration, use `algorithms` and `keyset` instead
+ * Remove `LazyFirewallContext::__invoke()`
+ * Make `ExpressionCacheWarmer` class `final`
+ * Remove autowiring aliases for `RateLimiterFactory`; use `RateLimiterFactoryInterface` instead
+
+7.4
+---
+
+ * Add `debug:security:role-hierarchy` command to dump role hierarchy graphs in the Mermaid.js flowchart format
+ * Add `Security::getAccessDecision()` and `getAccessDecisionForUser()` helpers
+ * Add options to configure a cache pool and storage service for login throttling rate limiters
+ * Register alias for argument for password hasher when its key is not a class name:
+
+    With the following configuration:
+    ```yaml
+    security:
+      password_hashers:
+          recovery_code: auto
+    ```
+
+    It is possible to inject the `recovery_code` password hasher in a service:
+
+    ```php
+    public function __construct(
+        #[Target('recovery_code')]
+        private readonly PasswordHasherInterface $passwordHasher,
+    ) {
+    }
+    ```
+ * Deprecate `LazyFirewallContext::__invoke()`
+
+7.3
+---
+
+ * Add `Security::isGrantedForUser()` to test user authorization without relying on the session. For example, users not currently logged in, or while processing a message from a message queue
+ * Add encryption support to `OidcTokenHandler` (JWE)
+ * Add `expose_security_errors` config option to display `AccountStatusException`
+ * Deprecate the `security.hide_user_not_found` config option in favor of `security.expose_security_errors`
+ * Add ability to fetch LDAP roles
+ * Add `OAuth2TokenHandlerFactory` for `AccessTokenFactory`
+ * Add discovery support to `OidcTokenHandler` and `OidcUserInfoTokenHandler`
+
+7.2
+---
+
+ * Allow configuring the secret used to sign login links
+ * Allow passing optional passport attributes to `Security::login()`
+
+7.1
+---
+
+ * Mark class `ExpressionCacheWarmer` as `final`
+ * Support multiple signature algorithms for OIDC Token
+ * Support JWK or JWKSet for OIDC Token
+
+7.0
+---
+
+ * Enabling SecurityBundle and not configuring it is not allowed
+ * Remove the `enable_authenticator_manager` config option
+ * Remove the `security.firewalls.logout.csrf_token_generator` config option, use `security.firewalls.logout.csrf_token_manager` instead
+ * Remove the `require_previous_session` config option from authenticators
+
 6.4
 ---
 
  * Deprecate `Security::ACCESS_DENIED_ERROR`, `AUTHENTICATION_ERROR` and `LAST_USERNAME` constants, use the ones on `SecurityRequestAttributes` instead
  * Allow an array of `pattern` in firewall configuration
  * Add `$badges` argument to `Security::login`
+ * Deprecate the `require_previous_session` config option. Setting it has no effect anymore
+ * Add `LogoutRouteLoader`
 
 6.3
 ---

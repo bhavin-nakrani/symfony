@@ -23,7 +23,7 @@ interface BatchHandlerInterface
      * @return mixed The number of pending messages in the batch if $ack is not null,
      *               the result from handling the message otherwise
      */
-    // public function __invoke(object $message, Acknowledger $ack = null): mixed;
+    // public function __invoke(object $message, ?Acknowledger $ack = null): mixed;
 
     /**
      * Flushes any pending buffers.
@@ -32,3 +32,5 @@ interface BatchHandlerInterface
      */
     public function flush(bool $force): void;
 }
+
+// @php-cs-fixer-ignore no_superfluous_phpdoc_tags As long as `__invoke` method is commented out

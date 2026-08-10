@@ -12,6 +12,8 @@
 namespace Symfony\Component\Notifier\Bridge\LinkedIn\Tests;
 
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Notifier\Bridge\LinkedIn\LinkedInAuthorType;
 use Symfony\Component\Notifier\Bridge\LinkedIn\LinkedInTransport;
 use Symfony\Component\Notifier\Exception\LogicException;
 use Symfony\Component\Notifier\Exception\TransportException;
@@ -26,14 +28,15 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final class LinkedInTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): LinkedInTransport
+    public static function createTransport(?HttpClientInterface $client = null, string $authorType = 'person'): LinkedInTransport
     {
-        return (new LinkedInTransport('AuthToken', 'AccountId', $client ?? new MockHttpClient()))->setHost('host.test');
+        return (new LinkedInTransport('AuthToken', 'AccountId', $client ?? new MockHttpClient(), null, LinkedInAuthorType::from($authorType)))->setHost('host.test');
     }
 
     public static function toStringProvider(): iterable
     {
         yield ['linkedin://host.test', self::createTransport()];
+        yield ['linkedin://host.test?author=organization', self::createTransport(authorType: 'organization')];
     }
 
     public static function supportedMessagesProvider(): iterable
@@ -49,15 +52,7 @@ final class LinkedInTransportTest extends TransportTestCase
 
     public function testSendWithEmptyArrayResponseThrowsTransportException()
     {
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(500);
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn('[]');
-
-        $client = new MockHttpClient(static fn (): ResponseInterface => $response);
+        $client = new MockHttpClient(new MockResponse('[]', ['http_code' => 500]));
 
         $transport = self::createTransport($client);
 
@@ -71,16 +66,7 @@ final class LinkedInTransportTest extends TransportTestCase
         $this->expectException(TransportException::class);
         $this->expectExceptionMessage('testErrorCode');
 
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(400);
-
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn('testErrorCode');
-
-        $client = new MockHttpClient(static fn (): ResponseInterface => $response);
+        $client = new MockHttpClient(new MockResponse('testErrorCode', ['http_code' => 400]));
 
         $transport = self::createTransport($client);
 
@@ -90,16 +76,6 @@ final class LinkedInTransportTest extends TransportTestCase
     public function testSendWithOptions()
     {
         $message = 'testMessage';
-
-        $response = $this->createMock(ResponseInterface::class);
-
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(201);
-
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn(json_encode(['id' => '42']));
 
         $expectedBody = json_encode([
             'specificContent' => [
@@ -119,12 +95,11 @@ final class LinkedInTransportTest extends TransportTestCase
         ]);
 
         $client = new MockHttpClient(function (string $method, string $url, array $options = []) use (
-            $response,
             $expectedBody
         ): ResponseInterface {
             $this->assertSame($expectedBody, $options['body']);
 
-            return $response;
+            return new MockResponse(json_encode(['id' => '42']), ['http_code' => 201]);
         });
         $transport = self::createTransport($client);
 
@@ -134,16 +109,6 @@ final class LinkedInTransportTest extends TransportTestCase
     public function testSendWithNotification()
     {
         $message = 'testMessage';
-
-        $response = $this->createMock(ResponseInterface::class);
-
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(201);
-
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn(json_encode(['id' => '42']));
 
         $notification = new Notification($message);
         $chatMessage = ChatMessage::fromNotification($notification);
@@ -166,12 +131,11 @@ final class LinkedInTransportTest extends TransportTestCase
         ]);
 
         $client = new MockHttpClient(function (string $method, string $url, array $options = []) use (
-            $response,
             $expectedBody
         ): ResponseInterface {
             $this->assertSame($expectedBody, $options['body']);
 
-            return $response;
+            return new MockResponse(json_encode(['id' => '42']), ['http_code' => 201]);
         });
 
         $transport = self::createTransport($client);
@@ -179,14 +143,47 @@ final class LinkedInTransportTest extends TransportTestCase
         $transport->send($chatMessage);
     }
 
+    public function testSendWithOrganizationAuthor()
+    {
+        $message = 'testMessage';
+
+        $expectedBody = json_encode([
+            'specificContent' => [
+                'com.linkedin.ugc.ShareContent' => [
+                    'shareCommentary' => [
+                        'attributes' => [],
+                        'text' => 'testMessage',
+                    ],
+                    'shareMediaCategory' => 'NONE',
+                ],
+            ],
+            'visibility' => [
+                'com.linkedin.ugc.MemberNetworkVisibility' => 'PUBLIC',
+            ],
+            'lifecycleState' => 'PUBLISHED',
+            'author' => 'urn:li:organization:AccountId',
+        ]);
+
+        $client = new MockHttpClient(function (string $method, string $url, array $options = []) use (
+            $expectedBody
+        ): ResponseInterface {
+            $this->assertSame($expectedBody, $options['body']);
+
+            return new MockResponse(json_encode(['id' => '42']), ['http_code' => 201]);
+        });
+        $transport = self::createTransport($client, 'organization');
+
+        $transport->send(new ChatMessage($message));
+    }
+
     public function testSendWithInvalidOptions()
     {
         $this->expectException(LogicException::class);
 
-        $client = new MockHttpClient(fn (string $method, string $url, array $options = []): ResponseInterface => $this->createMock(ResponseInterface::class));
+        $client = new MockHttpClient(new MockResponse());
 
         $transport = self::createTransport($client);
 
-        $transport->send(new ChatMessage('testMessage', $this->createMock(MessageOptionsInterface::class)));
+        $transport->send(new ChatMessage('testMessage', $this->createStub(MessageOptionsInterface::class)));
     }
 }

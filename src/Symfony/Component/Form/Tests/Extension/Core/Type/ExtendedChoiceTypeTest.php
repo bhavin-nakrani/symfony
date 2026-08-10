@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\Tests\Fixtures\ChoiceTypeExtension;
@@ -18,9 +19,7 @@ use Symfony\Component\Form\Tests\Fixtures\LazyChoiceTypeExtension;
 
 class ExtendedChoiceTypeTest extends TestCase
 {
-    /**
-     * @dataProvider provideTestedTypes
-     */
+    #[DataProvider('provideTestedTypes')]
     public function testChoicesAreOverridden($type)
     {
         ChoiceTypeExtension::$extendedType = $type;
@@ -38,9 +37,7 @@ class ExtendedChoiceTypeTest extends TestCase
         $this->assertSame('b', $choices[1]->value);
     }
 
-    /**
-     * @dataProvider provideTestedTypes
-     */
+    #[DataProvider('provideTestedTypes')]
     public function testChoiceLoaderIsOverridden($type)
     {
         LazyChoiceTypeExtension::$extendedType = $type;
@@ -58,7 +55,7 @@ class ExtendedChoiceTypeTest extends TestCase
         $this->assertSame('lazy_b', $choices[1]->value);
     }
 
-    public static function provideTestedTypes()
+    public static function provideTestedTypes(): iterable
     {
         yield [CountryTypeTest::TESTED_TYPE];
         yield [CurrencyTypeTest::TESTED_TYPE];

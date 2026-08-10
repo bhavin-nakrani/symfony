@@ -15,22 +15,47 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\Compound;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
+use Symfony\Component\Validator\Constraints\Sequentially;
 
 class CompoundTest extends TestCase
 {
-    public function testItCannotRedefineConstraintsOption()
+    public function testGroupsAndPayload()
     {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('You can\'t redefine the "constraints" option. Use the "Symfony\Component\Validator\Constraints\Compound::getConstraints()" method instead.');
-        new EmptyCompound(['constraints' => [new NotBlank()]]);
+        $payload = new \stdClass();
+        $compound = new EmptyCompound(groups: ['my-group', 'my-other-group'], payload: $payload);
+
+        $this->assertSame(['my-group', 'my-other-group'], $compound->groups);
+        $this->assertSame($payload, $compound->payload);
     }
 
-    public function testCanDependOnNormalizedOptions()
+    public function testGroupsArePropagatedToNestedCompositeConstraints()
     {
-        $constraint = new ForwardingOptionCompound($min = 3);
+        $compound = new CompoundWithSequentially(groups: ['my-group']);
 
-        $this->assertSame($min, $constraint->constraints[0]->min);
+        $this->assertSame(['my-group'], $compound->groups);
+
+        $sequentially = $compound->constraints[0];
+        $this->assertInstanceOf(Sequentially::class, $sequentially);
+        $this->assertSame(['my-group'], $sequentially->groups);
+
+        foreach ($sequentially->constraints as $nestedConstraint) {
+            $this->assertSame(['my-group'], $nestedConstraint->groups);
+        }
+    }
+
+    public function testExplicitGroupsOnNestedCompositeArePreserved()
+    {
+        $compound = new CompoundWithExplicitlyGroupedSequentially(groups: ['outer', 'inner']);
+
+        $this->assertSame(['outer', 'inner'], $compound->groups);
+
+        $sequentially = $compound->constraints[0];
+        $this->assertInstanceOf(Sequentially::class, $sequentially);
+        $this->assertSame(['inner'], $sequentially->groups);
+
+        foreach ($sequentially->constraints as $nestedConstraint) {
+            $this->assertSame(['inner'], $nestedConstraint->groups);
+        }
     }
 }
 
@@ -42,19 +67,28 @@ class EmptyCompound extends Compound
     }
 }
 
-class ForwardingOptionCompound extends Compound
+class CompoundWithSequentially extends Compound
 {
-    public $min;
-
-    public function getDefaultOption(): ?string
-    {
-        return 'min';
-    }
-
     protected function getConstraints(array $options): array
     {
         return [
-            new Length(['min' => $options['min'] ?? null]),
+            new Sequentially([
+                new NotBlank(),
+                new Length(min: 3),
+            ]),
+        ];
+    }
+}
+
+class CompoundWithExplicitlyGroupedSequentially extends Compound
+{
+    protected function getConstraints(array $options): array
+    {
+        return [
+            new Sequentially(constraints: [
+                new NotBlank(),
+                new Length(min: 3),
+            ], groups: ['inner']),
         ];
     }
 }

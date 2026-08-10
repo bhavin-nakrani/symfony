@@ -11,17 +11,22 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\Test\TypeTestCase;
-use Symfony\Component\Form\Tests\VersionAwareTest;
 
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
 abstract class BaseTypeTestCase extends TypeTestCase
 {
-    use VersionAwareTest;
-
     public const TESTED_TYPE = '';
+
+    protected function setUp(): void
+    {
+        $this->dispatcher = new EventDispatcher();
+
+        parent::setUp();
+    }
 
     public function testPassDisabledAsOption()
     {
@@ -38,16 +43,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
         $this->assertEquals('name', $view->vars['id']);
         $this->assertEquals('name', $view->vars['name']);
         $this->assertEquals('name', $view->vars['full_name']);
-    }
-
-    public function testStripLeadingUnderscoresAndDigitsFromId()
-    {
-        $view = $this->factory->createNamed('_09name', $this->getTestedType(), null, $this->getTestOptions())
-            ->createView();
-
-        $this->assertEquals('name', $view->vars['id']);
-        $this->assertEquals('_09name', $view->vars['name']);
-        $this->assertEquals('_09name', $view->vars['full_name']);
     }
 
     public function testPassIdAndNameToViewWithParent()
@@ -124,8 +119,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testPassLabelTranslationParametersToView()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory->create($this->getTestedType(), null, array_merge($this->getTestOptions(), [
             'label_translation_parameters' => ['%param%' => 'value'],
         ]))
@@ -136,8 +129,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testPassAttrTranslationParametersToView()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory->create($this->getTestedType(), null, array_merge($this->getTestOptions(), [
             'attr_translation_parameters' => ['%param%' => 'value'],
         ]))
@@ -148,8 +139,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testInheritLabelTranslationParametersFromParent()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory
             ->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE, null, [
                 'label_translation_parameters' => ['%param%' => 'value'],
@@ -163,8 +152,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testInheritAttrTranslationParametersFromParent()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory
             ->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE, null, [
                 'attr_translation_parameters' => ['%param%' => 'value'],
@@ -178,8 +165,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testPreferOwnLabelTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory
             ->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE, null, [
                 'label_translation_parameters' => ['%parent_param%' => 'parent_value', '%override_param%' => 'parent_override_value'],
@@ -195,8 +180,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testPreferOwnAttrTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory
             ->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE, null, [
                 'attr_translation_parameters' => ['%parent_param%' => 'parent_value', '%override_param%' => 'parent_override_value'],
@@ -212,8 +195,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testDefaultLabelTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE)
             ->add('child', $this->getTestedType(), $this->getTestOptions())
             ->getForm()
@@ -224,8 +205,6 @@ abstract class BaseTypeTestCase extends TypeTestCase
 
     public function testDefaultAttrTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $view = $this->factory->createNamedBuilder('parent', FormTypeTest::TESTED_TYPE)
             ->add('child', $this->getTestedType(), $this->getTestOptions())
             ->getForm()

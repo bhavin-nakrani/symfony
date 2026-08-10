@@ -11,10 +11,13 @@
 
 namespace Symfony\Component\Console\Tests\Tester;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Helper\QuestionHelper;
+use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\Output;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Console\Tester\ApplicationTester;
 
@@ -29,8 +32,10 @@ class ApplicationTesterTest extends TestCase
         $this->application->setAutoExit(false);
         $this->application->register('foo')
             ->addArgument('foo')
-            ->setCode(function ($input, $output) {
+            ->setCode(static function (OutputInterface $output): int {
                 $output->writeln('foo');
+
+                return 0;
             })
         ;
 
@@ -65,11 +70,13 @@ class ApplicationTesterTest extends TestCase
     {
         $application = new Application();
         $application->setAutoExit(false);
-        $application->register('foo')->setCode(function ($input, $output) {
+        $application->register('foo')->setCode(static function (InputInterface $input, OutputInterface $output): int {
             $helper = new QuestionHelper();
             $helper->ask($input, $output, new Question('Q1'));
             $helper->ask($input, $output, new Question('Q2'));
             $helper->ask($input, $output, new Question('Q3'));
+
+            return 0;
         });
         $tester = new ApplicationTester($application);
 
@@ -85,14 +92,58 @@ class ApplicationTesterTest extends TestCase
         $this->tester->assertCommandIsSuccessful('->getStatusCode() returns the status code');
     }
 
+    #[DataProvider('provideShellVerbositySources')]
+    public function testShellVerbosityDoesNotOverrideInteractiveAndVerbosity(callable $setShellVerbosity, callable $cleanUp)
+    {
+        $setShellVerbosity();
+
+        try {
+            $application = new Application();
+            $application->setAutoExit(false);
+            $application->register('foo')
+                ->setCode(static function (InputInterface $input, OutputInterface $output): int {
+                    $output->writeln('foo');
+
+                    return 0;
+                })
+            ;
+
+            $tester = new ApplicationTester($application);
+            $tester->run(['command' => 'foo'], ['interactive' => true]);
+
+            $this->assertTrue($tester->getInput()->isInteractive());
+            $this->assertSame('foo'.\PHP_EOL, $tester->getDisplay());
+        } finally {
+            $cleanUp();
+        }
+    }
+
+    public static function provideShellVerbositySources(): iterable
+    {
+        yield 'putenv' => [
+            static function () { putenv('SHELL_VERBOSITY=-1'); },
+            static function () { putenv('SHELL_VERBOSITY'); },
+        ];
+        yield '$_ENV' => [
+            static function () { $_ENV['SHELL_VERBOSITY'] = '-1'; },
+            static function () { unset($_ENV['SHELL_VERBOSITY']); },
+        ];
+        yield '$_SERVER' => [
+            static function () { $_SERVER['SHELL_VERBOSITY'] = '-1'; },
+            static function () { unset($_SERVER['SHELL_VERBOSITY']); },
+        ];
+    }
+
     public function testErrorOutput()
     {
         $application = new Application();
         $application->setAutoExit(false);
         $application->register('foo')
             ->addArgument('foo')
-            ->setCode(function ($input, $output) {
+            ->setCode(static function (OutputInterface $output): int {
                 $output->getErrorOutput()->write('foo');
+
+                return 0;
             })
         ;
 

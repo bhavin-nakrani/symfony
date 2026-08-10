@@ -30,10 +30,7 @@ class AuthenticationException extends RuntimeException
         return $this->token;
     }
 
-    /**
-     * @return void
-     */
-    public function setToken(TokenInterface $token)
+    public function setToken(TokenInterface $token): void
     {
         $this->token = $token;
     }
@@ -76,15 +73,19 @@ class AuthenticationException extends RuntimeException
      */
     public function __unserialize(array $data): void
     {
+        if (($data[2] ?? null) instanceof \Stringable
+            || ($data[3] ?? null) instanceof \Stringable
+        ) {
+            throw new \BadMethodCallException('Cannot unserialize '.self::class);
+        }
+
         [$this->token, $this->code, $this->message, $this->file, $this->line] = $data;
     }
 
     /**
      * Message key to be used by the translation component.
-     *
-     * @return string
      */
-    public function getMessageKey()
+    public function getMessageKey(): string
     {
         return 'An authentication exception occurred.';
     }

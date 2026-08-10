@@ -46,37 +46,39 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  */
 class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthenticatorInterface
 {
-    private iterable $authenticators;
-    private TokenStorageInterface $tokenStorage;
-    private EventDispatcherInterface $eventDispatcher;
-    private bool $eraseCredentials;
-    private ?LoggerInterface $logger;
-    private string $firewallName;
-    private bool $hideUserNotFoundExceptions;
-    private array $requiredBadges;
-
     /**
      * @param iterable<mixed, AuthenticatorInterface> $authenticators
+     * @param ExposeSecurityLevel                     $exposeSecurityErrors Passing a bool is deprecated since Symfony 8.1
+     * @param string[]                                $requiredBadges
      */
-    public function __construct(iterable $authenticators, TokenStorageInterface $tokenStorage, EventDispatcherInterface $eventDispatcher, string $firewallName, LoggerInterface $logger = null, bool $eraseCredentials = true, bool $hideUserNotFoundExceptions = true, array $requiredBadges = [])
-    {
-        $this->authenticators = $authenticators;
-        $this->tokenStorage = $tokenStorage;
-        $this->eventDispatcher = $eventDispatcher;
-        $this->firewallName = $firewallName;
-        $this->logger = $logger;
-        $this->eraseCredentials = $eraseCredentials;
-        $this->hideUserNotFoundExceptions = $hideUserNotFoundExceptions;
-        $this->requiredBadges = $requiredBadges;
+    public function __construct(
+        private iterable $authenticators,
+        private TokenStorageInterface $tokenStorage,
+        private EventDispatcherInterface $eventDispatcher,
+        private string $firewallName,
+        private ?LoggerInterface $logger = null,
+        private ExposeSecurityLevel|bool $exposeSecurityErrors = ExposeSecurityLevel::None,
+        private array|ExposeSecurityLevel $requiredBadges = [],
+    ) {
+        if (\is_bool($exposeSecurityErrors)) {
+            trigger_deprecation('symfony/security-http', '8.1', 'Passing the "$eraseCredentials" argument to "%s::__construct()" is deprecated, as the "eraseCredentials()" method was removed in Symfony 8.0.', self::class);
+            $this->exposeSecurityErrors = $requiredBadges instanceof ExposeSecurityLevel ? $requiredBadges : ExposeSecurityLevel::None;
+            $this->requiredBadges = \func_num_args() > 7 ? func_get_arg(7) : [];
+        }
     }
 
     /**
-     * @param BadgeInterface[] $badges Optionally, pass some Passport badges to use for the manual login
+     * @param BadgeInterface[]     $badges     Optionally, pass some Passport badges to use for the manual login
+     * @param array<string, mixed> $attributes Optionally, pass some Passport attributes to use for the manual login
      */
-    public function authenticateUser(UserInterface $user, AuthenticatorInterface $authenticator, Request $request, array $badges = []): ?Response
+    public function authenticateUser(UserInterface $user, AuthenticatorInterface $authenticator, Request $request, array $badges = [], array $attributes = []): ?Response
     {
         // create an authentication token for the User
-        $passport = new SelfValidatingPassport(new UserBadge($user->getUserIdentifier(), fn () => $user), $badges);
+        $passport = new SelfValidatingPassport(new UserBadge($user->getUserIdentifier(), static fn () => $user), $badges);
+        foreach ($attributes as $k => $v) {
+            $passport->setAttribute($k, $v);
+        }
+
         $token = $authenticator->createToken($passport, $this->firewallName);
 
         // announce the authentication token
@@ -105,7 +107,7 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
             $this->logger?->debug('Checking support on authenticator.', ['firewall_name' => $this->firewallName, 'authenticator' => $authenticator::class]);
 
             if (!$authenticator instanceof AuthenticatorInterface) {
-                throw new \InvalidArgumentException(sprintf('Authenticator "%s" must implement "%s".', get_debug_type($authenticator), AuthenticatorInterface::class));
+                throw new \InvalidArgumentException(\sprintf('Authenticator "%s" must implement "%s".', get_debug_type($authenticator), AuthenticatorInterface::class));
             }
 
             if (false !== $supports = $authenticator->supports($request)) {
@@ -117,12 +119,12 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
             }
         }
 
+        $request->attributes->set('_security_skipped_authenticators', $skippedAuthenticators);
+        $request->attributes->set('_security_authenticators', $authenticators);
+
         if (!$authenticators) {
             return false;
         }
-
-        $request->attributes->set('_security_authenticators', $authenticators);
-        $request->attributes->set('_security_skipped_authenticators', $skippedAuthenticators);
 
         return $lazy ? null : true;
     }
@@ -183,7 +185,7 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
             $resolvedBadges = [];
             foreach ($passport->getBadges() as $badge) {
                 if (!$badge->isResolved()) {
-                    throw new BadCredentialsException(sprintf('Authentication failed: Security badge "%s" is not resolved, did you forget to register the correct listeners?', get_debug_type($badge)));
+                    throw new BadCredentialsException(\sprintf('Authentication failed: Security badge "%s" is not resolved, did you forget to register the correct listeners?', get_debug_type($badge)));
                 }
 
                 $resolvedBadges[] = $badge::class;
@@ -191,7 +193,7 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
 
             $missingRequiredBadges = array_diff($this->requiredBadges, $resolvedBadges);
             if ($missingRequiredBadges) {
-                throw new BadCredentialsException(sprintf('Authentication failed; Some badges marked as required by the firewall config are not available on the passport: "%s".', implode('", "', $missingRequiredBadges)));
+                throw new BadCredentialsException(\sprintf('Authentication failed; Some badges marked as required by the firewall config are not available on the passport: "%s".', implode('", "', $missingRequiredBadges)));
             }
 
             // create the authentication token
@@ -199,10 +201,6 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
 
             // announce the authentication token
             $authenticatedToken = $this->eventDispatcher->dispatch(new AuthenticationTokenCreatedEvent($authenticatedToken, $passport))->getAuthenticatedToken();
-
-            if (true === $this->eraseCredentials) {
-                $authenticatedToken->eraseCredentials();
-            }
 
             $this->eventDispatcher->dispatch(new AuthenticationSuccessEvent($authenticatedToken), AuthenticationEvents::AUTHENTICATION_SUCCESS);
 
@@ -252,7 +250,7 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
 
         // Avoid leaking error details in case of invalid user (e.g. user not found or invalid account status)
         // to prevent user enumeration via response content comparison
-        if ($this->hideUserNotFoundExceptions && ($authenticationException instanceof UserNotFoundException || ($authenticationException instanceof AccountStatusException && !$authenticationException instanceof CustomUserMessageAccountStatusException))) {
+        if ($this->isSensitiveException($authenticationException)) {
             $authenticationException = new BadCredentialsException('Bad credentials.', 0, $authenticationException);
         }
 
@@ -265,5 +263,18 @@ class AuthenticatorManager implements AuthenticatorManagerInterface, UserAuthent
 
         // returning null is ok, it means they want the request to continue
         return $loginFailureEvent->getResponse();
+    }
+
+    private function isSensitiveException(AuthenticationException $exception): bool
+    {
+        if (ExposeSecurityLevel::All !== $this->exposeSecurityErrors && $exception instanceof UserNotFoundException) {
+            return true;
+        }
+
+        if (ExposeSecurityLevel::None === $this->exposeSecurityErrors && $exception instanceof AccountStatusException && !$exception instanceof CustomUserMessageAccountStatusException) {
+            return true;
+        }
+
+        return false;
     }
 }

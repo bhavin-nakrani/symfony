@@ -11,6 +11,7 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Command;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Command\SecretsRemoveCommand;
 use Symfony\Bundle\FrameworkBundle\Secrets\AbstractVault;
@@ -18,15 +19,13 @@ use Symfony\Component\Console\Tester\CommandCompletionTester;
 
 class SecretsRemoveCommandTest extends TestCase
 {
-    /**
-     * @dataProvider provideCompletionSuggestions
-     */
+    #[DataProvider('provideCompletionSuggestions')]
     public function testComplete(bool $withLocalVault, array $input, array $expectedSuggestions)
     {
-        $vault = $this->createMock(AbstractVault::class);
+        $vault = $this->createStub(AbstractVault::class);
         $vault->method('list')->willReturn(['SECRET' => null, 'OTHER_SECRET' => null]);
         if ($withLocalVault) {
-            $localVault = $this->createMock(AbstractVault::class);
+            $localVault = $this->createStub(AbstractVault::class);
             $localVault->method('list')->willReturn(['SECRET' => null]);
         } else {
             $localVault = null;
@@ -37,7 +36,7 @@ class SecretsRemoveCommandTest extends TestCase
         $this->assertSame($expectedSuggestions, $suggestions);
     }
 
-    public static function provideCompletionSuggestions()
+    public static function provideCompletionSuggestions(): iterable
     {
         yield 'name' => [true, [''], ['SECRET', 'OTHER_SECRET']];
         yield '--local name (with local vault)' => [true, ['--local', ''], ['SECRET']];

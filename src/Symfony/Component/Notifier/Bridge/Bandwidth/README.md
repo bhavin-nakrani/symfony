@@ -12,12 +12,12 @@ BANDWIDTH_DSN=bandwidth://USERNAME:PASSWORD@default?from=FROM&account_id=ACCOUNT
 
 where:
 
-- `USERNAME` is your Bandwidth username
-- `PASSWORD` is your Bandwidth password
-- `FROM` is your sender
-- `ACCOUNT_ID` is your account ID
-- `APPLICATION_ID` is your application ID
-- `PRIORITY` is your priority (optional)
+ - `USERNAME` is your Bandwidth username
+ - `PASSWORD` is your Bandwidth password
+ - `FROM` is your sender
+ - `ACCOUNT_ID` is your account ID
+ - `APPLICATION_ID` is your application ID
+ - `PRIORITY` is your priority (optional)
 
 Adding Options to a Message
 ---------------------------
@@ -47,10 +47,20 @@ $sms->options($options);
 $texter->send($sms);
 ```
 
+Sponsor
+-------
+
+This package is looking for a [backer][1].
+
+Help Symfony by [sponsoring][3] its development!
+
 Resources
 ---------
 
-* [Contributing](https://symfony.com/doc/current/contributing/index.html)
-* [Report issues](https://github.com/symfony/symfony/issues) and
-  [send Pull Requests](https://github.com/symfony/symfony/pulls)
-  in the [main Symfony repository](https://github.com/symfony/symfony)
+ * [Contributing](https://symfony.com/doc/current/contributing/index.html)
+ * [Report issues](https://github.com/symfony/symfony/issues) and
+   [send Pull Requests](https://github.com/symfony/symfony/pulls)
+   in the [main Symfony repository](https://github.com/symfony/symfony)
+
+[1]: https://symfony.com/backers
+[3]: https://symfony.com/sponsor

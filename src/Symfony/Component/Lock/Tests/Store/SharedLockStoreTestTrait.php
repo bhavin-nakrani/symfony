@@ -14,6 +14,7 @@ namespace Symfony\Component\Lock\Tests\Store;
 use Symfony\Component\Lock\Exception\LockConflictedException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\Test\AbstractStoreTestCase;
 
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
@@ -22,19 +23,16 @@ trait SharedLockStoreTestTrait
 {
     /**
      * @see AbstractStoreTestCase::getStore()
-     *
-     * @return PersistingStoreInterface
      */
-    abstract protected function getStore();
+    abstract protected function getStore(): PersistingStoreInterface;
 
     public function testSharedLockReadFirst()
     {
         $store = $this->getStore();
 
-        $resource = uniqid(__METHOD__, true);
-        $key1 = new Key($resource);
-        $key2 = new Key($resource);
-        $key3 = new Key($resource);
+        $key1 = new Key(__METHOD__);
+        $key2 = new Key(__METHOD__);
+        $key3 = new Key(__METHOD__);
 
         $store->saveRead($key1);
         $this->assertTrue($store->exists($key1));
@@ -82,10 +80,8 @@ trait SharedLockStoreTestTrait
     public function testSharedLockWriteFirst()
     {
         $store = $this->getStore();
-
-        $resource = uniqid(__METHOD__, true);
-        $key1 = new Key($resource);
-        $key2 = new Key($resource);
+        $key1 = new Key(__METHOD__);
+        $key2 = new Key(__METHOD__);
 
         $store->save($key1);
         $this->assertTrue($store->exists($key1));
@@ -114,13 +110,45 @@ trait SharedLockStoreTestTrait
         $this->assertFalse($store->exists($key2));
     }
 
-    public function testSharedLockPromote()
+    public function testSharedLockReleaseReadLockFirstWriteSecondReadThird()
     {
         $store = $this->getStore();
 
         $resource = uniqid(__METHOD__, true);
         $key1 = new Key($resource);
         $key2 = new Key($resource);
+
+        $store->saveRead($key1);
+        $this->assertTrue($store->exists($key1));
+        $this->assertFalse($store->exists($key2));
+
+        $store->delete($key1);
+        $this->assertFalse($store->exists($key1));
+        $this->assertFalse($store->exists($key2));
+
+        $store->save($key1);
+        $this->assertTrue($store->exists($key1));
+        $this->assertFalse($store->exists($key2));
+
+        try {
+            $store->saveRead($key2);
+            $this->fail('The store shouldn\'t save the second key');
+        } catch (LockConflictedException $e) {
+        }
+        $this->assertTrue($store->exists($key1));
+        $this->assertFalse($store->exists($key2));
+
+        $store->delete($key1);
+        $this->assertFalse($store->exists($key1));
+        $this->assertFalse($store->exists($key2));
+    }
+
+    public function testSharedLockPromote()
+    {
+        $store = $this->getStore();
+
+        $key1 = new Key(__METHOD__);
+        $key2 = new Key(__METHOD__);
 
         $store->saveRead($key1);
         $store->saveRead($key2);
@@ -138,9 +166,8 @@ trait SharedLockStoreTestTrait
     {
         $store = $this->getStore();
 
-        $resource = uniqid(__METHOD__, true);
-        $key1 = new Key($resource);
-        $key2 = new Key($resource);
+        $key1 = new Key(static::class.__METHOD__);
+        $key2 = new Key(static::class.__METHOD__);
 
         $store->saveRead($key1);
         $store->save($key1);
@@ -163,9 +190,8 @@ trait SharedLockStoreTestTrait
     {
         $store = $this->getStore();
 
-        $resource = uniqid(__METHOD__, true);
-        $key1 = new Key($resource);
-        $key2 = new Key($resource);
+        $key1 = new Key(static::class.__METHOD__);
+        $key2 = new Key(static::class.__METHOD__);
 
         $store->save($key1);
         $store->saveRead($key1);

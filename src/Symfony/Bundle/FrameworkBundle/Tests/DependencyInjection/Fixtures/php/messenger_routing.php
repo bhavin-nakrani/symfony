@@ -4,8 +4,6 @@ use Symfony\Bundle\FrameworkBundle\Tests\Fixtures\Messenger\DummyMessage;
 use Symfony\Bundle\FrameworkBundle\Tests\Fixtures\Messenger\SecondMessage;
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'serializer' => true,
     'messenger' => [
         'serializer' => [
@@ -13,9 +11,7 @@ $container->loadFromExtension('framework', [
         ],
         'routing' => [
             DummyMessage::class => ['amqp', 'messenger.transport.audit'],
-            SecondMessage::class => [
-                'senders' => ['amqp', 'audit'],
-            ],
+            SecondMessage::class => ['amqp', 'audit'],
             'Symfony\*' => 'amqp',
             '*' => 'amqp',
         ],

@@ -11,60 +11,68 @@
 
 namespace Symfony\Component\Messenger\Bridge\AmazonSqs\Transport;
 
-use AsyncAws\Core\Exception\Http\HttpException;
+use AsyncAws\Core\Exception\Exception as AsyncAwsException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\LogicException;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Exception\TransportException;
+use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
+use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
-use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
  */
-class AmazonSqsReceiver implements ReceiverInterface, MessageCountAwareInterface
+class AmazonSqsReceiver implements KeepaliveReceiverInterface, MessageCountAwareInterface
 {
-    private Connection $connection;
     private SerializerInterface $serializer;
 
-    public function __construct(Connection $connection, SerializerInterface $serializer = null)
-    {
-        $this->connection = $connection;
+    public function __construct(
+        private Connection $connection,
+        ?SerializerInterface $serializer = null,
+    ) {
         $this->serializer = $serializer ?? new PhpSerializer();
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
+        $fetchSize = \func_num_args() > 0 ? max(1, func_get_arg(0)) : 1;
+
         try {
-            $sqsEnvelope = $this->connection->get();
-        } catch (HttpException $e) {
+            if (!$sqsEnvelopes = $this->connection->get($fetchSize)) {
+                return;
+            }
+        } catch (AsyncAwsException $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
-        if (null === $sqsEnvelope) {
-            return;
+
+        foreach ($sqsEnvelopes as $sqsEnvelope) {
+            $stamps = [
+                new AmazonSqsReceivedStamp($sqsEnvelope['id']),
+                new TransportMessageIdStamp($sqsEnvelope['id']),
+            ];
+
+            try {
+                yield $this->serializer->decode($sqsEnvelope = [
+                    'body' => $sqsEnvelope['body'],
+                    'headers' => $sqsEnvelope['headers'],
+                ])->with(...$stamps);
+            } catch (MessageDecodingFailedException $e) {
+                yield MessageDecodingFailedException::wrap($sqsEnvelope, $e->getMessage(), $e->getCode(), $e)->with(...$stamps);
+            }
         }
-
-        try {
-            $envelope = $this->serializer->decode([
-                'body' => $sqsEnvelope['body'],
-                'headers' => $sqsEnvelope['headers'],
-            ]);
-        } catch (MessageDecodingFailedException $exception) {
-            $this->connection->delete($sqsEnvelope['id']);
-
-            throw $exception;
-        }
-
-        yield $envelope->with(new AmazonSqsReceivedStamp($sqsEnvelope['id']));
     }
 
     public function ack(Envelope $envelope): void
     {
         try {
-            $this->connection->delete($this->findSqsReceivedStamp($envelope)->getId());
-        } catch (HttpException $e) {
+            $this->connection->delete($this->findSqsReceivedStampId($envelope));
+        } catch (AsyncAwsException $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
     }
@@ -72,8 +80,17 @@ class AmazonSqsReceiver implements ReceiverInterface, MessageCountAwareInterface
     public function reject(Envelope $envelope): void
     {
         try {
-            $this->connection->delete($this->findSqsReceivedStamp($envelope)->getId());
-        } catch (HttpException $e) {
+            $this->connection->reject($this->findSqsReceivedStampId($envelope));
+        } catch (AsyncAwsException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
+        }
+    }
+
+    public function keepalive(Envelope $envelope, ?int $seconds = null): void
+    {
+        try {
+            $this->connection->keepalive($this->findSqsReceivedStampId($envelope), $seconds);
+        } catch (AsyncAwsException $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
     }
@@ -82,20 +99,13 @@ class AmazonSqsReceiver implements ReceiverInterface, MessageCountAwareInterface
     {
         try {
             return $this->connection->getMessageCount();
-        } catch (HttpException $e) {
+        } catch (AsyncAwsException $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
     }
 
-    private function findSqsReceivedStamp(Envelope $envelope): AmazonSqsReceivedStamp
+    private function findSqsReceivedStampId(Envelope $envelope): string
     {
-        /** @var AmazonSqsReceivedStamp|null $sqsReceivedStamp */
-        $sqsReceivedStamp = $envelope->last(AmazonSqsReceivedStamp::class);
-
-        if (null === $sqsReceivedStamp) {
-            throw new LogicException('No AmazonSqsReceivedStamp found on the Envelope.');
-        }
-
-        return $sqsReceivedStamp;
+        return $envelope->last(AmazonSqsReceivedStamp::class)?->getId() ?? throw new LogicException('No AmazonSqsReceivedStamp found on the Envelope.');
     }
 }

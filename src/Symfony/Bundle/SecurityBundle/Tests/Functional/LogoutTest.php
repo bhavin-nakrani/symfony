@@ -30,7 +30,7 @@ class LogoutTest extends AbstractWebTestCase
             '_password' => 'test',
         ]);
 
-        $this->callInRequestContext($client, function () {
+        $this->callInRequestContext($client, static function () {
             static::getContainer()->get('security.csrf.token_storage')->setToken('foo', 'bar');
         });
 
@@ -78,11 +78,84 @@ class LogoutTest extends AbstractWebTestCase
         $this->assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
     }
 
+    public function testTheCsrfTokenManagerOfTheFirewallMintsTheLogoutToken()
+    {
+        $client = $this->createClient(['test_case' => 'Logout', 'root_config' => 'config_csrf_custom_manager.yml']);
+
+        $client->request('POST', '/login', ['_username' => 'johannes', '_password' => 'test']);
+
+        // this is what csrf_token('logout') does in a template
+        $csrfToken = static::getContainer()->get('security.csrf.token_manager')->getToken('logout')->getValue();
+
+        $this->assertSame(FixedCsrfTokenManager::VALUE, $csrfToken);
+
+        $client->request('GET', '/logout?_csrf_token='.$csrfToken);
+
+        $this->assertRedirect($client->getResponse(), '/');
+    }
+
+    public function testTheCsrfTokenManagerOfTheFirewallWinsOverStatelessTokenIds()
+    {
+        $client = $this->createClient(['test_case' => 'Logout', 'root_config' => 'config_csrf_custom_manager_stateless.yml']);
+
+        $client->request('POST', '/login', ['_username' => 'johannes', '_password' => 'test']);
+
+        $csrfToken = static::getContainer()->get('security.csrf.token_manager')->getToken('logout')->getValue();
+
+        $this->assertSame(FixedCsrfTokenManager::VALUE, $csrfToken);
+
+        $client->request('GET', '/logout?_csrf_token='.$csrfToken);
+
+        $this->assertRedirect($client->getResponse(), '/');
+    }
+
+    public function testTheLogoutFormHelperBuildsAFormTheListenerAccepts()
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $crawler = $client->request('GET', '/logout-form');
+        $client->submit($crawler->selectButton('logout')->form());
+
+        $this->assertRedirect($client->getResponse(), '/');
+    }
+
+    public function testLoggingOutWithoutTheTokenTheFormCarriesIsDenied()
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('POST', '/logout');
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+    }
+
+    public function testTheLogoutPathCannotBeFollowedAsALinkWhenTheRouteIsPostOnly()
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/logout');
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_METHOD_NOT_ALLOWED);
+    }
+
+    private function createAuthenticatedClient(): KernelBrowser
+    {
+        $client = $this->createClient(['test_case' => 'StandardFormLogin', 'root_config' => 'logout_csrf.yml']);
+        $client->followRedirects(true);
+
+        $form = $client->request('GET', '/login')->selectButton('login')->form();
+        $form['_username'] = 'johannes';
+        $form['_password'] = 'test';
+        $client->submit($form);
+        $client->followRedirects(false);
+
+        return $client;
+    }
+
     private function callInRequestContext(KernelBrowser $client, callable $callable): void
     {
         /** @var EventDispatcherInterface $eventDispatcher */
         $eventDispatcher = static::getContainer()->get(EventDispatcherInterface::class);
-        $wrappedCallable = function (RequestEvent $event) use (&$callable) {
+        $wrappedCallable = static function (RequestEvent $event) use (&$callable) {
             $callable();
             $event->setResponse(new Response(''));
             $event->stopPropagation();
@@ -90,7 +163,7 @@ class LogoutTest extends AbstractWebTestCase
 
         $eventDispatcher->addListener(KernelEvents::REQUEST, $wrappedCallable);
         try {
-            $client->request('GET', '/'.uniqid('', true));
+            $client->request('GET', '/not-existent');
         } finally {
             $eventDispatcher->removeListener(KernelEvents::REQUEST, $wrappedCallable);
         }

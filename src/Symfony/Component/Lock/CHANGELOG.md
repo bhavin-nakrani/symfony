@@ -1,6 +1,45 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add argument `$advisory` to `StoreFactory::createStore()` to use advisory locks when reusing an existing `\PDO` or Doctrine DBAL `Connection`
+ * Add `DoctrineDbalMysqlStore` based on MySQL `GET_LOCK()` functionality, usable with the `mysql+advisory://` DSN
+ * Add `MysqlStore` based on MySQL `GET_LOCK()` functionality, usable with the `mysql+advisory:` DSN
+
+8.1
+---
+
+ * Add support for scoping semaphore stores by project ID (e.g. `semaphore://<project-id>`)
+
+7.4
+---
+
+ * Add `LockKeyNormalizer`
+
+7.3
+---
+
+ * Add support for `valkey:` / `valkeys:` schemes
+
+7.2
+---
+
+ * RedisStore uses `EVALSHA` over `EVAL` when evaluating LUA scripts
+ * Add `NullStore`
+
+7.0
+---
+
+ * Add parameter `$isSameDatabase` to `DoctrineDbalStore::configureSchema()`
+ * Remove the `gcProbablity` (notice the typo) option, use `gcProbability` instead
+
+6.4
+---
+
+ * Make `MongoDbStore` instantiable with the mongodb extension directly
+
 6.3
 ---
 

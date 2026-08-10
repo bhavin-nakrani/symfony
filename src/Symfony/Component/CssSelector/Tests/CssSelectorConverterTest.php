@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\CssSelector\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\CssSelector\CssSelectorConverter;
 use Symfony\Component\CssSelector\Exception\ParseException;
@@ -48,11 +49,41 @@ class CssSelectorConverterTest extends TestCase
     {
         $this->expectException(ParseException::class);
         $this->expectExceptionMessage('Expected identifier, but <eof at 3> found.');
-        $converter = new CssSelectorConverter();
-        $converter->toXPath('h1:');
+        (new CssSelectorConverter())->toXPath('h1:');
     }
 
-    /** @dataProvider getCssToXPathWithoutPrefixTestData */
+    public function testLruCacheMovesRecentlyUsedToEnd()
+    {
+        CssSelectorConverter::$maxCachedItems = 5;
+        $htmlCacheProperty = new \ReflectionProperty(CssSelectorConverter::class, 'htmlCache');
+        $htmlCacheProperty->setValue(null, []);
+
+        $converter = new CssSelectorConverter(true);
+
+        // Fill cache with 5 entries (h0-h4)
+        for ($i = 0; $i < 5; ++$i) {
+            $converter->toXPath("h$i");
+        }
+
+        // Access h0 to move it to end (most recently used)
+        $converter->toXPath('h0');
+
+        // Trigger eviction
+        $converter->toXPath('h5');
+
+        $cache = $htmlCacheProperty->getValue();
+
+        // h0 was accessed recently (moved to end), so it survives eviction
+        $this->assertArrayHasKey("descendant-or-self::\0h0", $cache);
+        // h5 is the newest entry
+        $this->assertArrayHasKey("descendant-or-self::\0h5", $cache);
+        // h1 was the oldest untouched entry, should be evicted
+        $this->assertArrayNotHasKey("descendant-or-self::\0h1", $cache);
+
+        CssSelectorConverter::$maxCachedItems = 1024;
+    }
+
+    #[DataProvider('getCssToXPathWithoutPrefixTestData')]
     public function testCssToXPathWithoutPrefix($css, $xpath)
     {
         $converter = new CssSelectorConverter();
@@ -60,7 +91,7 @@ class CssSelectorConverterTest extends TestCase
         $this->assertEquals($xpath, $converter->toXPath($css, ''), '->parse() parses an input string and returns a node');
     }
 
-    public static function getCssToXPathWithoutPrefixTestData()
+    public static function getCssToXPathWithoutPrefixTestData(): array
     {
         return [
             ['h1', 'h1'],

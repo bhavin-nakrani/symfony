@@ -11,26 +11,25 @@
 
 namespace Symfony\Component\Lock\Tests\Store;
 
-use PHPUnit\Framework\SkippedTestSuiteError;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 
 /**
  * @author Jérémy Derussé <jeremy@derusse.com>
- *
- * @requires extension redis
- *
- * @group integration
  */
+#[RequiresPhpExtension('redis')]
+#[Group('integration')]
 class RedisArrayStoreTest extends AbstractRedisStoreTestCase
 {
     public static function setUpBeforeClass(): void
     {
         if (!class_exists(\RedisArray::class)) {
-            throw new SkippedTestSuiteError('The RedisArray class is required.');
+            self::markTestSkipped('The RedisArray class is required.');
         }
         try {
             (new \Redis())->connect(...explode(':', getenv('REDIS_HOST')));
         } catch (\Exception $e) {
-            throw new SkippedTestSuiteError($e->getMessage());
+            self::markTestSkipped($e->getMessage());
         }
     }
 

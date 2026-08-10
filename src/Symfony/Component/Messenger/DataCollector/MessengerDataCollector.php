@@ -32,7 +32,7 @@ class MessengerDataCollector extends DataCollector implements LateDataCollectorI
         $this->traceableBuses[$name] = $bus;
     }
 
-    public function collect(Request $request, Response $response, \Throwable $exception = null): void
+    public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         // Noop. Everything is collected live by the traceable buses & cloned as late as possible.
     }
@@ -50,7 +50,7 @@ class MessengerDataCollector extends DataCollector implements LateDataCollectorI
         }
 
         // Order by call time
-        usort($messages, fn ($a, $b) => $a[1] <=> $b[1]);
+        usort($messages, static fn ($a, $b) => $a[1] <=> $b[1]);
 
         // Keep the messages clones only
         $this->data['messages'] = array_column($messages, 0);
@@ -106,7 +106,7 @@ class MessengerDataCollector extends DataCollector implements LateDataCollectorI
         return $debugRepresentation;
     }
 
-    public function getExceptionsCount(string $bus = null): int
+    public function getExceptionsCount(?string $bus = null): int
     {
         $count = 0;
         foreach ($this->getMessages($bus) as $message) {
@@ -116,13 +116,13 @@ class MessengerDataCollector extends DataCollector implements LateDataCollectorI
         return $count;
     }
 
-    public function getMessages(string $bus = null): array
+    public function getMessages(?string $bus = null): array
     {
         if (null === $bus) {
             return $this->data['messages'];
         }
 
-        return array_filter($this->data['messages'], fn ($message) => $bus === $message['bus']);
+        return array_filter($this->data['messages'], static fn ($message) => $bus === $message['bus']);
     }
 
     public function getBuses(): array

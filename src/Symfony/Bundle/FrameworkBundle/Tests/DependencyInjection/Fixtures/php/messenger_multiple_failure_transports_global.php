@@ -1,19 +1,17 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'messenger' => [
         'failure_transport' => 'failure_transport_global',
         'transports' => [
             'transport_1' => [
                 'dsn' => 'null://',
-                'failure_transport' => 'failure_transport_1'
+                'failure_transport' => 'failure_transport_1',
             ],
             'transport_2' => 'null://',
             'transport_3' => [
                 'dsn' => 'null://',
-                'failure_transport' => 'failure_transport_3'
+                'failure_transport' => 'failure_transport_3',
             ],
             'failure_transport_global' => 'null://',
             'failure_transport_1' => 'null://',

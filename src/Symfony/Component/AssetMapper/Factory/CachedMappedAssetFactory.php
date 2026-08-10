@@ -14,8 +14,11 @@ namespace Symfony\Component\AssetMapper\Factory;
 use Symfony\Component\AssetMapper\MappedAsset;
 use Symfony\Component\Config\ConfigCache;
 use Symfony\Component\Config\Resource\DirectoryResource;
+use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\Config\Resource\ResourceInterface;
+use Symfony\Component\Config\ResourceCheckerConfigCache;
+use Symfony\Component\Filesystem\Filesystem;
 
 /**
  * Decorates the asset factory to load MappedAssets from cache when possible.
@@ -32,10 +35,16 @@ class CachedMappedAssetFactory implements MappedAssetFactoryInterface
     public function createMappedAsset(string $logicalPath, string $sourcePath): ?MappedAsset
     {
         $cachePath = $this->getCacheFilePath($logicalPath, $sourcePath);
-        $configCache = new ConfigCache($cachePath, $this->debug);
+
+        if ($this->debug) {
+            clearstatcache();
+            $configCache = new ResourceCheckerConfigCache($cachePath, [new NonCachingSelfCheckingResourceChecker()]);
+        } else {
+            $configCache = new ConfigCache($cachePath, false);
+        }
 
         if ($configCache->isFresh()) {
-            return unserialize(file_get_contents($cachePath));
+            return unserialize((new Filesystem())->readFile($cachePath), ['allowed_classes' => true]);
         }
 
         $mappedAsset = $this->innerFactory->createMappedAsset($logicalPath, $sourcePath);
@@ -50,6 +59,13 @@ class CachedMappedAssetFactory implements MappedAssetFactoryInterface
         return $mappedAsset;
     }
 
+    public function reset(): void
+    {
+        if (\is_callable([$this->innerFactory, 'reset'])) {
+            $this->innerFactory->reset();
+        }
+    }
+
     private function getCacheFilePath(string $logicalPath, string $sourcePath): string
     {
         return $this->cacheDir.'/'.hash('xxh128', $logicalPath.':'.$sourcePath).'.php';
@@ -60,15 +76,15 @@ class CachedMappedAssetFactory implements MappedAssetFactoryInterface
      */
     private function collectResourcesFromAsset(MappedAsset $mappedAsset): array
     {
-        $resources = array_map(fn (string $path) => is_dir($path) ? new DirectoryResource($path) : new FileResource($path), $mappedAsset->getFileDependencies());
+        $resources = array_map(static fn (string $path) => is_dir($path) ? new DirectoryResource($path) : new FileResource($path), $mappedAsset->getFileDependencies());
         $resources[] = new FileResource($mappedAsset->sourcePath);
 
-        foreach ($mappedAsset->getDependencies() as $dependency) {
-            if (!$dependency->isContentDependency) {
-                continue;
-            }
+        foreach ($mappedAsset->getDependencies() as $assetDependency) {
+            $resources = array_merge($resources, $this->collectResourcesFromAsset($assetDependency));
+        }
 
-            $resources = array_merge($resources, $this->collectResourcesFromAsset($dependency->asset));
+        foreach ($mappedAsset->getJavaScriptImports() as $import) {
+            $resources[] = new FileExistenceResource($import->assetSourcePath);
         }
 
         return $resources;

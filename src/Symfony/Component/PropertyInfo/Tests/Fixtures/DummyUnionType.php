@@ -40,7 +40,7 @@ class DummyUnionType
     public $d;
 
     /**
-     * @var (Dummy<array<mixed, string>, (int | (string<DefaultValue>)[])> | ParentDummy | null)
+     * @var (Dummy<array<string>, (int | (\Traversable<DefaultValue>)[])> | ParentDummy | null)
      */
     public $e;
 
@@ -53,4 +53,14 @@ class DummyUnionType
      * @var non-empty-array<string|int>
      */
     public $g;
+
+    /**
+     * @var string|mixed
+     */
+    public $h;
+
+    /**
+     * @var mixed|null
+     */
+    public $i;
 }

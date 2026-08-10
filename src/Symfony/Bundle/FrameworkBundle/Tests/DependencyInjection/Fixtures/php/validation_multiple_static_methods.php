@@ -1,8 +1,6 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'secret' => 's3cr3t',
     'validation' => [
         'enabled' => true,

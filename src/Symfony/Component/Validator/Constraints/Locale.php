@@ -13,11 +13,13 @@ namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Intl\Locales;
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 use Symfony\Component\Validator\Exception\LogicException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is a valid locale (e.g. fr, fr_FR, etc.).
+ *
+ * @see https://unicode-org.github.io/icu/userguide/locale/
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
@@ -30,26 +32,29 @@ class Locale extends Constraint
         self::NO_SUCH_LOCALE_ERROR => 'NO_SUCH_LOCALE_ERROR',
     ];
 
+    public string $message = 'This value is not a valid locale.';
+    public bool $canonicalize = true;
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param bool|null     $canonicalize Whether to canonicalize the value before validation (defaults to true) (see {@see https://www.php.net/manual/en/locale.canonicalize.php})
+     * @param string[]|null $groups
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $message = 'This value is not a valid locale.';
-    public $canonicalize = true;
-
     public function __construct(
-        array $options = null,
-        string $message = null,
-        bool $canonicalize = null,
-        array $groups = null,
-        mixed $payload = null
+        ?array $options = null,
+        ?string $message = null,
+        ?bool $canonicalize = null,
+        ?array $groups = null,
+        mixed $payload = null,
     ) {
         if (!class_exists(Locales::class)) {
             throw new LogicException('The Intl component is required to use the Locale constraint. Try running "composer require symfony/intl".');
         }
 
-        parent::__construct($options, $groups, $payload);
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        parent::__construct(null, $groups, $payload);
 
         $this->message = $message ?? $this->message;
         $this->canonicalize = $canonicalize ?? $this->canonicalize;

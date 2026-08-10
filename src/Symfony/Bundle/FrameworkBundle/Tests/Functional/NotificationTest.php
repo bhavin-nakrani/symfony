@@ -11,19 +11,21 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\RequiresMethod;
+use Symfony\Bundle\MercureBundle\MercureBundle;
+
 final class NotificationTest extends AbstractWebTestCase
 {
-    /**
-     * @requires function \Symfony\Bundle\MercureBundle\MercureBundle::build
-     */
+    #[RequiresMethod(MercureBundle::class, 'build')]
     public function testNotifierAssertion()
     {
         $client = $this->createClient(['test_case' => 'Notifier', 'root_config' => 'config.yml', 'debug' => true]);
         $client->request('GET', '/send_notification');
 
-        $this->assertNotificationCount(2);
+        $this->assertNotificationCount(3);
         $first = 0;
         $second = 1;
+        $third = 2;
         $this->assertNotificationIsNotQueued($this->getNotifierEvent($first));
         $this->assertNotificationIsNotQueued($this->getNotifierEvent($second));
 
@@ -38,5 +40,9 @@ final class NotificationTest extends AbstractWebTestCase
         $this->assertNotificationSubjectNotContains($notification, 'Hello World!');
         $this->assertNotificationTransportIsEqual($notification, 'mercure');
         $this->assertNotificationTransportIsNotEqual($notification, 'slack');
+
+        $notification = $this->getNotifierMessage($third);
+        $this->assertNotificationSubjectContains($notification, 'Hello World!');
+        $this->assertNotificationTransportIsEqual($notification, null);
     }
 }

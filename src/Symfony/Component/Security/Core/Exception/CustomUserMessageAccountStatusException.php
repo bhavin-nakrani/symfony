@@ -26,7 +26,7 @@ class CustomUserMessageAccountStatusException extends AccountStatusException
     private string $messageKey;
     private array $messageData = [];
 
-    public function __construct(string $message = '', array $messageData = [], int $code = 0, \Throwable $previous = null)
+    public function __construct(string $message = '', array $messageData = [], int $code = 0, ?\Throwable $previous = null)
     {
         parent::__construct($message, $code, $previous);
 
@@ -38,10 +38,8 @@ class CustomUserMessageAccountStatusException extends AccountStatusException
      *
      * @param string $messageKey  The message or message key
      * @param array  $messageData Data to be passed into the translator
-     *
-     * @return void
      */
-    public function setSafeMessage(string $messageKey, array $messageData = [])
+    public function setSafeMessage(string $messageKey, array $messageData = []): void
     {
         $this->messageKey = $messageKey;
         $this->messageData = $messageData;
@@ -64,6 +62,10 @@ class CustomUserMessageAccountStatusException extends AccountStatusException
 
     public function __unserialize(array $data): void
     {
+        if (($data[1] ?? null) instanceof \Stringable) {
+            throw new \BadMethodCallException('Cannot unserialize '.self::class);
+        }
+
         [$parentData, $this->messageKey, $this->messageData] = $data;
         parent::__unserialize($parentData);
     }

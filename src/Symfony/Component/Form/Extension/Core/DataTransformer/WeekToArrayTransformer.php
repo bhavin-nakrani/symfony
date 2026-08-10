@@ -23,16 +23,6 @@ use Symfony\Component\Form\Exception\TransformationFailedException;
  */
 class WeekToArrayTransformer implements DataTransformerInterface
 {
-    /**
-     * Transforms a string containing an ISO 8601 week date into an array.
-     *
-     * @param string|null $value A week date string
-     *
-     * @return array{year: int|null, week: int|null}
-     *
-     * @throws TransformationFailedException If the given value is not a string,
-     *                                       or if the given value does not follow the right format
-     */
     public function transform(mixed $value): array
     {
         if (null === $value) {
@@ -40,7 +30,7 @@ class WeekToArrayTransformer implements DataTransformerInterface
         }
 
         if (!\is_string($value)) {
-            throw new TransformationFailedException(sprintf('Value is expected to be a string but was "%s".', get_debug_type($value)));
+            throw new TransformationFailedException(\sprintf('Value is expected to be a string but was "%s".', get_debug_type($value)));
         }
 
         if (0 === preg_match('/^(?P<year>\d{4})-W(?P<week>\d{2})$/', $value, $matches)) {
@@ -53,16 +43,6 @@ class WeekToArrayTransformer implements DataTransformerInterface
         ];
     }
 
-    /**
-     * Transforms an array into a week date string.
-     *
-     * @param array{year: int|null, week: int|null} $value
-     *
-     * @return string|null A week date string following the format Y-\WW
-     *
-     * @throws TransformationFailedException If the given value cannot be merged in a valid week date string,
-     *                                       or if the obtained week date does not exists
-     */
     public function reverseTransform(mixed $value): ?string
     {
         if (null === $value || [] === $value) {
@@ -70,7 +50,7 @@ class WeekToArrayTransformer implements DataTransformerInterface
         }
 
         if (!\is_array($value)) {
-            throw new TransformationFailedException(sprintf('Value is expected to be an array, but was "%s".', get_debug_type($value)));
+            throw new TransformationFailedException(\sprintf('Value is expected to be an array, but was "%s".', get_debug_type($value)));
         }
 
         if (!\array_key_exists('year', $value)) {
@@ -82,7 +62,7 @@ class WeekToArrayTransformer implements DataTransformerInterface
         }
 
         if ($additionalKeys = array_diff(array_keys($value), ['year', 'week'])) {
-            throw new TransformationFailedException(sprintf('Expected only keys "year" and "week" to be present, but also got ["%s"].', implode('", "', $additionalKeys)));
+            throw new TransformationFailedException(\sprintf('Expected only keys "year" and "week" to be present, but also got ["%s"].', implode('", "', $additionalKeys)));
         }
 
         if (null === $value['year'] && null === $value['week']) {
@@ -90,18 +70,18 @@ class WeekToArrayTransformer implements DataTransformerInterface
         }
 
         if (!\is_int($value['year'])) {
-            throw new TransformationFailedException(sprintf('Year is expected to be an integer, but was "%s".', get_debug_type($value['year'])));
+            throw new TransformationFailedException(\sprintf('Year is expected to be an integer, but was "%s".', get_debug_type($value['year'])));
         }
 
         if (!\is_int($value['week'])) {
-            throw new TransformationFailedException(sprintf('Week is expected to be an integer, but was "%s".', get_debug_type($value['week'])));
+            throw new TransformationFailedException(\sprintf('Week is expected to be an integer, but was "%s".', get_debug_type($value['week'])));
         }
 
         // The 28th December is always in the last week of the year
         if (date('W', strtotime('28th December '.$value['year'])) < $value['week']) {
-            throw new TransformationFailedException(sprintf('Week "%d" does not exist for year "%d".', $value['week'], $value['year']));
+            throw new TransformationFailedException(\sprintf('Week "%d" does not exist for year "%d".', $value['week'], $value['year']));
         }
 
-        return sprintf('%d-W%02d', $value['year'], $value['week']);
+        return \sprintf('%d-W%02d', $value['year'], $value['week']);
     }
 }

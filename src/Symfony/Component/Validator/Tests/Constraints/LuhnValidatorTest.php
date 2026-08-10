@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraints\Luhn;
 use Symfony\Component\Validator\Constraints\LuhnValidator;
 use Symfony\Component\Validator\Exception\UnexpectedValueException;
@@ -25,24 +26,22 @@ class LuhnValidatorTest extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Luhn());
+        $this->validate(null, new Luhn());
 
         $this->assertNoViolation();
     }
 
     public function testEmptyStringIsValid()
     {
-        $this->validator->validate('', new Luhn());
+        $this->validate('', new Luhn());
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getValidNumbers
-     */
+    #[DataProvider('getValidNumbers')]
     public function testValidNumbers($number)
     {
-        $this->validator->validate($number, new Luhn());
+        $this->validate($number, new Luhn());
 
         $this->assertNoViolation();
     }
@@ -71,16 +70,12 @@ class LuhnValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getInvalidNumbers
-     */
+    #[DataProvider('getInvalidNumbers')]
     public function testInvalidNumbers($number, $code)
     {
-        $constraint = new Luhn([
-            'message' => 'myMessage',
-        ]);
+        $constraint = new Luhn(message: 'myMessage');
 
-        $this->validator->validate($number, $constraint);
+        $this->validate($number, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', '"'.$number.'"')
@@ -99,15 +94,13 @@ class LuhnValidatorTest extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getInvalidTypes
-     */
+    #[DataProvider('getInvalidTypes')]
     public function testInvalidTypes($number)
     {
         $this->expectException(UnexpectedValueException::class);
         $constraint = new Luhn();
 
-        $this->validator->validate($number, $constraint);
+        $this->validate($number, $constraint);
     }
 
     public static function getInvalidTypes()

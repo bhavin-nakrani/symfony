@@ -11,18 +11,34 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Command;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Command\EventDispatcherDebugCommand;
 use Symfony\Component\Console\Tester\CommandCompletionTester;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Mailer\Event\MessageEvent;
 
 class EventDispatcherDebugCommandTest extends TestCase
 {
-    /**
-     * @dataProvider provideCompletionSuggestions
-     */
+    public function testDispatchersOption()
+    {
+        $dispatchers = new ServiceLocator([
+            'event_dispatcher' => static fn () => new EventDispatcher(),
+            'other_event_dispatcher' => static fn () => new EventDispatcher(),
+        ]);
+        $command = new EventDispatcherDebugCommand($dispatchers);
+        $tester = new CommandTester($command);
+        $tester->execute(['--dispatchers' => true]);
+
+        $this->assertSame(0, $tester->getStatusCode());
+        $output = $tester->getDisplay();
+        $this->assertStringContainsString('event_dispatcher', $output);
+        $this->assertStringContainsString('other_event_dispatcher', $output);
+    }
+
+    #[DataProvider('provideCompletionSuggestions')]
     public function testComplete(array $input, array $expectedSuggestions)
     {
         $tester = $this->createCommandCompletionTester();
@@ -32,7 +48,7 @@ class EventDispatcherDebugCommandTest extends TestCase
         $this->assertSame($expectedSuggestions, $suggestions);
     }
 
-    public static function provideCompletionSuggestions()
+    public static function provideCompletionSuggestions(): iterable
     {
         yield 'event' => [[''], [MessageEvent::class, 'console.command']];
         yield 'event for other dispatcher' => [['--dispatcher', 'other_event_dispatcher', ''], ['other_event', 'App\OtherEvent']];
@@ -43,14 +59,14 @@ class EventDispatcherDebugCommandTest extends TestCase
     private function createCommandCompletionTester(): CommandCompletionTester
     {
         $dispatchers = new ServiceLocator([
-            'event_dispatcher' => function () {
+            'event_dispatcher' => static function () {
                 $dispatcher = new EventDispatcher();
                 $dispatcher->addListener(MessageEvent::class, 'var_dump');
                 $dispatcher->addListener('console.command', 'var_dump');
 
                 return $dispatcher;
             },
-            'other_event_dispatcher' => function () {
+            'other_event_dispatcher' => static function () {
                 $dispatcher = new EventDispatcher();
                 $dispatcher->addListener('other_event', 'var_dump');
                 $dispatcher->addListener('App\OtherEvent', 'var_dump');

@@ -1,12 +1,72 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add the `extra.cache_policy` option to `CachingHttpClient` to tag cached responses and force their lifetime
+ * Allow passing a stream or a closure to `HttpOptions::buffer()`
+
+8.1
+---
+
+ * Add support for the `max_connect_duration` option
+ * Add option `extra.use_persistent_connections` to `CurlHttpClient` to control the use of persistent connections introduced in PHP 8.5
+ * Add `GuzzleHttpHandler` that allows using Symfony HttpClient as a Guzzle handler
+ * Add `$allowList` argument to `NoPrivateNetworkHttpClient` to allow specific hosts (e.g. a local proxy) to bypass the private-network filter
+ * Add `DnsResolvingHttpClient` decorator to resolve host names using a custom resolver, including on redirects
+ * Change `$maxTtl` argument of `CachingHttpClient` to default to `86400` (24h) instead of `null`
+ * Deprecate passing `null` as `$maxTtl` to `CachingHttpClient`, pass a positive integer instead
+ * Make `CachingHttpClient` implement `Psr\Log\LoggerAwareInterface` to log when a stale cached response is served because the upstream call failed (`stale-if-error` fallback)
+
+8.0
+---
+
+ * Remove support for passing an instance of `StoreInterface` as `$cache` argument to `CachingHttpClient` constructor, use a `TagAwareCacheInterface` instead
+ * Remove support for amphp/http-client < 5
+ * Remove setLogger() methods on decorators; configure the logger on the wrapped client directly instead
+
+7.4
+---
+
+ * Add RFC 9111–based caching support to `CachingHttpClient`
+ * Add option `auto_upgrade_http_version` to control how the request HTTP version is handled in `HttplugClient` and `Psr18Client`
+ * Add QUERY to the list of retriable HTTP methods
+ * Deprecate using amphp/http-client < 5
+ * Deprecate passing an instance of `StoreInterface` as `$cache` argument to `CachingHttpClient` constructor
+
+7.3
+---
+
+ * Add IPv6 support to `NativeHttpClient`
+ * Allow using HTTP/3 with the `CurlHttpClient`
+
+7.2
+---
+
+ * Add support for amphp/http-client v5 on PHP 8.4+
+
+7.1
+---
+
+ * Add `HttpOptions::setHeader()` to add or replace a single header
+ * Allow mocking `start_time` info in `MockResponse`
+ * Add `MockResponse::fromFile()` and `JsonMockResponse::fromFile()` methods to help using fixtures files
+ * Add `ThrottlingHttpClient` to enable limiting the number of requests within a certain period
+ * Deprecate the `setLogger()` methods of the `NoPrivateNetworkHttpClient`, `TraceableHttpClient` and `ScopingHttpClient` classes, configure the logger of the wrapped clients directly instead
+
+7.0
+---
+
+ * Remove implementing `Http\Message\RequestFactory` from `HttplugClient`
+
 6.4
 ---
 
  * Add `HarFileResponseFactory` testing utility, allow to replay responses from `.har` files
  * Add `max_retries` option to `RetryableHttpClient` to adjust the retry logic on a per request level
  * Add `PingWehookMessage` and `PingWebhookMessageHandler`
+ * Enable using EventSourceHttpClient::connect() for both GET and POST
 
 6.3
 ---

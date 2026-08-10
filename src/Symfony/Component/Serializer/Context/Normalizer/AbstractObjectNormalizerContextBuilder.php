@@ -47,7 +47,7 @@ abstract class AbstractObjectNormalizerContextBuilder extends AbstractNormalizer
         preg_match_all('/(?<!%)(?:%{2})*%(?<specifier>[a-z])/', $depthKeyPattern, $matches);
 
         if (2 !== \count($matches['specifier']) || 's' !== $matches['specifier'][0] || 's' !== $matches['specifier'][1]) {
-            throw new InvalidArgumentException(sprintf('The depth key pattern "%s" is not valid. You must set exactly two string placeholders.', $depthKeyPattern));
+            throw new InvalidArgumentException(\sprintf('The depth key pattern "%s" is not valid. You must set exactly two string placeholders.', $depthKeyPattern));
         }
 
         return $this->with(AbstractObjectNormalizer::DEPTH_KEY_PATTERN, $depthKeyPattern);
@@ -59,6 +59,14 @@ abstract class AbstractObjectNormalizerContextBuilder extends AbstractNormalizer
     public function withDisableTypeEnforcement(?bool $disableTypeEnforcement): static
     {
         return $this->with(AbstractObjectNormalizer::DISABLE_TYPE_ENFORCEMENT, $disableTypeEnforcement);
+    }
+
+    /**
+     * Configures whether to convert scalar types to the expected type, if their value is compatible.
+     */
+    public function withEnableTypeConversion(?bool $enableTypeConversion): static
+    {
+        return $this->with(AbstractObjectNormalizer::ENABLE_TYPE_CONVERSION, $enableTypeConversion);
     }
 
     /**

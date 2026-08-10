@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Scheduler\Tests\Trigger;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Scheduler\Exception\InvalidArgumentException;
 use Symfony\Component\Scheduler\Trigger\PeriodicalTrigger;
@@ -18,14 +19,12 @@ use Symfony\Component\Scheduler\Trigger\TriggerInterface;
 
 class PeriodicalTriggerTest extends TestCase
 {
-    /**
-     * @dataProvider provideForConstructor
-     */
+    #[DataProvider('provideForConstructor')]
     public function testConstructor(PeriodicalTrigger $trigger, bool $optimizable = true)
     {
-        $run = new \DateTimeImmutable('2922-02-22 13:34:00+00:00');
+        $run = new \DateTimeImmutable('2922-02-22 12:34:00+00:00');
 
-        $this->assertSame('2922-02-23 13:34:00+00:00', $trigger->getNextRunDate($run)->format('Y-m-d H:i:sP'));
+        $this->assertSame('2922-02-23 13:34:00+01:00', $trigger->getNextRunDate($run)->format('Y-m-d H:i:sP'));
 
         if ($optimizable) {
             // test that we are using the fast algorithm for short period of time
@@ -36,7 +35,7 @@ class PeriodicalTriggerTest extends TestCase
 
     public static function provideForConstructor(): iterable
     {
-        $from = new \DateTimeImmutable($now = '2022-02-22 13:34:00+00:00');
+        $from = new \DateTimeImmutable($now = '2022-02-22 13:34:00+01:00');
         $until = new \DateTimeImmutable($farFuture = '3000-01-01');
 
         yield [new PeriodicalTrigger(86400, $from, $until)];
@@ -57,27 +56,26 @@ class PeriodicalTriggerTest extends TestCase
         yield [new PeriodicalTrigger(new \DateInterval('P1D'), $now), false];
     }
 
-    /**
-     * @dataProvider getInvalidIntervals
-     */
-    public function testInvalidInterval($interval)
+    #[DataProvider('getInvalidIntervals')]
+    public function testInvalidInterval($interval, $expectedExceptionMessage)
     {
         $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedExceptionMessage);
 
         new PeriodicalTrigger($interval, $now = new \DateTimeImmutable(), $now->modify('1 day'));
     }
 
     public static function getInvalidIntervals(): iterable
     {
-        yield ['wrong'];
-        yield ['3600.5'];
-        yield ['-3600'];
-        yield [-3600];
+        yield ['wrong', 'Unknown or bad format (wrong) at position 0 (w): The timezone could not be found in the database'];
+        yield ['3600.5', 'Unknown or bad format (3600.5) at position 5 (5): Unexpected character'];
+        yield ['-3600', 'Unknown or bad format (-3600) at position 3 (0): Unexpected character'];
+        yield [-3600, 'The "$interval" argument must be greater than zero.'];
+        yield ['0', 'The "$interval" argument must be greater than zero.'];
+        yield [0, 'The "$interval" argument must be greater than zero.'];
     }
 
-    /**
-     * @dataProvider provideForToString
-     */
+    #[DataProvider('provideForToString')]
     public function testToString(string $expected, PeriodicalTrigger $trigger)
     {
         $this->assertSame($expected, (string) $trigger);
@@ -96,18 +94,13 @@ class PeriodicalTriggerTest extends TestCase
         yield ['every 2 hours', new PeriodicalTrigger('2 hours', $from, $until)];
         yield ['every 2 seconds', new PeriodicalTrigger(new \DateInterval('PT2S'), $from, $until)];
         yield ['DateInterval', new PeriodicalTrigger(new \DateInterval('P1D'), $from, $until)];
-
-        if (\PHP_VERSION_ID >= 80200) {
-            yield ['last day of next month', new PeriodicalTrigger(\DateInterval::createFromDateString('last day of next month'), $from, $until)];
-        }
+        yield ['last day of next month', new PeriodicalTrigger(\DateInterval::createFromDateString('last day of next month'), $from, $until)];
     }
 
-    /**
-     * @dataProvider providerGetNextRunDates
-     */
-    public function testGetNextRunDates(\DateTimeImmutable $from, TriggerInterface $trigger, array $expected, int $count = 0)
+    #[DataProvider('providerGetNextRunDates')]
+    public function testGetNextRunDates(\DateTimeImmutable $from, TriggerInterface $trigger, array $expected, int $count)
     {
-        $this->assertEquals($expected, $this->getNextRunDates($from, $trigger, $count ?? \count($expected)));
+        $this->assertEquals($expected, $this->getNextRunDates($from, $trigger, $count));
     }
 
     public static function providerGetNextRunDates(): iterable
@@ -155,9 +148,7 @@ class PeriodicalTriggerTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider providerGetNextRunDateAgain
-     */
+    #[DataProvider('providerGetNextRunDateAgain')]
     public function testGetNextRunDateAgain(PeriodicalTrigger $trigger, \DateTimeImmutable $lastRun, ?\DateTimeImmutable $expected)
     {
         $this->assertEquals($expected, $trigger->getNextRunDate($lastRun));
@@ -184,7 +175,7 @@ class PeriodicalTriggerTest extends TestCase
         yield [
             $trigger,
             new \DateTimeImmutable('2020-02-20T01:59:00+02:00'),
-            new \DateTimeImmutable('2020-02-20T02:09:00+02:00'),
+            new \DateTimeImmutable('2020-02-20T02:00:00+02:00'),
         ];
         yield [
             $trigger,

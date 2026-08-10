@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Mime\Tests\Part;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mime\Exception\InvalidArgumentException;
 use Symfony\Component\Mime\Header\Headers;
@@ -18,6 +19,8 @@ use Symfony\Component\Mime\Header\IdentificationHeader;
 use Symfony\Component\Mime\Header\ParameterizedHeader;
 use Symfony\Component\Mime\Header\UnstructuredHeader;
 use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Process\PhpExecutableFinder;
+use Symfony\Component\Process\Process;
 
 class DataPartTest extends TestCase
 {
@@ -134,27 +137,49 @@ class DataPartTest extends TestCase
         DataPart::fromPath(__DIR__.'/../Fixtures/mimetypes/');
     }
 
-    /**
-     * @group network
-     */
     public function testFromPathWithUrl()
     {
-        if (!\in_array('https', stream_get_wrappers())) {
-            $this->markTestSkipped('"https" stream wrapper is not enabled.');
+        if (!\in_array('http', stream_get_wrappers(), true)) {
+            $this->markTestSkipped('"http" stream wrapper is not enabled.');
         }
 
-        $p = DataPart::fromPath($file = 'https://symfony.com/images/common/logo/logo_symfony_header.png');
-        $content = file_get_contents($file);
-        $this->assertEquals($content, $p->getBody());
-        $maxLineLength = 76;
-        $this->assertEquals(substr(base64_encode($content), 0, $maxLineLength), substr($p->bodyToString(), 0, $maxLineLength));
-        $this->assertEquals(substr(base64_encode($content), 0, $maxLineLength), substr(implode('', iterator_to_array($p->bodyToIterable())), 0, $maxLineLength));
-        $this->assertEquals('image', $p->getMediaType());
-        $this->assertEquals('png', $p->getMediaSubType());
+        $finder = new PhpExecutableFinder();
+        $process = new Process(array_merge([$finder->find(false)], $finder->findArguments(), ['-dopcache.enable=0', '-dvariables_order=EGPCS', '-S', 'localhost:8856']));
+        $process->setWorkingDirectory(__DIR__.'/../Fixtures/web');
+        $process->start();
+
+        try {
+            do {
+                usleep(50000);
+            } while (!@fopen('http://localhost:8856', 'r'));
+            $p = DataPart::fromPath($file = 'http://localhost:8856/logo_symfony_header.png');
+            $content = file_get_contents($file);
+            $this->assertEquals($content, $p->getBody());
+            $maxLineLength = 76;
+            $this->assertEquals(substr(base64_encode($content), 0, $maxLineLength), substr($p->bodyToString(), 0, $maxLineLength));
+            $this->assertEquals(substr(base64_encode($content), 0, $maxLineLength), substr(implode('', iterator_to_array($p->bodyToIterable())), 0, $maxLineLength));
+            $this->assertEquals('image', $p->getMediaType());
+            $this->assertEquals('png', $p->getMediaSubType());
+            $this->assertEquals(new Headers(
+                new ParameterizedHeader('Content-Type', 'image/png', ['name' => 'logo_symfony_header.png']),
+                new UnstructuredHeader('Content-Transfer-Encoding', 'base64'),
+                new ParameterizedHeader('Content-Disposition', 'attachment', ['name' => 'logo_symfony_header.png', 'filename' => 'logo_symfony_header.png'])
+            ), $p->getPreparedHeaders());
+        } finally {
+            $process->stop();
+        }
+    }
+
+    public function testBinaryEncodingPreservesRawBytes()
+    {
+        $body = "\xFF\xFE\x80\x00\x7F\xC3\xA9raw\x01payload";
+        $p = new DataPart($body, 'blob.bin', 'application/octet-stream', 'binary');
+        $this->assertSame($body, $p->bodyToString());
+        $this->assertSame($body, implode('', iterator_to_array($p->bodyToIterable())));
         $this->assertEquals(new Headers(
-            new ParameterizedHeader('Content-Type', 'image/png', ['name' => 'logo_symfony_header.png']),
-            new UnstructuredHeader('Content-Transfer-Encoding', 'base64'),
-            new ParameterizedHeader('Content-Disposition', 'attachment', ['name' => 'logo_symfony_header.png', 'filename' => 'logo_symfony_header.png'])
+            new ParameterizedHeader('Content-Type', 'application/octet-stream', ['name' => 'blob.bin']),
+            new UnstructuredHeader('Content-Transfer-Encoding', 'binary'),
+            new ParameterizedHeader('Content-Disposition', 'attachment', ['name' => 'blob.bin', 'filename' => 'blob.bin'])
         ), $p->getPreparedHeaders());
     }
 
@@ -210,5 +235,57 @@ class DataPartTest extends TestCase
         $p->getHeaders()->addTextHeader('foo', 'bar');
         $expected = clone $p;
         $this->assertEquals($expected->toString(), unserialize(serialize($p))->toString());
+    }
+
+    public function testSerializePreservesContentId()
+    {
+        $p = new DataPart('content', 'image.jpg', 'image/jpeg');
+        $p->asInline();
+        $cid = $p->getContentId();
+
+        $unserialized = unserialize(serialize($p));
+
+        $this->assertTrue($unserialized->hasContentId());
+        $this->assertSame($cid, $unserialized->getContentId());
+    }
+
+    #[DataProvider('provideTrampolineKeys')]
+    public function testUnserializeRejectsObjectInTypedStringProperty(string $key)
+    {
+        $template = (new DataPart('content'))->__serialize();
+        $template[$key] = new DataPartTestToStringGadget();
+        $payload = \sprintf('O:%d:"%s":%d:{', \strlen(DataPart::class), DataPart::class, \count($template));
+        foreach ($template as $k => $v) {
+            $payload .= serialize($k).serialize($v);
+        }
+        $payload .= '}';
+        DataPartTestToStringGadget::$fired = false;
+
+        try {
+            unserialize($payload);
+            $this->fail('Expected BadMethodCallException.');
+        } catch (\BadMethodCallException $e) {
+        }
+
+        $this->assertFalse(DataPartTestToStringGadget::$fired, '__toString gadget must not fire during unserialize');
+    }
+
+    public static function provideTrampolineKeys(): iterable
+    {
+        yield ['filename'];
+        yield ['mediaType'];
+        yield ['cid'];
+    }
+}
+
+class DataPartTestToStringGadget
+{
+    public static bool $fired = false;
+
+    public function __toString(): string
+    {
+        self::$fired = true;
+
+        return '';
     }
 }

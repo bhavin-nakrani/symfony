@@ -11,13 +11,12 @@
 
 namespace Symfony\Component\HttpFoundation\Tests;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class ResponseHeaderBagTest extends TestCase
 {
     public function testAllPreserveCase()
@@ -134,6 +133,14 @@ class ResponseHeaderBagTest extends TestCase
 
         $bag->clearCookie('foo', '/', null, true, false, 'none');
         $this->assertSetCookieHeader('foo=deleted; expires='.gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0; path=/; secure; samesite=none', $bag);
+    }
+
+    public function testClearCookiePartitioned()
+    {
+        $bag = new ResponseHeaderBag([]);
+
+        $bag->clearCookie('foo', '/', null, true, false, 'none', true);
+        $this->assertSetCookieHeader('foo=deleted; expires='.gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0; path=/; secure; samesite=none; partitioned', $bag);
     }
 
     public function testReplace()

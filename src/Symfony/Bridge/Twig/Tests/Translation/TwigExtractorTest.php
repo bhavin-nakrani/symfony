@@ -11,30 +11,29 @@
 
 namespace Symfony\Bridge\Twig\Tests\Translation;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Bridge\Twig\Translation\TwigExtractor;
+use Symfony\Component\Translation\IdentityTranslator;
 use Symfony\Component\Translation\MessageCatalogue;
-use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
-use Twig\Loader\LoaderInterface;
 
 class TwigExtractorTest extends TestCase
 {
-    /**
-     * @dataProvider getExtractData
-     */
+    public const CUSTOM_DOMAIN = 'domain';
+
+    #[DataProvider('getExtractData')]
     public function testExtract($template, $messages)
     {
-        $loader = $this->createMock(LoaderInterface::class);
-        $twig = new Environment($loader, [
+        $twig = new Environment(new ArrayLoader(), [
             'strict_variables' => true,
             'debug' => true,
             'cache' => false,
             'autoescape' => false,
         ]);
-        $twig->addExtension(new TranslationExtension($this->createMock(TranslatorInterface::class)));
+        $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
 
         $extractor = new TwigExtractor($twig);
         $extractor->setPrefix('prefix');
@@ -76,6 +75,11 @@ class TwigExtractorTest extends TestCase
             // make sure this works with twig's named arguments
             ['{{ "new key" | trans(domain="domain") }}', ['new key' => 'domain']],
 
+            // make sure this works with const domain
+            ['{{ "new key" | trans({}, constant(\'Symfony\\\\Bridge\\\\Twig\\\\Tests\\\\Translation\\\\TwigExtractorTest::CUSTOM_DOMAIN\')) }}', ['new key' => self::CUSTOM_DOMAIN]],
+            ['{% trans from constant(\'Symfony\\\\Bridge\\\\Twig\\\\Tests\\\\Translation\\\\TwigExtractorTest::CUSTOM_DOMAIN\') %}new key{% endtrans %}', ['new key' => self::CUSTOM_DOMAIN]],
+            ['{{ t("new key", {}, constant(\'Symfony\\\\Bridge\\\\Twig\\\\Tests\\\\Translation\\\\TwigExtractorTest::CUSTOM_DOMAIN\')) | trans() }}', ['new key' => self::CUSTOM_DOMAIN]],
+
             // concat translations
             ['{{ ("new" ~ " key") | trans() }}', ['new key' => 'messages']],
             ['{{ ("another " ~ "new " ~ "key") | trans() }}', ['another new key' => 'messages']],
@@ -87,13 +91,11 @@ class TwigExtractorTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider resourcesWithSyntaxErrorsProvider
-     */
+    #[DataProvider('resourcesWithSyntaxErrorsProvider')]
     public function testExtractSyntaxError($resources, array $messages)
     {
-        $twig = new Environment($this->createMock(LoaderInterface::class));
-        $twig->addExtension(new TranslationExtension($this->createMock(TranslatorInterface::class)));
+        $twig = new Environment(new ArrayLoader());
+        $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
 
         $extractor = new TwigExtractor($twig);
         $catalogue = new MessageCatalogue('en');
@@ -110,9 +112,7 @@ class TwigExtractorTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider resourceProvider
-     */
+    #[DataProvider('resourceProvider')]
     public function testExtractWithFiles($resource)
     {
         $loader = new ArrayLoader([]);
@@ -122,7 +122,7 @@ class TwigExtractorTest extends TestCase
             'cache' => false,
             'autoescape' => false,
         ]);
-        $twig->addExtension(new TranslationExtension($this->createMock(TranslatorInterface::class)));
+        $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
 
         $extractor = new TwigExtractor($twig);
         $catalogue = new MessageCatalogue('en');

@@ -1,6 +1,12 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add `$projectId` constructor parameter to `CrowdinProvider`
+ * Make `CrowdinProvider::read()` fetch every locale when passed none
+
 5.4
 ---
 

@@ -11,9 +11,13 @@
 
 namespace Symfony\Component\Lock\Store;
 
+use AsyncAws\DynamoDb\DynamoDbClient;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Relay\Relay;
 use Symfony\Component\Cache\Adapter\AbstractAdapter;
+use Symfony\Component\Lock\Bridge\DynamoDb\Store\DynamoDbStore;
 use Symfony\Component\Lock\Exception\InvalidArgumentException;
 use Symfony\Component\Lock\PersistingStoreInterface;
 
@@ -24,9 +28,27 @@ use Symfony\Component\Lock\PersistingStoreInterface;
  */
 class StoreFactory
 {
-    public static function createStore(#[\SensitiveParameter] object|string $connection): PersistingStoreInterface
+    /**
+     * Advisory locks are held by the database session, not by a table: a reconnection, an explicit
+     * close or the server's idle timeout releases every lock the application holds, and nothing
+     * detects it. Prefer a connection dedicated to locking.
+     *
+     * With a Doctrine DBAL connection, the platform selects the advisory store, so a connection
+     * configured without a "serverVersion" parameter connects to the database to resolve it.
+     *
+     * @param bool $advisory Whether to use advisory locks (PostgreSQL or MySQL) instead of the default
+     *                       table-based store when reusing an existing \PDO or DBAL connection
+     */
+    public static function createStore(#[\SensitiveParameter] object|string $connection/* , bool $advisory = false */): PersistingStoreInterface
     {
+        $advisory = 1 < \func_num_args() ? func_get_arg(1) : false;
+
         switch (true) {
+            case $connection instanceof DynamoDbClient:
+                self::requireBridgeClass(DynamoDbStore::class, 'symfony/amazon-dynamo-db-lock');
+
+                return new DynamoDbStore($connection);
+
             case $connection instanceof \Redis:
             case $connection instanceof Relay:
             case $connection instanceof \RedisArray:
@@ -41,16 +63,34 @@ class StoreFactory
                 return new MongoDbStore($connection);
 
             case $connection instanceof \PDO:
-                return new PdoStore($connection);
+                if (!$advisory) {
+                    return new PdoStore($connection);
+                }
+
+                return match ($driver = $connection->getAttribute(\PDO::ATTR_DRIVER_NAME)) {
+                    'pgsql' => new PostgreSqlStore($connection),
+                    'mysql' => new MysqlStore($connection),
+                    default => throw new InvalidArgumentException(\sprintf('The "%s" PDO driver does not support advisory locks.', $driver)),
+                };
 
             case $connection instanceof Connection:
-                return new DoctrineDbalStore($connection);
+                if (!$advisory) {
+                    return new DoctrineDbalStore($connection);
+                }
+
+                $platform = $connection->getDatabasePlatform();
+
+                return match (true) {
+                    $platform instanceof PostgreSQLPlatform => new DoctrineDbalPostgreSqlStore($connection),
+                    $platform instanceof AbstractMySQLPlatform => new DoctrineDbalMysqlStore($connection),
+                    default => throw new InvalidArgumentException(\sprintf('The "%s" platform does not support advisory locks.', $platform::class)),
+                };
 
             case $connection instanceof \Zookeeper:
                 return new ZookeeperStore($connection);
 
             case !\is_string($connection):
-                throw new InvalidArgumentException(sprintf('Unsupported Connection: "%s".', get_debug_type($connection)));
+                throw new InvalidArgumentException(\sprintf('Unsupported Connection: "%s".', get_debug_type($connection)));
             case 'flock' === $connection:
                 return new FlockStore();
 
@@ -60,8 +100,18 @@ class StoreFactory
             case 'semaphore' === $connection:
                 return new SemaphoreStore();
 
+            case str_starts_with($connection, 'semaphore://'):
+                return new SemaphoreStore(rawurldecode(substr($connection, 12)));
+
+            case str_starts_with($connection, 'dynamodb://'):
+                self::requireBridgeClass(DynamoDbStore::class, 'symfony/amazon-dynamo-db-lock');
+
+                return new DynamoDbStore($connection);
+
             case str_starts_with($connection, 'redis:'):
             case str_starts_with($connection, 'rediss:'):
+            case str_starts_with($connection, 'valkey:'):
+            case str_starts_with($connection, 'valkeys:'):
             case str_starts_with($connection, 'memcached:'):
                 if (!class_exists(AbstractAdapter::class)) {
                     throw new InvalidArgumentException('Unsupported Redis or Memcached DSN. Try running "composer require symfony/cache".');
@@ -101,13 +151,30 @@ class StoreFactory
             case str_starts_with($connection, 'pgsql+advisory:'):
                 return new PostgreSqlStore(preg_replace('/^([^:+]+)\+advisory/', '$1', $connection));
 
+            case str_starts_with($connection, 'mysql+advisory://'):
+            case str_starts_with($connection, 'mysql2+advisory://'):
+                return new DoctrineDbalMysqlStore($connection);
+
+            case str_starts_with($connection, 'mysql+advisory:'):
+                return new MysqlStore(preg_replace('/^([^:+]+)\+advisory/', '$1', $connection));
+
             case str_starts_with($connection, 'zookeeper://'):
                 return new ZookeeperStore(ZookeeperStore::createConnection($connection));
 
             case 'in-memory' === $connection:
                 return new InMemoryStore();
+
+            case 'null' === $connection:
+                return new NullStore();
         }
 
-        throw new InvalidArgumentException(sprintf('Unsupported Connection: "%s".', $connection));
+        throw new InvalidArgumentException(\sprintf('Unsupported Connection: "%s".', $connection));
+    }
+
+    private static function requireBridgeClass(string $class, string $package): void
+    {
+        if (!class_exists($class)) {
+            throw new \LogicException(\sprintf('Class "%s" is missing. Try running "composer require %s" to install the lock store package.', $class, $package));
+        }
     }
 }

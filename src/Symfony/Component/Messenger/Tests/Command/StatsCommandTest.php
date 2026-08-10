@@ -27,17 +27,16 @@ class StatsCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $messageCountableTransport = $this->createMock(MessageCountAwareInterface::class);
+        $messageCountableTransport = $this->createStub(MessageCountAwareInterface::class);
         $messageCountableTransport->method('getMessageCount')->willReturn(6);
 
-        $simpleTransport = $this->createMock(TransportInterface::class);
+        $simpleTransport = $this->createStub(TransportInterface::class);
 
         // mock a service locator
-        /** @var MockObject&ServiceLocator $serviceLocator */
-        $serviceLocator = $this->createMock(ServiceLocator::class);
+        $serviceLocator = $this->createStub(ServiceLocator::class);
         $serviceLocator
             ->method('get')
-            ->willReturnCallback(function (string $transportName) use ($messageCountableTransport, $simpleTransport) {
+            ->willReturnCallback(static function (string $transportName) use ($messageCountableTransport, $simpleTransport) {
                 if (\in_array($transportName, ['message_countable', 'another_message_countable'], true)) {
                     return $messageCountableTransport;
                 }
@@ -46,7 +45,7 @@ class StatsCommandTest extends TestCase
             });
         $serviceLocator
             ->method('has')
-            ->willReturnCallback(fn (string $transportName) => \in_array($transportName, ['message_countable', 'simple', 'another_message_countable'], true))
+            ->willReturnCallback(static fn (string $transportName) => \in_array($transportName, ['message_countable', 'simple', 'another_message_countable'], true))
         ;
 
         $this->command = new StatsCommand($serviceLocator, [
@@ -69,6 +68,23 @@ class StatsCommandTest extends TestCase
         $this->assertStringContainsString('! [NOTE] Unable to get message count for the following transports: "simple".', $display);
     }
 
+    public function testWithoutArgumentJsonFormat()
+    {
+        $tester = new CommandTester($this->command);
+        $tester->execute(['--format' => 'json']);
+        $display = $tester->getDisplay();
+
+        $this->assertJsonStringEqualsJsonString('{
+    "transports": {
+        "message_countable": {"count": 6},
+        "another_message_countable": {"count": 6}
+    },
+    "uncountable_transports": [
+        "simple"
+    ]
+}', $display);
+    }
+
     public function testWithOneExistingMessageCountableTransport()
     {
         $tester = new CommandTester($this->command);
@@ -81,6 +97,19 @@ class StatsCommandTest extends TestCase
         $this->assertStringNotContainsString(' ! [NOTE] Unable to get message count for the following transports: "simple".', $display);
     }
 
+    public function testWithOneExistingMessageCountableTransportJsonFormat()
+    {
+        $tester = new CommandTester($this->command);
+        $tester->execute(['transport_names' => ['message_countable'], '--format' => 'json']);
+        $display = $tester->getDisplay();
+
+        $this->assertJsonStringEqualsJsonString('{
+    "transports": {
+        "message_countable": {"count": 6}
+    }
+}', $display);
+    }
+
     public function testWithMultipleExistingMessageCountableTransport()
     {
         $tester = new CommandTester($this->command);
@@ -91,6 +120,20 @@ class StatsCommandTest extends TestCase
         $this->assertStringContainsString('message_countable           6', $display);
         $this->assertStringContainsString('another_message_countable   6', $display);
         $this->assertStringNotContainsString('! [NOTE] Unable to get message count for the following transports: "simple".', $display);
+    }
+
+    public function testWithMultipleExistingMessageCountableTransportJsonFormat()
+    {
+        $tester = new CommandTester($this->command);
+        $tester->execute(['transport_names' => ['message_countable', 'another_message_countable'], '--format' => 'json']);
+        $display = $tester->getDisplay();
+
+        $this->assertJsonStringEqualsJsonString('{
+    "transports": {
+        "message_countable": {"count": 6},
+        "another_message_countable": {"count": 6}
+    }
+}', $display);
     }
 
     public function testWithNotMessageCountableTransport()
@@ -115,5 +158,34 @@ class StatsCommandTest extends TestCase
         $this->assertStringNotContainsString('message_countable', $display);
         $this->assertStringNotContainsString('another_message_countable', $display);
         $this->assertStringNotContainsString('! [NOTE] Unable to get message count for the following transports: "simple".', $display);
+    }
+
+    public function testTableOutputGoesToStdout()
+    {
+        $tester = new CommandTester($this->command);
+        $tester->execute([], ['capture_stderr_separately' => true]);
+
+        $stdout = $tester->getDisplay();
+        $stderr = $tester->getErrorOutput();
+
+        $this->assertStringContainsString('Transport', $stdout);
+        $this->assertStringContainsString('message_countable', $stdout);
+
+        $this->assertStringContainsString('[WARNING]', $stderr);
+        $this->assertStringContainsString('[NOTE]', $stderr);
+        $this->assertStringNotContainsString('Transport', $stderr);
+    }
+
+    public function testWarningsGoToStderrWithSpecificTransport()
+    {
+        $tester = new CommandTester($this->command);
+        $tester->execute(['transport_names' => ['message_countable']], ['capture_stderr_separately' => true]);
+
+        $stdout = $tester->getDisplay();
+        $stderr = $tester->getErrorOutput();
+
+        $this->assertStringContainsString('message_countable', $stdout);
+        $this->assertStringNotContainsString('[WARNING]', $stderr);
+        $this->assertStringNotContainsString('Transport', $stderr);
     }
 }

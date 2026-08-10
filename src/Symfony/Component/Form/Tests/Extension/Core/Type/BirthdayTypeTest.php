@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
+use Symfony\Component\Form\Extension\Core\Type\BirthdayType;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
 /**
@@ -18,7 +19,7 @@ use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
  */
 class BirthdayTypeTest extends DateTypeTest
 {
-    public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\BirthdayType';
+    public const TESTED_TYPE = BirthdayType::class;
 
     public function testSetInvalidYearsOption()
     {
@@ -27,5 +28,44 @@ class BirthdayTypeTest extends DateTypeTest
             'years' => 'bad value',
             'widget' => 'choice',
         ]);
+    }
+
+    public function testWidgetSingleTextHasDefaultAttrMinMax()
+    {
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'widget' => 'single_text',
+        ]);
+        $formView = $form->createView();
+        $options = $form->getConfig()->getOptions();
+        $expectedMin = \sprintf('%d-01-01', min($options['years']));
+        $expectedMax = \sprintf('%d-12-31', max($options['years']));
+        $this->assertSame($expectedMin, $formView->vars['attr']['min']);
+        $this->assertSame($expectedMax, $formView->vars['attr']['max']);
+    }
+
+    public function testWidgetSingleTextDoesntRemoveUserAttr()
+    {
+        $expectedMin = date('Y-m-d', strtotime('10 years ago'));
+        $expectedMax = date('Y-m-d', strtotime('1 years ago'));
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'widget' => 'single_text',
+            'attr' => [
+                'min' => $expectedMin,
+                'max' => $expectedMax,
+            ],
+        ]);
+        $formView = $form->createView();
+        $this->assertSame($expectedMin, $formView->vars['attr']['min']);
+        $this->assertSame($expectedMax, $formView->vars['attr']['max']);
+    }
+
+    public function testWidgetChoiceDoesNotSetMinMaxAttr()
+    {
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'widget' => 'choice',
+        ]);
+        $formView = $form->createView();
+        $this->assertArrayNotHasKey('min', $formView->vars['attr']);
+        $this->assertArrayNotHasKey('max', $formView->vars['attr']);
     }
 }

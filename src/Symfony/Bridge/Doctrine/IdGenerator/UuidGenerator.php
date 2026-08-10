@@ -11,7 +11,6 @@
 
 namespace Symfony\Bridge\Doctrine\IdGenerator;
 
-use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Id\AbstractIdGenerator;
 use Symfony\Component\Uid\Factory\NameBasedUuidFactory;
@@ -22,21 +21,13 @@ use Symfony\Component\Uid\Uuid;
 
 final class UuidGenerator extends AbstractIdGenerator
 {
-    private UuidFactory $protoFactory;
+    private readonly UuidFactory $protoFactory;
     private UuidFactory|NameBasedUuidFactory|RandomBasedUuidFactory|TimeBasedUuidFactory $factory;
     private ?string $entityGetter = null;
 
-    public function __construct(UuidFactory $factory = null)
+    public function __construct(?UuidFactory $factory = null)
     {
         $this->protoFactory = $this->factory = $factory ?? new UuidFactory();
-    }
-
-    /**
-     * doctrine/orm < 2.11 BC layer.
-     */
-    public function generate(EntityManager $em, $entity): Uuid
-    {
-        return $this->generateId($em, $entity);
     }
 
     public function generateId(EntityManagerInterface $em, $entity): Uuid
@@ -52,7 +43,7 @@ final class UuidGenerator extends AbstractIdGenerator
         return $this->factory->create();
     }
 
-    public function nameBased(string $entityGetter, Uuid|string $namespace = null): static
+    public function nameBased(string $entityGetter, Uuid|string|null $namespace = null): static
     {
         $clone = clone $this;
         $clone->factory = $clone->protoFactory->nameBased($namespace);
@@ -70,7 +61,7 @@ final class UuidGenerator extends AbstractIdGenerator
         return $clone;
     }
 
-    public function timeBased(Uuid|string $node = null): static
+    public function timeBased(Uuid|string|null $node = null): static
     {
         $clone = clone $this;
         $clone->factory = $clone->protoFactory->timeBased($node);

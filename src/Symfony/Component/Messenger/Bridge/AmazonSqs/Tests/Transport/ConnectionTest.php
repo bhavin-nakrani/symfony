@@ -12,17 +12,27 @@
 namespace Symfony\Component\Messenger\Bridge\AmazonSqs\Tests\Transport;
 
 use AsyncAws\Core\Exception\Http\HttpException;
+use AsyncAws\Core\Exception\Http\NetworkException;
 use AsyncAws\Core\Test\ResultMockFactory;
+use AsyncAws\Sqs\Enum\QueueAttributeName;
 use AsyncAws\Sqs\Result\GetQueueUrlResult;
+use AsyncAws\Sqs\Result\QueueExistsWaiter;
 use AsyncAws\Sqs\Result\ReceiveMessageResult;
 use AsyncAws\Sqs\SqsClient;
 use AsyncAws\Sqs\ValueObject\Message;
+use Composer\InstalledVersions;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\Chunk\ErrorChunk;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Response\ResponseStream;
 use Symfony\Component\Messenger\Bridge\AmazonSqs\Transport\Connection;
+use Symfony\Component\Messenger\Exception\TransportException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
+use Symfony\Contracts\HttpClient\ResponseStreamInterface;
 
 class ConnectionTest extends TestCase
 {
@@ -45,7 +55,7 @@ class ConnectionTest extends TestCase
         $awsKey = 'some_aws_access_key_value';
         $awsSecret = 'some_aws_secret_value';
         $region = 'eu-west-1';
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => $region, 'accessKeyId' => $awsKey, 'accessKeySecret' => $awsSecret], null, $httpClient)),
             Connection::fromDsn('sqs://default/queue', [
@@ -62,7 +72,7 @@ class ConnectionTest extends TestCase
         $awsSecret = 'some_aws_secret_value';
         $sessionToken = 'some_aws_sessionToken';
         $region = 'eu-west-1';
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => $region, 'accessKeyId' => $awsKey, 'accessKeySecret' => $awsSecret, 'sessionToken' => $sessionToken], null, $httpClient)),
             Connection::fromDsn('sqs://default/queue', [
@@ -84,7 +94,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsn()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://default/queue', [], $httpClient)
@@ -93,16 +103,25 @@ class ConnectionTest extends TestCase
 
     public function testDsnPrecedence()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue_dsn'], new SqsClient(['region' => 'us-east-2', 'accessKeyId' => 'key_dsn', 'accessKeySecret' => 'secret_dsn'], null, $httpClient)),
             Connection::fromDsn('sqs://key_dsn:secret_dsn@default/queue_dsn?region=us-east-2', ['region' => 'eu-west-3', 'queue_name' => 'queue_options', 'access_key' => 'key_option', 'secret_key' => 'secret_option'], $httpClient)
         );
     }
 
+    public function testQueueNameDefault()
+    {
+        $httpClient = new MockHttpClient();
+        $this->assertEquals(
+            new Connection(['queue_name' => 'messages'], new SqsClient(['region' => 'us-east-2', 'accessKeyId' => 'key_dsn', 'accessKeySecret' => 'secret_dsn'], null, $httpClient)),
+            Connection::fromDsn('sqs://key_dsn:secret_dsn@default/?region=us-east-2', ['region' => 'eu-west-3', 'access_key' => 'key_option', 'secret_key' => 'secret_option'], $httpClient)
+        );
+    }
+
     public function testFromDsnWithRegion()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'us-west-2', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://default/queue?region=us-west-2', [], $httpClient)
@@ -111,7 +130,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnAsQueueUrl()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'ab1-MyQueue-A2BCDEF3GHI4', 'account' => '123456789012'], new SqsClient(['region' => 'us-east-2', 'endpoint' => 'https://sqs.us-east-2.amazonaws.com', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient), 'https://sqs.us-east-2.amazonaws.com/123456789012/ab1-MyQueue-A2BCDEF3GHI4'),
             Connection::fromDsn('https://sqs.us-east-2.amazonaws.com/123456789012/ab1-MyQueue-A2BCDEF3GHI4', [], $httpClient)
@@ -120,7 +139,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithCustomEndpoint()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'endpoint' => 'https://localhost', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://localhost/queue', [], $httpClient)
@@ -129,7 +148,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithSslMode()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'endpoint' => 'http://localhost', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://localhost/queue?sslmode=disable', [], $httpClient)
@@ -138,7 +157,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithSslModeOnDefault()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://default/queue?sslmode=disable', [], $httpClient)
@@ -147,7 +166,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithCustomEndpointAndPort()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'endpoint' => 'https://localhost:1234', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://localhost:1234/queue', [], $httpClient)
@@ -156,7 +175,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithOptions()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['account' => '213', 'queue_name' => 'queue', 'buffer_size' => 1, 'wait_time' => 5, 'auto_setup' => false], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://default/213/queue', ['buffer_size' => 1, 'wait_time' => 5, 'auto_setup' => false], $httpClient)
@@ -165,7 +184,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithQueryOptions()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
         $this->assertEquals(
             new Connection(['account' => '213', 'queue_name' => 'queue', 'buffer_size' => 1, 'wait_time' => 5, 'auto_setup' => false], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
             Connection::fromDsn('sqs://default/213/queue?buffer_size=1&wait_time=5&auto_setup=0', [], $httpClient)
@@ -174,7 +193,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithQueueNameOption()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
 
         $this->assertEquals(
             new Connection(['queue_name' => 'queue'], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
@@ -189,7 +208,7 @@ class ConnectionTest extends TestCase
 
     public function testFromDsnWithAccountAndEndpointOption()
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
+        $httpClient = new MockHttpClient();
 
         $this->assertEquals(
             new Connection(['account' => 12345], new SqsClient(['endpoint' => 'https://custom-endpoint.tld', 'region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
@@ -224,10 +243,11 @@ class ConnectionTest extends TestCase
     public function testKeepGettingPendingMessages()
     {
         $client = $this->createMock(SqsClient::class);
-        $client->expects($this->any())
+        $client
             ->method('getQueueUrl')
-            ->with(['QueueName' => 'queue', 'QueueOwnerAWSAccountId' => 123])
-            ->willReturn(ResultMockFactory::create(GetQueueUrlResult::class, ['QueueUrl' => 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue']));
+            ->willReturnMap([
+                [['QueueName' => 'queue', 'QueueOwnerAWSAccountId' => 123], ResultMockFactory::create(GetQueueUrlResult::class, ['QueueUrl' => 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue'])],
+            ]);
 
         $firstResult = ResultMockFactory::create(ReceiveMessageResult::class, ['Messages' => [
             new Message(['MessageId' => 1, 'Body' => 'this is a test']),
@@ -266,13 +286,56 @@ class ConnectionTest extends TestCase
         $this->assertNull($connection->get());
     }
 
+    public function testGetUsesMaxOfFetchSizeAndConfiguredBufferSize()
+    {
+        $client = $this->createMock(SqsClient::class);
+        $client
+            ->method('getQueueUrl')
+            ->willReturnMap([
+                [['QueueName' => 'queue', 'QueueOwnerAWSAccountId' => 123], ResultMockFactory::create(GetQueueUrlResult::class, ['QueueUrl' => 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue'])],
+            ]);
+
+        $firstResult = ResultMockFactory::create(ReceiveMessageResult::class, ['Messages' => [
+            new Message(['MessageId' => 1, 'Body' => 'this is a test']),
+        ]]);
+        $secondResult = ResultMockFactory::create(ReceiveMessageResult::class, ['Messages' => []]);
+
+        $series = [
+            [[['QueueUrl' => 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+                'VisibilityTimeout' => null,
+                'MaxNumberOfMessages' => 10,
+                'MessageAttributeNames' => ['All'],
+                'WaitTimeSeconds' => 20]], $firstResult],
+            [[['QueueUrl' => 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+                'VisibilityTimeout' => null,
+                'MaxNumberOfMessages' => 10,
+                'MessageAttributeNames' => ['All'],
+                'WaitTimeSeconds' => 20]], $secondResult],
+        ];
+
+        $client->expects($this->exactly(2))
+            ->method('receiveMessage')
+            ->willReturnCallback(function (...$args) use (&$series) {
+                [$expectedArgs, $return] = array_shift($series);
+                $this->assertSame($expectedArgs, $args);
+
+                return $return;
+            })
+        ;
+
+        $connection = new Connection(['queue_name' => 'queue', 'account' => 123, 'auto_setup' => false, 'buffer_size' => 9], $client);
+        $this->assertNotNull($connection->get(12));
+        $this->assertNull($connection->get(12));
+    }
+
     public function testUnexpectedSqsError()
     {
         $this->expectException(HttpException::class);
         $this->expectExceptionMessage('SQS error happens');
 
         $client = $this->createMock(SqsClient::class);
-        $client->expects($this->any())
+        $client
+            ->expects($this->once())
             ->method('getQueueUrl')
             ->with(['QueueName' => 'queue', 'QueueOwnerAWSAccountId' => 123])
             ->willReturn(ResultMockFactory::createFailing(GetQueueUrlResult::class, 400, 'SQS error happens'));
@@ -281,9 +344,104 @@ class ConnectionTest extends TestCase
         $connection->get();
     }
 
+    public function testDestructDoesNotThrowWhenTheInFlightReceiveCannotBeResumed()
+    {
+        $httpClient = $this->createPollingClientThatCannotResume();
+        $client = new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => 'key', 'accessKeySecret' => 'secret'], null, $httpClient);
+        $connection = new Connection(['queue_name' => 'queue', 'auto_setup' => false], $client, 'https://sqs.eu-west-1.amazonaws.com/123456789012/queue');
+
+        $this->assertNull($connection->get());
+
+        unset($connection);
+
+        $this->assertTrue($httpClient->response->getInfo('canceled'));
+    }
+
+    public function testResetDiscardsTheInFlightReceiveThatCannotBeResumed()
+    {
+        $httpClient = $this->createPollingClientThatCannotResume();
+        $client = new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => 'key', 'accessKeySecret' => 'secret'], null, $httpClient);
+        $connection = new Connection(['queue_name' => 'queue', 'auto_setup' => false], $client, 'https://sqs.eu-west-1.amazonaws.com/123456789012/queue');
+
+        $this->assertNull($connection->get());
+
+        $connection->reset();
+
+        $this->assertTrue($httpClient->response->getInfo('canceled'));
+    }
+
+    public function testDestructDoesNotThrowOnNetworkFailure()
+    {
+        $httpClient = new MockHttpClient(new MockResponse('', ['error' => 'Connection timed out']));
+        $client = new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => 'key', 'accessKeySecret' => 'secret'], null, $httpClient);
+        $connection = new Connection(['queue_name' => 'queue', 'auto_setup' => false], $client, 'https://sqs.eu-west-1.amazonaws.com/123456789012/queue');
+
+        try {
+            $connection->get();
+            $this->fail('The receive should have failed.');
+        } catch (NetworkException) {
+        }
+
+        unset($connection);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testResetDiscardsTheFailedResponseOnNetworkFailure()
+    {
+        $httpClient = new MockHttpClient(new MockResponse('', ['error' => 'Connection timed out']));
+        $client = new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => 'key', 'accessKeySecret' => 'secret'], null, $httpClient);
+        $connection = new Connection(['queue_name' => 'queue', 'auto_setup' => false], $client, 'https://sqs.eu-west-1.amazonaws.com/123456789012/queue');
+
+        try {
+            $connection->get();
+            $this->fail('The receive should have failed.');
+        } catch (NetworkException) {
+        }
+
+        $connection->reset();
+
+        $this->addToAssertionCount(1);
+    }
+
     /**
-     * @dataProvider provideQueueUrl
+     * Simulates an in-flight ReceiveMessage long-poll: the first stream() call times out,
+     * leaving the response pending, and any later attempt to resume it throws, like
+     * HttpClient decorators do when the underlying response was already consumed.
      */
+    private function createPollingClientThatCannotResume(): HttpClientInterface
+    {
+        return new class implements HttpClientInterface {
+            public ?MockResponse $response = null;
+            private int $streamCalls = 0;
+
+            public function request(string $method, string $url, array $options = []): ResponseInterface
+            {
+                return $this->response = new MockResponse();
+            }
+
+            public function stream($responses, ?float $timeout = null): ResponseStreamInterface
+            {
+                if (++$this->streamCalls > 1) {
+                    throw new \LogicException('Instance of "Symfony\Component\HttpClient\Response\CurlResponse" is already consumed and cannot be managed by "Symfony\Component\HttpClient\Response\AsyncResponse". A decorated client should not call any of the response\'s methods in its "request()" method.');
+                }
+
+                $response = $this->response;
+                $timeoutChunk = new ErrorChunk(0, 'Idle timeout reached');
+
+                return new ResponseStream((static function () use ($response, $timeoutChunk) {
+                    yield $response => $timeoutChunk;
+                })());
+            }
+
+            public function withOptions(array $options): static
+            {
+                return $this;
+            }
+        };
+    }
+
+    #[DataProvider('provideQueueUrl')]
     public function testInjectQueueUrl(string $dsn, string $queueUrl)
     {
         $connection = Connection::fromDsn($dsn);
@@ -301,9 +459,7 @@ class ConnectionTest extends TestCase
         yield ['https://sqs.us-east-2.amazonaws.com/123456/queue?auto_setup=1', 'https://sqs.us-east-2.amazonaws.com/123456/queue'];
     }
 
-    /**
-     * @dataProvider provideNotQueueUrl
-     */
+    #[DataProvider('provideNotQueueUrl')]
     public function testNotInjectQueueUrl(string $dsn)
     {
         $connection = Connection::fromDsn($dsn);
@@ -356,58 +512,205 @@ class ConnectionTest extends TestCase
         $connection->get();
     }
 
+    public function testKeepalive()
+    {
+        $expectedParams = [
+            'QueueUrl' => $queueUrl = 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+            'ReceiptHandle' => $id = 'abc',
+            'VisibilityTimeout' => $visibilityTimeout = 30,
+        ];
+
+        $client = $this->createMock(SqsClient::class);
+        $client->expects($this->once())->method('changeMessageVisibility')->with($expectedParams);
+
+        $connection = new Connection(['visibility_timeout' => $visibilityTimeout], $client, $queueUrl);
+        $connection->keepalive($id);
+    }
+
+    public function testDeleteOnReject()
+    {
+        $expectedParams = [
+            'QueueUrl' => $queueUrl = 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+            'ReceiptHandle' => $id = 'abc',
+        ];
+
+        $client = $this->createMock(SqsClient::class);
+        $client->expects($this->once())->method('deleteMessage')->with($expectedParams);
+
+        $connection = new Connection([], $client, $queueUrl);
+        $connection->reject($id);
+    }
+
+    public function testDoNotDeleteOnRejection()
+    {
+        $expectedParams = [
+            'QueueUrl' => $queueUrl = 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+            'ReceiptHandle' => $id = 'abc',
+            'VisibilityTimeout' => 0,
+        ];
+
+        $client = $this->createMock(SqsClient::class);
+        $client->expects($this->once())->method('changeMessageVisibility')->with($expectedParams);
+
+        $connection = new Connection(['delete_on_rejection' => false, 'visibility_timeout' => 30], $client, $queueUrl);
+        $connection->reject($id);
+    }
+
+    public function testDoNotDeleteOnRejectionWithRetryDelay()
+    {
+        $expectedParams = [
+            'QueueUrl' => $queueUrl = 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue',
+            'ReceiptHandle' => $id = 'abc',
+            'VisibilityTimeout' => $retryDelay = 5,
+        ];
+
+        $client = $this->createMock(SqsClient::class);
+        $client->expects($this->once())->method('changeMessageVisibility')->with($expectedParams);
+
+        $connection = new Connection(['delete_on_rejection' => false, 'retry_delay' => $retryDelay], $client, $queueUrl);
+        $connection->reject($id);
+    }
+
+    public function testKeepaliveWithTooSmallTtl()
+    {
+        $client = $this->createMock(SqsClient::class);
+        $client->expects($this->never())->method($this->anything());
+
+        $connection = new Connection(['visibility_timeout' => 1], $client, 'https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue');
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('SQS visibility_timeout (1s) cannot be smaller than the keepalive interval (2s).');
+        $connection->keepalive('123', 2);
+    }
+
+    public function testQueueAttributesAndTags()
+    {
+        $queueName = 'queueName.fifo';
+        $queueAttributes = [
+            QueueAttributeName::MESSAGE_RETENTION_PERIOD => '900',
+            QueueAttributeName::MAXIMUM_MESSAGE_SIZE => '1024',
+        ];
+        $queueTags = ['tag1' => 'value1', 'tag2' => 'value2'];
+
+        $queueExistsWaiter = ResultMockFactory::waiter(QueueExistsWaiter::class, QueueExistsWaiter::STATE_FAILURE);
+        $client = $this->createMock(SqsClient::class);
+        $client->method('queueExists')->willReturn($queueExistsWaiter);
+        $client->expects($this->once())->method('createQueue')->with(['QueueName' => $queueName, 'Attributes' => array_merge($queueAttributes, [QueueAttributeName::FIFO_QUEUE => 'true']), 'tags' => $queueTags]);
+
+        $connection = new Connection(['queue_name' => $queueName, 'queue_attributes' => $queueAttributes, 'queue_tags' => $queueTags], $client);
+
+        $this->expectException(TransportException::class);
+        $connection->setup();
+    }
+
+    public function testQueueAttributesAndTagsFromDsn()
+    {
+        $httpClient = new MockHttpClient();
+
+        $queueName = 'queueName';
+        $queueAttributes = [
+            QueueAttributeName::MESSAGE_RETENTION_PERIOD => '900',
+            QueueAttributeName::MAXIMUM_MESSAGE_SIZE => '1024',
+        ];
+        $queueTags = ['tag1' => 'value1', 'tag2' => 'value2'];
+
+        $this->assertEquals(
+            new Connection(['queue_name' => $queueName, 'queue_attributes' => $queueAttributes, 'queue_tags' => $queueTags], new SqsClient(['region' => 'eu-west-1', 'accessKeyId' => null, 'accessKeySecret' => null], null, $httpClient)),
+            Connection::fromDsn('sqs://default/'.$queueName, ['queue_attributes' => $queueAttributes, 'queue_tags' => $queueTags], $httpClient)
+        );
+    }
+
     private function getMockedQueueUrlResponse(): MockResponse
     {
+        if ($this->isAsyncAwsSqsVersion2Installed()) {
+            return new MockResponse(
+                <<<JSON
+                    {
+                        "QueueUrl": "https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"
+                    }
+                    JSON
+            );
+        }
+
         return new MockResponse(<<<XML
-<GetQueueUrlResponse>
-    <GetQueueUrlResult>
-        <QueueUrl>https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue</QueueUrl>
-    </GetQueueUrlResult>
-    <ResponseMetadata>
-        <RequestId>470a6f13-2ed9-4181-ad8a-2fdea142988e</RequestId>
-    </ResponseMetadata>
-</GetQueueUrlResponse>
-XML
+            <GetQueueUrlResponse>
+                <GetQueueUrlResult>
+                    <QueueUrl>https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue</QueueUrl>
+                </GetQueueUrlResult>
+                <ResponseMetadata>
+                    <RequestId>470a6f13-2ed9-4181-ad8a-2fdea142988e</RequestId>
+                </ResponseMetadata>
+            </GetQueueUrlResponse>
+            XML
         );
     }
 
     private function getMockedReceiveMessageResponse(): MockResponse
     {
+        if ($this->isAsyncAwsSqsVersion2Installed()) {
+            return new MockResponse(<<<JSON
+                {
+                    "Messages": [
+                        {
+                            "Attributes": {
+                                "SenderId": "195004372649",
+                                "ApproximateFirstReceiveTimestamp": "1250700979248",
+                                "ApproximateReceiveCount": "5",
+                                "SentTimestamp": "1238099229000"
+                            },
+                            "Body": "This is a test message",
+                            "MD5OfBody": "fafb00f5732ab283681e124bf8747ed1",
+                            "MessageId": "5fea7756-0ea4-451a-a703-a558b933e274",
+                            "ReceiptHandle": "MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+CwLj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QEauMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0="
+                        }
+                    ]
+                }
+                JSON
+            );
+        }
+
         return new MockResponse(<<<XML
-<ReceiveMessageResponse>
-  <ReceiveMessageResult>
-    <Message>
-      <MessageId>5fea7756-0ea4-451a-a703-a558b933e274</MessageId>
-      <ReceiptHandle>
-        MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+Cw
-        Lj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QE
-        auMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=
-      </ReceiptHandle>
-      <MD5OfBody>fafb00f5732ab283681e124bf8747ed1</MD5OfBody>
-      <Body>This is a test message</Body>
-      <Attribute>
-        <Name>SenderId</Name>
-        <Value>195004372649</Value>
-      </Attribute>
-      <Attribute>
-        <Name>SentTimestamp</Name>
-        <Value>1238099229000</Value>
-      </Attribute>
-      <Attribute>
-        <Name>ApproximateReceiveCount</Name>
-        <Value>5</Value>
-      </Attribute>
-      <Attribute>
-        <Name>ApproximateFirstReceiveTimestamp</Name>
-        <Value>1250700979248</Value>
-      </Attribute>
-    </Message>
-  </ReceiveMessageResult>
-  <ResponseMetadata>
-    <RequestId>b6633655-283d-45b4-aee4-4e84e0ae6afa</RequestId>
-  </ResponseMetadata>
-</ReceiveMessageResponse>
-XML
+            <ReceiveMessageResponse>
+              <ReceiveMessageResult>
+                <Message>
+                  <MessageId>5fea7756-0ea4-451a-a703-a558b933e274</MessageId>
+                  <ReceiptHandle>
+                    MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+Cw
+                    Lj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QE
+                    auMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=
+                  </ReceiptHandle>
+                  <MD5OfBody>fafb00f5732ab283681e124bf8747ed1</MD5OfBody>
+                  <Body>This is a test message</Body>
+                  <Attribute>
+                    <Name>SenderId</Name>
+                    <Value>195004372649</Value>
+                  </Attribute>
+                  <Attribute>
+                    <Name>SentTimestamp</Name>
+                    <Value>1238099229000</Value>
+                  </Attribute>
+                  <Attribute>
+                    <Name>ApproximateReceiveCount</Name>
+                    <Value>5</Value>
+                  </Attribute>
+                  <Attribute>
+                    <Name>ApproximateFirstReceiveTimestamp</Name>
+                    <Value>1250700979248</Value>
+                  </Attribute>
+                </Message>
+              </ReceiveMessageResult>
+              <ResponseMetadata>
+                <RequestId>b6633655-283d-45b4-aee4-4e84e0ae6afa</RequestId>
+              </ResponseMetadata>
+            </ReceiveMessageResponse>
+            XML
         );
+    }
+
+    private function isAsyncAwsSqsVersion2Installed(): bool
+    {
+        $version = InstalledVersions::getVersion('async-aws/sqs');
+
+        return 'dev-master' === $version || version_compare($version, '2.0.0') >= 0;
     }
 }

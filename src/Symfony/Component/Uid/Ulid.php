@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\Uid;
 
+use Symfony\Component\Uid\Exception\InvalidArgumentException;
+
 /**
  * A ULID is lexicographically sortable and contains a 48-bit timestamp and 80-bit of crypto-random entropy.
  *
@@ -20,31 +22,65 @@ namespace Symfony\Component\Uid;
  */
 class Ulid extends AbstractUid implements TimeBasedUidInterface
 {
+    public const FORMAT_BINARY = 1;
+    public const FORMAT_BASE_32 = 1 << 1;
+    public const FORMAT_BASE_58 = 1 << 2;
+    public const FORMAT_RFC_4122 = 1 << 3;
+    public const FORMAT_RFC_9562 = self::FORMAT_RFC_4122;
+    public const FORMAT_ALL = -1;
+
     protected const NIL = '00000000000000000000000000';
     protected const MAX = '7ZZZZZZZZZZZZZZZZZZZZZZZZZ';
 
     private static string $time = '';
     private static array $rand = [];
 
-    public function __construct(string $ulid = null)
+    public function __construct(?string $ulid = null)
     {
         if (null === $ulid) {
             $this->uid = static::generate();
         } elseif (self::NIL === $ulid) {
-            $this->uid = $ulid;
-        } elseif (self::MAX === strtr($ulid, 'z', 'Z')) {
-            $this->uid = $ulid;
+            $this->uid = self::NIL;
         } else {
-            if (!self::isValid($ulid)) {
-                throw new \InvalidArgumentException(sprintf('Invalid ULID: "%s".', $ulid));
-            }
-
             $this->uid = strtoupper($ulid);
+
+            if (self::MAX === $this->uid) {
+                $this->uid = self::MAX;
+            } elseif (!self::isValid($ulid)) {
+                throw new InvalidArgumentException('Invalid ULID.', $ulid);
+            }
         }
     }
 
-    public static function isValid(string $ulid): bool
+    /**
+     * @param int-mask-of<Ulid::FORMAT_*> $format
+     */
+    public static function isValid(string $ulid/* , int $format = self::FORMAT_BASE_32 */): bool
     {
+        $format = \func_num_args() > 1 ? (int) func_get_arg(1) : self::FORMAT_BASE_32;
+
+        if (26 === \strlen($ulid) && !($format & self::FORMAT_BASE_32)) {
+            return false;
+        }
+
+        if (false === $ulid = self::transformToBase32($ulid, $format)) {
+            return false;
+        }
+
+        $upperUlid = strtoupper($ulid);
+
+        if (self::NIL === $upperUlid && \in_array(static::class, [__CLASS__, NilUlid::class], true)) {
+            return true;
+        }
+
+        if (self::MAX === $upperUlid && \in_array(static::class, [__CLASS__, MaxUlid::class], true)) {
+            return true;
+        }
+
+        if (\in_array(static::class, [NilUlid::class, MaxUlid::class], true)) {
+            return false;
+        }
+
         if (26 !== \strlen($ulid)) {
             return false;
         }
@@ -53,13 +89,13 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
             return false;
         }
 
-        return $ulid[0] <= '7';
+        return $upperUlid[0] <= '7';
     }
 
     public static function fromString(string $ulid): static
     {
         if (36 === \strlen($ulid) && preg_match('{^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$}Di', $ulid)) {
-            $ulid = uuid_parse($ulid);
+            $ulid = hex2bin(str_replace('-', '', $ulid));
         } elseif (22 === \strlen($ulid) && 22 === strspn($ulid, BinaryUtil::BASE58[''])) {
             $ulid = str_pad(BinaryUtil::fromBase($ulid, BinaryUtil::BASE58), 16, "\0", \STR_PAD_LEFT);
         }
@@ -73,7 +109,7 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
         }
 
         $ulid = bin2hex($ulid);
-        $ulid = sprintf('%02s%04s%04s%04s%04s%04s%04s',
+        $ulid = \sprintf('%02s%04s%04s%04s%04s%04s%04s',
             base_convert(substr($ulid, 0, 2), 16, 32),
             base_convert(substr($ulid, 2, 5), 16, 32),
             base_convert(substr($ulid, 7, 5), 16, 32),
@@ -101,7 +137,7 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
     {
         $ulid = strtr($this->uid, 'ABCDEFGHJKMNPQRSTVWXYZ', 'abcdefghijklmnopqrstuv');
 
-        $ulid = sprintf('%02s%05s%05s%05s%05s%05s%05s',
+        $ulid = \sprintf('%02s%05s%05s%05s%05s%05s%05s',
             base_convert(substr($ulid, 0, 2), 32, 16),
             base_convert(substr($ulid, 2, 4), 32, 16),
             base_convert(substr($ulid, 6, 4), 32, 16),
@@ -133,7 +169,7 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
         if (\PHP_INT_SIZE >= 8) {
             $time = (string) hexdec(base_convert($time, 32, 16));
         } else {
-            $time = sprintf('%02s%05s%05s',
+            $time = \sprintf('%02s%05s%05s',
                 base_convert(substr($time, 0, 2), 32, 16),
                 base_convert(substr($time, 2, 4), 32, 16),
                 base_convert(substr($time, 6, 4), 32, 16)
@@ -148,13 +184,13 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
         return \DateTimeImmutable::createFromFormat('U.u', substr_replace($time, '.', -3, 0));
     }
 
-    public static function generate(\DateTimeInterface $time = null): string
+    public static function generate(?\DateTimeInterface $time = null): string
     {
         if (null === $mtime = $time) {
             $time = microtime(false);
             $time = substr($time, 11).substr($time, 2, 3);
         } elseif (0 > $time = $time->format('Uv')) {
-            throw new \InvalidArgumentException('The timestamp must be positive.');
+            throw new InvalidArgumentException('The timestamp must be positive.');
         }
 
         if ($time > self::$time || (null !== $mtime && $time !== self::$time)) {
@@ -190,19 +226,63 @@ class Ulid extends AbstractUid implements TimeBasedUidInterface
             $time = base_convert($time, 10, 32);
         } else {
             $time = str_pad(bin2hex(BinaryUtil::fromBase($time, BinaryUtil::BASE10)), 12, '0', \STR_PAD_LEFT);
-            $time = sprintf('%s%04s%04s',
+            $time = \sprintf('%s%04s%04s',
                 base_convert(substr($time, 0, 2), 16, 32),
                 base_convert(substr($time, 2, 5), 16, 32),
                 base_convert(substr($time, 7, 5), 16, 32)
             );
         }
 
-        return strtr(sprintf('%010s%04s%04s%04s%04s',
+        return strtr(\sprintf('%010s%04s%04s%04s%04s',
             $time,
             base_convert(self::$rand[1], 10, 32),
             base_convert(self::$rand[2], 10, 32),
             base_convert(self::$rand[3], 10, 32),
             base_convert(self::$rand[4], 10, 32)
         ), 'abcdefghijklmnopqrstuv', 'ABCDEFGHJKMNPQRSTVWXYZ');
+    }
+
+    /**
+     * @param int-mask-of<Ulid::FORMAT_*> $format
+     *
+     * @return string|false The base32 string or false if the format doesn't match the input
+     */
+    private static function transformToBase32(string $ulid, int $format): string|false
+    {
+        $inputUlid = $ulid;
+        $fromBase58 = false;
+
+        if (22 === \strlen($ulid) && 22 === strspn($ulid, BinaryUtil::BASE58['']) && $format & self::FORMAT_BASE_58) {
+            $ulid = str_pad(BinaryUtil::fromBase($ulid, BinaryUtil::BASE58), 16, "\0", \STR_PAD_LEFT);
+            $fromBase58 = true;
+        }
+
+        if (16 === \strlen($ulid) && $format & self::FORMAT_BINARY || $fromBase58 && $format & self::FORMAT_BASE_58) {
+            $ulid = self::binaryToBase32($ulid);
+        } elseif (36 === \strlen($ulid) && preg_match('{^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$}Di', $ulid) && $format & self::FORMAT_RFC_4122) {
+            $ulid = self::binaryToBase32(hex2bin(str_replace('-', '', $ulid)));
+        }
+
+        if ($inputUlid === $ulid && !($format & self::FORMAT_BASE_32)) {
+            return false;
+        }
+
+        return $ulid;
+    }
+
+    private static function binaryToBase32(string $ulid): string
+    {
+        $ulid = bin2hex($ulid);
+        $ulid = \sprintf('%02s%04s%04s%04s%04s%04s%04s',
+            base_convert(substr($ulid, 0, 2), 16, 32),
+            base_convert(substr($ulid, 2, 5), 16, 32),
+            base_convert(substr($ulid, 7, 5), 16, 32),
+            base_convert(substr($ulid, 12, 5), 16, 32),
+            base_convert(substr($ulid, 17, 5), 16, 32),
+            base_convert(substr($ulid, 22, 5), 16, 32),
+            base_convert(substr($ulid, 27, 5), 16, 32)
+        );
+
+        return strtr($ulid, 'abcdefghijklmnopqrstuv', 'ABCDEFGHJKMNPQRSTVWXYZ');
     }
 }

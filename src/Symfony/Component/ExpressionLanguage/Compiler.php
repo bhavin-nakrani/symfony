@@ -21,17 +21,13 @@ use Symfony\Contracts\Service\ResetInterface;
 class Compiler implements ResetInterface
 {
     private string $source = '';
-    private array $functions;
 
-    public function __construct(array $functions)
-    {
-        $this->functions = $functions;
+    public function __construct(
+        private array $functions,
+    ) {
     }
 
-    /**
-     * @return array
-     */
-    public function getFunction(string $name)
+    public function getFunction(string $name): array
     {
         return $this->functions[$name];
     }
@@ -66,10 +62,7 @@ class Compiler implements ResetInterface
         return $this;
     }
 
-    /**
-     * @return string
-     */
-    public function subcompile(Node\Node $node)
+    public function subcompile(Node\Node $node): string
     {
         $current = $this->source;
         $this->source = '';
@@ -101,7 +94,7 @@ class Compiler implements ResetInterface
      */
     public function string(string $value): static
     {
-        $this->source .= sprintf('"%s"', addcslashes($value, "\0\t\"\$\\"));
+        $this->source .= \sprintf('"%s"', addcslashes($value, "\0\t\"\$\\"));
 
         return $this;
     }
@@ -114,15 +107,7 @@ class Compiler implements ResetInterface
     public function repr(mixed $value): static
     {
         if (\is_int($value) || \is_float($value)) {
-            if (false !== $locale = setlocale(\LC_NUMERIC, 0)) {
-                setlocale(\LC_NUMERIC, 'C');
-            }
-
-            $this->raw($value);
-
-            if (false !== $locale) {
-                setlocale(\LC_NUMERIC, $locale);
-            }
+            $this->raw(var_export($value, true));
         } elseif (null === $value) {
             $this->raw('null');
         } elseif (\is_bool($value)) {

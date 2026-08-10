@@ -13,17 +13,14 @@ namespace Symfony\Component\Messenger\Bridge\Doctrine\Tests\Transport;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\Result;
-use Doctrine\DBAL\Schema\AbstractSchemaManager;
 use Doctrine\DBAL\Schema\DefaultSchemaManagerFactory;
 use Doctrine\DBAL\Tools\DsnParser;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Bridge\Doctrine\Tests\Fixtures\DummyMessage;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
 
-/**
- * @requires extension pdo_sqlite
- */
+#[RequiresPhpExtension('pdo_sqlite')]
 class DoctrineIntegrationTest extends TestCase
 {
     private \Doctrine\DBAL\Connection $driverConnection;
@@ -32,11 +29,9 @@ class DoctrineIntegrationTest extends TestCase
     protected function setUp(): void
     {
         $dsn = getenv('MESSENGER_DOCTRINE_DSN') ?: 'pdo-sqlite://:memory:';
-        $params = class_exists(DsnParser::class) ? (new DsnParser())->parse($dsn) : ['url' => $dsn];
+        $params = (new DsnParser())->parse($dsn);
         $config = new Configuration();
-        if (class_exists(DefaultSchemaManagerFactory::class)) {
-            $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
-        }
+        $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
 
         $this->driverConnection = DriverManager::getConnection($params, $config);
         $this->connection = new Connection([], $this->driverConnection);
@@ -51,29 +46,68 @@ class DoctrineIntegrationTest extends TestCase
     {
         $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
         $encoded = $this->connection->get();
-        $this->assertEquals('{"message": "Hi"}', $encoded['body']);
-        $this->assertEquals(['type' => DummyMessage::class], $encoded['headers']);
+        $this->assertEquals('{"message": "Hi"}', $encoded[0]['body']);
+        $this->assertEquals(['type' => DummyMessage::class], $encoded[0]['headers']);
+    }
+
+    public function testKeepaliveRenewsTheLease()
+    {
+        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
+        $encoded = $this->connection->get();
+        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
+
+        $this->connection->keepalive($encoded[0]['id']);
+
+        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
+    }
+
+    public function testKeepaliveWhileTheConnectionIsInATransaction()
+    {
+        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
+        $encoded = $this->connection->get();
+        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
+
+        $this->driverConnection->beginTransaction();
+        $this->connection->keepalive($encoded[0]['id']);
+        $this->driverConnection->commit();
+
+        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
     }
 
     public function testSendWithDelay()
     {
         $this->connection->send('{"message": "Hi i am delayed"}', ['type' => DummyMessage::class], 600000);
 
-        $stmt = $this->driverConnection->createQueryBuilder()
+        $qb = $this->driverConnection->createQueryBuilder()
             ->select('m.available_at')
             ->from('messenger_messages', 'm')
             ->where('m.body = :body')
             ->setParameter('body', '{"message": "Hi i am delayed"}');
-        if (method_exists($stmt, 'executeQuery')) {
-            $stmt = $stmt->executeQuery();
-        } else {
-            $stmt = $stmt->execute();
-        }
 
-        $available_at = new \DateTimeImmutable($stmt instanceof Result ? $stmt->fetchOne() : $stmt->fetchColumn());
+        $result = $qb->executeQuery();
 
-        $now = new \DateTimeImmutable('now + 60 seconds');
-        $this->assertGreaterThan($now, $available_at);
+        $availableAt = new \DateTimeImmutable($result->fetchOne(), new \DateTimeZone('UTC'));
+
+        $now = new \DateTimeImmutable('now + 60 seconds', new \DateTimeZone('UTC'));
+        $this->assertGreaterThan($now, $availableAt);
+    }
+
+    public function testSendWithNegativeDelay()
+    {
+        $this->connection->send('{"message": "Hi, I am not actually delayed"}', ['type' => DummyMessage::class], -600000);
+
+        $qb = $this->driverConnection->createQueryBuilder()
+            ->select('m.available_at')
+            ->from('messenger_messages', 'm')
+            ->where('m.body = :body')
+            ->setParameter('body', '{"message": "Hi, I am not actually delayed"}');
+
+        $result = $qb->executeQuery();
+
+        $availableAt = new \DateTimeImmutable($result->fetchOne(), new \DateTimeZone('UTC'));
+
+        $now = new \DateTimeImmutable('now - 60 seconds', new \DateTimeZone('UTC'));
+        $this->assertLessThan($now, $availableAt);
     }
 
     public function testItRetrieveTheFirstAvailableMessage()
@@ -107,7 +141,7 @@ class DoctrineIntegrationTest extends TestCase
         ]);
 
         $encoded = $this->connection->get();
-        $this->assertEquals('{"message": "Hi available"}', $encoded['body']);
+        $this->assertEquals('{"message": "Hi available"}', $encoded[0]['body']);
     }
 
     public function testItCountMessages()
@@ -154,7 +188,7 @@ class DoctrineIntegrationTest extends TestCase
     public function testItRetrieveTheMessageThatIsOlderThanRedeliverTimeout()
     {
         $this->connection->setup();
-        $twoHoursAgo = new \DateTimeImmutable('now -2 hours');
+        $twoHoursAgo = new \DateTimeImmutable('now -2 hours', new \DateTimeZone('UTC'));
         $this->driverConnection->insert('messenger_messages', [
             'body' => '{"message": "Hi requeued"}',
             'headers' => json_encode(['type' => DummyMessage::class]),
@@ -172,29 +206,23 @@ class DoctrineIntegrationTest extends TestCase
         ]);
 
         $next = $this->connection->get();
-        $this->assertEquals('{"message": "Hi requeued"}', $next['body']);
-        $this->connection->reject($next['id']);
+        $this->assertEquals('{"message": "Hi requeued"}', $next[0]['body']);
+        $this->connection->reject($next[0]['id']);
     }
 
     public function testTheTransportIsSetupOnGet()
     {
-        $this->assertFalse($this->createSchemaManager()->tablesExist(['messenger_messages']));
+        $this->driverConnection->executeStatement('CREATE TABLE unrelated (unknown_type_column)');
+        $this->assertFalse($this->driverConnection->createSchemaManager()->tablesExist(['messenger_messages']));
         $this->assertNull($this->connection->get());
 
         $this->connection->send('the body', ['my' => 'header']);
         $envelope = $this->connection->get();
-        $this->assertEquals('the body', $envelope['body']);
+        $this->assertEquals('the body', $envelope[0]['body']);
     }
 
-    private function formatDateTime(\DateTimeImmutable $dateTime)
+    private function formatDateTime(\DateTimeImmutable $dateTime): string
     {
         return $dateTime->format($this->driverConnection->getDatabasePlatform()->getDateTimeFormatString());
-    }
-
-    private function createSchemaManager(): AbstractSchemaManager
-    {
-        return method_exists($this->driverConnection, 'createSchemaManager')
-            ? $this->driverConnection->createSchemaManager()
-            : $this->driverConnection->getSchemaManager();
     }
 }

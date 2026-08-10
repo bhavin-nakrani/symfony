@@ -18,16 +18,15 @@ use Symfony\Component\Lock\Exception\UnserializableKeyException;
  *
  * @author Jérémy Derussé <jeremy@derusse.com>
  */
-final class Key
+final class Key implements \Stringable
 {
-    private string $resource;
     private ?float $expiringTime = null;
     private array $state = [];
     private bool $serializable = true;
 
-    public function __construct(string $resource)
-    {
-        $this->resource = $resource;
+    public function __construct(
+        private string $resource,
+    ) {
     }
 
     public function __toString(): string
@@ -90,12 +89,27 @@ final class Key
         return null !== $this->expiringTime && $this->expiringTime <= microtime(true);
     }
 
-    public function __sleep(): array
+    public function __unserialize(array $data): void
     {
-        if (!$this->serializable) {
-            throw new UnserializableKeyException('The key cannot be serialized.');
+        if (($data['resource'] ?? $data["\0".self::class."\0resource"] ?? null) instanceof \Stringable) {
+            throw new \BadMethodCallException('Cannot unserialize '.self::class);
         }
 
-        return ['resource', 'expiringTime', 'state'];
+        $this->resource = $data['resource'] ?? $data["\0".self::class."\0resource"];
+        $this->expiringTime = $data['expiringTime'] ?? $data["\0".self::class."\0expiringTime"] ?? null;
+        $this->state = $data['state'] ?? $data["\0".self::class."\0state"] ?? [];
+    }
+
+    public function __serialize(): array
+    {
+        if (!$this->serializable) {
+            throw new UnserializableKeyException('The current lock store doesn\'t support serialization of Key objects.');
+        }
+
+        return [
+            'resource' => $this->resource,
+            'expiringTime' => $this->expiringTime,
+            'state' => $this->state,
+        ];
     }
 }

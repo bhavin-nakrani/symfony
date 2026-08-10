@@ -15,8 +15,7 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\MissingOptionsException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates a collection's element count.
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
@@ -35,58 +34,49 @@ class Count extends Constraint
         self::NOT_DIVISIBLE_BY_ERROR => 'NOT_DIVISIBLE_BY_ERROR',
     ];
 
+    public string $minMessage = 'This collection should contain {{ limit }} element or more.|This collection should contain {{ limit }} elements or more.';
+    public string $maxMessage = 'This collection should contain {{ limit }} element or less.|This collection should contain {{ limit }} elements or less.';
+    public string $exactMessage = 'This collection should contain exactly {{ limit }} element.|This collection should contain exactly {{ limit }} elements.';
+    public string $divisibleByMessage = 'The number of elements in this collection should be a multiple of {{ compared_value }}.';
+    public ?int $min = null;
+    public ?int $max = null;
+    public ?int $divisibleBy = null;
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param int<0, max>|null  $exactly     The exact expected number of elements
+     * @param int<0, max>|null  $min         Minimum expected number of elements
+     * @param int<0, max>|null  $max         Maximum expected number of elements
+     * @param positive-int|null $divisibleBy The number the collection count should be divisible by
+     * @param string[]|null     $groups
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $minMessage = 'This collection should contain {{ limit }} element or more.|This collection should contain {{ limit }} elements or more.';
-    public $maxMessage = 'This collection should contain {{ limit }} element or less.|This collection should contain {{ limit }} elements or less.';
-    public $exactMessage = 'This collection should contain exactly {{ limit }} element.|This collection should contain exactly {{ limit }} elements.';
-    public $divisibleByMessage = 'The number of elements in this collection should be a multiple of {{ compared_value }}.';
-    public $min;
-    public $max;
-    public $divisibleBy;
-
     public function __construct(
-        int|array $exactly = null,
-        int $min = null,
-        int $max = null,
-        int $divisibleBy = null,
-        string $exactMessage = null,
-        string $minMessage = null,
-        string $maxMessage = null,
-        string $divisibleByMessage = null,
-        array $groups = null,
+        ?int $exactly = null,
+        ?int $min = null,
+        ?int $max = null,
+        ?int $divisibleBy = null,
+        ?string $exactMessage = null,
+        ?string $minMessage = null,
+        ?string $maxMessage = null,
+        ?string $divisibleByMessage = null,
+        ?array $groups = null,
         mixed $payload = null,
-        array $options = []
     ) {
-        if (\is_array($exactly)) {
-            $options = array_merge($exactly, $options);
-            $exactly = $options['value'] ?? null;
-        }
-
-        $min ??= $options['min'] ?? null;
-        $max ??= $options['max'] ?? null;
-
-        unset($options['value'], $options['min'], $options['max']);
-
         if (null !== $exactly && null === $min && null === $max) {
             $min = $max = $exactly;
         }
 
-        parent::__construct($options, $groups, $payload);
+        parent::__construct(null, $groups, $payload);
 
         $this->min = $min;
         $this->max = $max;
-        $this->divisibleBy = $divisibleBy ?? $this->divisibleBy;
+        $this->divisibleBy = $divisibleBy;
         $this->exactMessage = $exactMessage ?? $this->exactMessage;
         $this->minMessage = $minMessage ?? $this->minMessage;
         $this->maxMessage = $maxMessage ?? $this->maxMessage;
         $this->divisibleByMessage = $divisibleByMessage ?? $this->divisibleByMessage;
 
         if (null === $this->min && null === $this->max && null === $this->divisibleBy) {
-            throw new MissingOptionsException(sprintf('Either option "min", "max" or "divisibleBy" must be given for constraint "%s".', __CLASS__), ['min', 'max', 'divisibleBy']);
+            throw new MissingOptionsException(\sprintf('Either option "min", "max" or "divisibleBy" must be given for constraint "%s".', __CLASS__), ['min', 'max', 'divisibleBy']);
         }
     }
 }

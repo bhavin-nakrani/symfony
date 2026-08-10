@@ -32,18 +32,18 @@ class MandrillApiTransport extends AbstractApiTransport
 {
     private const HOST = 'mandrillapp.com';
 
-    private string $key;
-
-    public function __construct(string $key, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null, LoggerInterface $logger = null)
-    {
-        $this->key = $key;
-
+    public function __construct(
+        #[\SensitiveParameter] private string $key,
+        ?HttpClientInterface $client = null,
+        ?EventDispatcherInterface $dispatcher = null,
+        ?LoggerInterface $logger = null,
+    ) {
         parent::__construct($client, $dispatcher, $logger);
     }
 
     public function __toString(): string
     {
-        return sprintf('mandrill+api://%s', $this->getEndpoint());
+        return \sprintf('mandrill+api://%s', $this->getEndpoint());
     }
 
     protected function doSendApi(SentMessage $sentMessage, Email $email, Envelope $envelope): ResponseInterface
@@ -56,17 +56,17 @@ class MandrillApiTransport extends AbstractApiTransport
             $statusCode = $response->getStatusCode();
             $result = $response->toArray(false);
         } catch (DecodingExceptionInterface) {
-            throw new HttpTransportException('Unable to send an email: '.$response->getContent(false).sprintf(' (code %d).', $statusCode), $response);
+            throw new HttpTransportException('Unable to send an email: '.$response->getContent(false).\sprintf(' (code %d).', $statusCode), $response);
         } catch (TransportExceptionInterface $e) {
             throw new HttpTransportException('Could not reach the remote Mandrill server.', $response, 0, $e);
         }
 
         if (200 !== $statusCode) {
             if ('error' === ($result['status'] ?? false)) {
-                throw new HttpTransportException('Unable to send an email: '.$result['message'].sprintf(' (code %d).', $result['code']), $response);
+                throw new HttpTransportException('Unable to send an email: '.$result['message'].\sprintf(' (code %d).', $result['code']), $response);
             }
 
-            throw new HttpTransportException(sprintf('Unable to send an email (code %d).', $result['code']), $response);
+            throw new HttpTransportException(\sprintf('Unable to send an email (code %d).', $result['code']), $response);
         }
 
         $firstRecipient = reset($result);
@@ -93,6 +93,10 @@ class MandrillApiTransport extends AbstractApiTransport
             ],
         ];
 
+        if ($email->getHeaders()->get('X-MC-Subaccount')) {
+            $payload['message']['subaccount'] = $email->getHeaders()->get('X-MC-Subaccount')->getBodyAsString();
+        }
+
         if ('' !== $envelope->getSender()->getName()) {
             $payload['message']['from_name'] = $envelope->getSender()->getName();
         }
@@ -111,15 +115,17 @@ class MandrillApiTransport extends AbstractApiTransport
             }
 
             if ('inline' === $disposition) {
+                if ($attachment->hasContentId()) {
+                    $att['name'] = $attachment->getContentId();
+                }
                 $payload['message']['images'][] = $att;
             } else {
                 $payload['message']['attachments'][] = $att;
             }
         }
 
-        $headersToBypass = ['from', 'to', 'cc', 'bcc', 'subject', 'content-type'];
         foreach ($email->getHeaders()->all() as $name => $header) {
-            if (\in_array($name, $headersToBypass, true)) {
+            if (\in_array($name, ['from', 'to', 'cc', 'bcc', 'subject', 'content-type', 'x-mc-subaccount'], true)) {
                 continue;
             }
 

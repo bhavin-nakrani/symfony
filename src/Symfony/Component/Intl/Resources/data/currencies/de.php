@@ -898,9 +898,13 @@ return [
             'SKK',
             'Slowakische Krone',
         ],
+        'SLE' => [
+            'SLE',
+            'Sierra-leonischer Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Sierra-leonischer Leone',
+            'Sierra-leonischer Leone (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1074,6 +1078,10 @@ return [
             'EC$',
             'Ostkaribischer Dollar',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karibischer Gulden',
+        ],
         'XEU' => [
             'XEU',
             'Europäische Währungseinheit (XEU)',
@@ -1149,6 +1157,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Simbabwe-Dollar (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Simbabwe-Gold',
         ],
         'ZWL' => [
             'ZWL',

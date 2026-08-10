@@ -13,6 +13,7 @@ namespace Symfony\Component\Validator\Mapping\Loader;
 
 use Symfony\Component\Config\Util\XmlUtils;
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Constraints\GroupSequence;
 use Symfony\Component\Validator\Exception\MappingException;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
 
@@ -26,9 +27,9 @@ class XmlFileLoader extends FileLoader
     /**
      * The XML nodes of the mapping file.
      *
-     * @var \SimpleXMLElement[]|null
+     * @var array<class-string, \SimpleXMLElement>
      */
-    protected $classes;
+    protected array $classes;
 
     public function __construct(string $file)
     {
@@ -55,7 +56,7 @@ class XmlFileLoader extends FileLoader
     /**
      * Return the names of the classes mapped in this file.
      *
-     * @return string[]
+     * @return class-string[]
      */
     public function getMappedClasses(): array
     {
@@ -79,9 +80,7 @@ class XmlFileLoader extends FileLoader
 
         foreach ($nodes as $node) {
             if (\count($node) > 0) {
-                if (\count($node->value) > 0) {
-                    $options = $this->parseValues($node->value);
-                } elseif (\count($node->constraint) > 0) {
+                if (\count($node->constraint) > 0) {
                     $options = $this->parseConstraints($node->constraint);
                 } elseif (\count($node->option) > 0) {
                     $options = $this->parseOptions($node->option);
@@ -92,6 +91,10 @@ class XmlFileLoader extends FileLoader
                 $options = XmlUtils::phpize(trim($node));
             } else {
                 $options = null;
+            }
+
+            if (isset($options['groups']) && !\is_array($options['groups'])) {
+                $options['groups'] = (array) $options['groups'];
             }
 
             $constraints[] = $this->newConstraint((string) $node['name'], $options);
@@ -201,12 +204,16 @@ class XmlFileLoader extends FileLoader
     private function loadClassMetadataFromXml(ClassMetadata $metadata, \SimpleXMLElement $classDescription): void
     {
         if (\count($classDescription->{'group-sequence-provider'}) > 0) {
+            $metadata->setGroupProvider($classDescription->{'group-sequence-provider'}[0]->value ?: null);
             $metadata->setGroupSequenceProvider(true);
         }
 
         foreach ($classDescription->{'group-sequence'} as $groupSequence) {
             if (\count($groupSequence->value) > 0) {
-                $metadata->setGroupSequence($this->parseValues($groupSequence[0]->value));
+                $groups = $this->parseValues($groupSequence[0]->value);
+                $cascadeCurrentGroup = XmlUtils::phpize($groupSequence['cascade-current-group'] ?? false);
+
+                $metadata->setGroupSequence($cascadeCurrentGroup ? new GroupSequence($groups, true) : $groups);
             }
         }
 

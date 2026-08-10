@@ -24,49 +24,53 @@ use Symfony\Component\RateLimiter\Storage\StorageInterface;
 /**
  * @author Wouter de Jong <wouter@wouterj.nl>
  */
-final class RateLimiterFactory
+final class RateLimiterFactory implements RateLimiterFactoryInterface
 {
     private array $config;
-    private StorageInterface $storage;
-    private ?LockFactory $lockFactory;
 
-    public function __construct(array $config, StorageInterface $storage, LockFactory $lockFactory = null)
-    {
-        $this->storage = $storage;
-        $this->lockFactory = $lockFactory;
-
+    public function __construct(
+        array $config,
+        private StorageInterface $storage,
+        private ?LockFactory $lockFactory = null,
+    ) {
         $options = new OptionsResolver();
         self::configureOptions($options);
 
         $this->config = $options->resolve($config);
     }
 
-    public function create(string $key = null): LimiterInterface
+    public function create(?string $key = null): LimiterInterface
     {
         $id = $this->config['id'].'-'.$key;
         $lock = $this->lockFactory?->createLock($id);
 
         return match ($this->config['policy']) {
             'token_bucket' => new TokenBucketLimiter($id, $this->config['limit'], $this->config['rate'], $this->storage, $lock),
-            'fixed_window' => new FixedWindowLimiter($id, $this->config['limit'], $this->config['interval'], $this->storage, $lock),
+            'fixed_window' => new FixedWindowLimiter($id, $this->config['limit'], $this->config['interval'], $this->storage, $lock, $this->config['anchor_at']),
             'sliding_window' => new SlidingWindowLimiter($id, $this->config['limit'], $this->config['interval'], $this->storage, $lock),
             'no_limit' => new NoLimiter(),
-            default => throw new \LogicException(sprintf('Limiter policy "%s" does not exists, it must be either "token_bucket", "sliding_window", "fixed_window" or "no_limit".', $this->config['policy'])),
+            default => throw new \LogicException(\sprintf('Limiter policy "%s" does not exists, it must be either "token_bucket", "sliding_window", "fixed_window" or "no_limit".', $this->config['policy'])),
         };
     }
 
-    protected static function configureOptions(OptionsResolver $options): void
+    private static function configureOptions(OptionsResolver $options): void
     {
         $intervalNormalizer = static function (Options $options, string $interval): \DateInterval {
-            try {
-                return (new \DateTimeImmutable())->diff(new \DateTimeImmutable('+'.$interval));
-            } catch (\Exception $e) {
-                if (!preg_match('/Failed to parse time string \(\+([^)]+)\)/', $e->getMessage(), $m)) {
-                    throw $e;
-                }
+            // Create DateTimeImmutable from unix timestamp, so the default timezone is ignored and we don't need to
+            // deal with quirks happening when modifying dates using a timezone with DST.
+            $now = \DateTimeImmutable::createFromFormat('U', (string) time());
 
-                throw new \LogicException(sprintf('Cannot parse interval "%s", please use a valid unit as described on https://www.php.net/datetime.formats.relative.', $m[1]));
+            try {
+                $nowPlusInterval = @$now->modify('+'.$interval);
+            } catch (\DateMalformedStringException $e) {
+                throw new \LogicException(\sprintf('Cannot parse interval "%s", please use a valid unit as described on https://php.net/datetime.formats#datetime.formats.relative', $interval), 0, $e);
             }
+
+            if (!$nowPlusInterval) {
+                throw new \LogicException(\sprintf('Cannot parse interval "%s", please use a valid unit as described on https://php.net/datetime.formats#datetime.formats.relative', $interval));
+            }
+
+            return $now->diff($nowPlusInterval);
         };
 
         $options
@@ -78,18 +82,38 @@ final class RateLimiterFactory
             ->define('limit')->allowedTypes('int')
             ->define('interval')->allowedTypes('string')->normalize($intervalNormalizer)
             ->define('rate')
-                ->default(function (OptionsResolver $rate) use ($intervalNormalizer) {
+                ->options(static function (OptionsResolver $rate) use ($intervalNormalizer) {
                     $rate
                         ->define('amount')->allowedTypes('int')->default(1)
                         ->define('interval')->allowedTypes('string')->normalize($intervalNormalizer)
                     ;
                 })
-                ->normalize(function (Options $options, $value) {
+                ->normalize(static function (Options $options, $value) {
                     if (!isset($value['interval'])) {
                         return null;
                     }
 
                     return new Rate($value['interval'], $value['amount']);
+                })
+            ->define('anchor_at')
+                ->default(null)
+                ->allowedTypes('null', 'string', \DateTimeInterface::class)
+                ->normalize(static function (Options $options, mixed $value): ?\DateTimeImmutable {
+                    if (null === $value) {
+                        return null;
+                    }
+                    if ('fixed_window' !== $options['policy']) {
+                        throw new \LogicException('The "anchor_at" option is only supported with the "fixed_window" policy.');
+                    }
+                    if ($value instanceof \DateTimeInterface) {
+                        return $value instanceof \DateTimeImmutable ? $value : \DateTimeImmutable::createFromInterface($value);
+                    }
+                    try {
+                        // parse as UTC so timezone-less strings produce a stable timestamp across servers
+                        return new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
+                    } catch (\Exception $e) {
+                        throw new \InvalidArgumentException(\sprintf('Cannot parse "anchor_at" value "%s".', $value), 0, $e);
+                    }
                 })
         ;
     }

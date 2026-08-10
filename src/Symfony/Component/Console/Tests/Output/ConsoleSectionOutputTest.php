@@ -44,7 +44,7 @@ class ConsoleSectionOutputTest extends TestCase
         $output->clear();
 
         rewind($output->getStream());
-        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL.sprintf("\x1b[%dA", 2)."\x1b[0J", stream_get_contents($output->getStream()));
+        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL.\sprintf("\x1b[%dA", 2)."\x1b[0J", stream_get_contents($output->getStream()));
     }
 
     public function testClearNumberOfLines()
@@ -56,7 +56,7 @@ class ConsoleSectionOutputTest extends TestCase
         $output->clear(2);
 
         rewind($output->getStream());
-        $this->assertEquals("Foo\nBar\nBaz\nFooBar".\PHP_EOL.sprintf("\x1b[%dA", 2)."\x1b[0J", stream_get_contents($output->getStream()));
+        $this->assertEquals("Foo\nBar\nBaz\nFooBar".\PHP_EOL.\sprintf("\x1b[%dA", 2)."\x1b[0J", stream_get_contents($output->getStream()));
     }
 
     public function testClearNumberOfLinesWithMultipleSections()
@@ -134,6 +134,40 @@ class ConsoleSectionOutputTest extends TestCase
         $this->assertEquals($expected, stream_get_contents($output->getStream()));
     }
 
+    public function testMaxHeightMultipleSections()
+    {
+        $expected = '';
+        $sections = [];
+
+        $firstSection = new ConsoleSectionOutput($this->stream, $sections, OutputInterface::VERBOSITY_NORMAL, true, new OutputFormatter());
+        $firstSection->setMaxHeight(3);
+
+        $secondSection = new ConsoleSectionOutput($this->stream, $sections, OutputInterface::VERBOSITY_NORMAL, true, new OutputFormatter());
+        $secondSection->setMaxHeight(3);
+
+        // fill the first section
+        $firstSection->writeln(['One', 'Two', 'Three']);
+        $expected .= 'One'.\PHP_EOL.'Two'.\PHP_EOL.'Three'.\PHP_EOL;
+
+        // fill the second section
+        $secondSection->writeln(['One', 'Two', 'Three']);
+        $expected .= 'One'.\PHP_EOL.'Two'.\PHP_EOL.'Three'.\PHP_EOL;
+
+        // cause overflow of second section (redraw whole section, without first line)
+        $secondSection->writeln('Four');
+        $expected .= "\x1b[3A\x1b[0J";
+        $expected .= 'Two'.\PHP_EOL.'Three'.\PHP_EOL.'Four'.\PHP_EOL;
+
+        // cause overflow of first section (redraw whole section, without first line)
+        $firstSection->writeln('Four'.\PHP_EOL.'Five'.\PHP_EOL.'Six');
+        $expected .= "\x1b[6A\x1b[0J";
+        $expected .= 'Four'.\PHP_EOL.'Five'.\PHP_EOL.'Six'.\PHP_EOL;
+        $expected .= 'Two'.\PHP_EOL.'Three'.\PHP_EOL.'Four'.\PHP_EOL;
+
+        rewind($this->stream);
+        $this->assertEquals(escapeshellcmd($expected), escapeshellcmd(stream_get_contents($this->stream)));
+    }
+
     public function testMaxHeightWithoutNewLine()
     {
         $expected = '';
@@ -154,6 +188,18 @@ class ConsoleSectionOutputTest extends TestCase
         $this->assertEquals($expected, stream_get_contents($output->getStream()));
     }
 
+    public function testOverwriteFormatsMessage()
+    {
+        $sections = [];
+        $output = new ConsoleSectionOutput($this->stream, $sections, OutputInterface::VERBOSITY_NORMAL, true, new OutputFormatter());
+
+        $output->writeln('Foo');
+        $output->overwrite('<info>Bar</>');
+
+        rewind($output->getStream());
+        $this->assertEquals('Foo'.\PHP_EOL."\x1b[1A\x1b[0J\x1b[32mBar\x1b[39m".\PHP_EOL, stream_get_contents($output->getStream()));
+    }
+
     public function testOverwriteMultipleLines()
     {
         $sections = [];
@@ -163,7 +209,21 @@ class ConsoleSectionOutputTest extends TestCase
         $output->overwrite('Bar');
 
         rewind($output->getStream());
-        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL.'Baz'.\PHP_EOL.sprintf("\x1b[%dA", 3)."\x1b[0J".'Bar'.\PHP_EOL, stream_get_contents($output->getStream()));
+        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL.'Baz'.\PHP_EOL.\sprintf("\x1b[%dA", 3)."\x1b[0J".'Bar'.\PHP_EOL, stream_get_contents($output->getStream()));
+    }
+
+    public function testOverwriteWithMaxHeightOverflow()
+    {
+        $sections = [];
+        $output = new ConsoleSectionOutput($this->stream, $sections, OutputInterface::VERBOSITY_NORMAL, true, new OutputFormatter());
+        $output->setMaxHeight(2);
+
+        $output->writeln(['One', 'Two']);
+        // overwrite with more lines than the max height: only the last lines stay visible
+        $output->overwrite('A'.\PHP_EOL.'B'.\PHP_EOL.'C');
+
+        rewind($output->getStream());
+        $this->assertEquals('One'.\PHP_EOL.'Two'.\PHP_EOL."\x1b[2A\x1b[0J".'B'.\PHP_EOL.'C'.\PHP_EOL, stream_get_contents($output->getStream()));
     }
 
     public function testAddingMultipleSections()
@@ -189,7 +249,7 @@ class ConsoleSectionOutputTest extends TestCase
         $output2->overwrite('Foobar');
 
         rewind($output->getStream());
-        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL."\x1b[2A\x1b[0JBar".\PHP_EOL."\x1b[1A\x1b[0JBaz".\PHP_EOL.'Bar'.\PHP_EOL."\x1b[1A\x1b[0JFoobar".\PHP_EOL, stream_get_contents($output->getStream()));
+        $this->assertEquals('Foo'.\PHP_EOL.'Bar'.\PHP_EOL."\x1b[2A\x1b[0JBaz".\PHP_EOL.'Bar'.\PHP_EOL."\x1b[1A\x1b[0JFoobar".\PHP_EOL, stream_get_contents($output->getStream()));
     }
 
     public function testMultipleSectionsOutputWithoutNewline()
@@ -256,5 +316,17 @@ class ConsoleSectionOutputTest extends TestCase
 
         rewind($output->getStream());
         $this->assertSame('What\'s your favorite super hero?'.\PHP_EOL."\x1b[2A\x1b[0J", stream_get_contents($output->getStream()));
+    }
+
+    public function testWriteWithoutNewLine()
+    {
+        $sections = [];
+        $output = new ConsoleSectionOutput($this->stream, $sections, OutputInterface::VERBOSITY_NORMAL, true, new OutputFormatter());
+
+        $output->write('Foo'.\PHP_EOL);
+        $output->write('Bar');
+
+        rewind($output->getStream());
+        $this->assertEquals(escapeshellcmd('Foo'.\PHP_EOL.'Bar'.\PHP_EOL), escapeshellcmd(stream_get_contents($output->getStream())));
     }
 }

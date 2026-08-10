@@ -27,15 +27,11 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\Service\ResetInterface;
 
 abstract class DoctrineType extends AbstractType implements ResetInterface
 {
-    /**
-     * @var ManagerRegistry
-     */
-    protected $registry;
-
     /**
      * @var IdReader[]
      */
@@ -92,15 +88,12 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
         return null;
     }
 
-    public function __construct(ManagerRegistry $registry)
-    {
-        $this->registry = $registry;
+    public function __construct(
+        protected ManagerRegistry $registry,
+    ) {
     }
 
-    /**
-     * @return void
-     */
-    public function buildForm(FormBuilderInterface $builder, array $options)
+    public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         if ($options['multiple'] && interface_exists(Collection::class)) {
             $builder
@@ -110,10 +103,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
         }
     }
 
-    /**
-     * @return void
-     */
-    public function configureOptions(OptionsResolver $resolver)
+    public function configureOptions(OptionsResolver $resolver): void
     {
         $choiceLoader = function (Options $options) {
             // Unless the choices are given explicitly, load them on demand
@@ -162,7 +152,28 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
         $choiceValue = function (Options $options) {
             // If the entity has a single-column ID, use that ID as value
             if ($options['id_reader'] instanceof IdReader && $options['id_reader']->isSingleId()) {
-                return ChoiceList::value($this, $options['id_reader']->getIdValue(...), $options['id_reader']);
+                $idReader = $options['id_reader'];
+                $uidFormat = $options['uid_format'];
+
+                if (null === $uidFormat) {
+                    return ChoiceList::value($this, $idReader->getIdValue(...), $idReader);
+                }
+
+                $formatMethod = match ($uidFormat) {
+                    'base32' => 'toBase32',
+                    'base58' => 'toBase58',
+                    'binary' => 'toBinary',
+                    'hex' => 'toHex',
+                    'rfc4122' => 'toRfc4122',
+                };
+
+                return ChoiceList::value($this, static function (?object $object = null) use ($idReader, $formatMethod): string {
+                    if ('' === $value = $idReader->getIdValue($object)) {
+                        return '';
+                    }
+
+                    return Uuid::fromString($value)->$formatMethod();
+                }, [$idReader, $uidFormat]);
             }
 
             // Otherwise, an incrementing integer is used as value automatically
@@ -181,7 +192,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
             $em = $this->registry->getManagerForClass($options['class']);
 
             if (null === $em) {
-                throw new RuntimeException(sprintf('Class "%s" seems not to be a managed Doctrine entity. Did you forget to map it?', $options['class']));
+                throw new RuntimeException(\sprintf('Class "%s" seems not to be a managed Doctrine entity. Did you forget to map it?', $options['class']));
             }
 
             return $em;
@@ -189,7 +200,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
 
         // Invoke the query builder closure so that we can cache choice lists
         // for equal query builders
-        $queryBuilderNormalizer = function (Options $options, $queryBuilder) {
+        $queryBuilderNormalizer = static function (Options $options, $queryBuilder) {
             if (\is_callable($queryBuilder)) {
                 $queryBuilder = $queryBuilder($options['em']->getRepository($options['class']));
             }
@@ -217,6 +228,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
             'choice_value' => $choiceValue,
             'id_reader' => null, // internal
             'choice_translation_domain' => false,
+            'uid_format' => null,
         ]);
 
         $resolver->setRequired(['class']);
@@ -226,6 +238,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
         $resolver->setNormalizer('id_reader', $idReaderNormalizer);
 
         $resolver->setAllowedTypes('em', ['null', 'string', ObjectManager::class]);
+        $resolver->setAllowedValues('uid_format', [null, 'base32', 'base58', 'binary', 'hex', 'rfc4122']);
     }
 
     /**
@@ -238,10 +251,7 @@ abstract class DoctrineType extends AbstractType implements ResetInterface
         return ChoiceType::class;
     }
 
-    /**
-     * @return void
-     */
-    public function reset()
+    public function reset(): void
     {
         $this->idReaders = [];
         $this->entityLoaders = [];

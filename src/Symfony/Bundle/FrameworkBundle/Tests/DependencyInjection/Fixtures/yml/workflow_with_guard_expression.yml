@@ -1,6 +1,4 @@
 framework:
-    annotations: false
-    http_method_override: false
     workflows:
         article:
             type: workflow

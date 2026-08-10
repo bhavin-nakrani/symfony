@@ -15,12 +15,11 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\PersistentCollection;
+use PHPUnit\Framework\Attributes\RequiresMethod;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\VarDumper\Test\VarDumperTestTrait;
 
-/**
- * @requires function \Doctrine\Common\Collections\ArrayCollection::__construct
- */
+#[RequiresMethod(ArrayCollection::class, '__construct')]
 class DoctrineCasterTest extends TestCase
 {
     use VarDumperTestTrait;
@@ -29,16 +28,32 @@ class DoctrineCasterTest extends TestCase
     {
         $classMetadata = new ClassMetadata(__CLASS__);
 
-        $collection = new PersistentCollection($this->createMock(EntityManagerInterface::class), $classMetadata, new ArrayCollection(['test']));
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManagerClass = $entityManager::class;
+        $collection = new PersistentCollection($entityManager, $classMetadata, new ArrayCollection(['test']));
 
-        $expected = <<<EODUMP
-Doctrine\ORM\PersistentCollection {
-%A
-  -em: Mock_EntityManagerInterface_%s { …3}
-  -backRefFieldName: null
-  -typeClass: Doctrine\ORM\Mapping\ClassMetadata { …}
-%A
-EODUMP;
+        if (property_exists(PersistentCollection::class, 'isDirty')) {
+            // Collections >= 2
+            $expected = <<<EODUMP
+                Doctrine\ORM\PersistentCollection {
+                %A
+                  -backRefFieldName: null
+                  -isDirty: false
+                  -em: $entityManagerClass { …%d}
+                  -typeClass: Doctrine\ORM\Mapping\ClassMetadata { …}
+                %A
+                EODUMP;
+        } else {
+            // Collections 1
+            $expected = <<<EODUMP
+                Doctrine\ORM\PersistentCollection {
+                %A
+                  -em: $entityManagerClass { …%d}
+                  -backRefFieldName: null
+                  -typeClass: Doctrine\ORM\Mapping\ClassMetadata { …}
+                %A
+                EODUMP;
+        }
 
         $this->assertDumpMatchesFormat($expected, $collection);
     }

@@ -12,12 +12,13 @@
 namespace Symfony\Bundle\SecurityBundle\DependencyInjection\Security\AccessToken;
 
 use Jose\Component\Core\Algorithm;
-use Jose\Component\Core\JWK;
 use Symfony\Component\Config\Definition\Builder\NodeBuilder;
 use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\Security\Http\Command\OidcTokenGenerateCommand;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
  * Configures a token handler for decoding and validating an OIDC token.
@@ -30,25 +31,86 @@ class OidcTokenHandlerFactory implements TokenHandlerFactoryInterface
             ->replaceArgument(2, $config['audience'])
             ->replaceArgument(3, $config['issuers'])
             ->replaceArgument(4, $config['claim'])
+            ->replaceArgument(7, $config['allowed_time_drift'])
+            ->addTag('container.reversible')
         );
 
-        if (!ContainerBuilder::willBeAvailable('web-token/jwt-core', Algorithm::class, ['symfony/security-bundle'])) {
-            throw new LogicException('You cannot use the "oidc" token handler since "web-token/jwt-core" is not installed. Try running "composer require web-token/jwt-core".');
+        if (!ContainerBuilder::willBeAvailable('web-token/jwt-library', Algorithm::class, ['symfony/security-bundle'])) {
+            throw new LogicException('You cannot use the "oidc" token handler since "web-token/jwt-library" is not installed. Try running "composer require web-token/jwt-library".');
         }
 
-        // @see Symfony\Bundle\SecurityBundle\DependencyInjection\Security\Factory\SignatureAlgorithmFactory
-        // for supported algorithms
-        if (\in_array($config['algorithm'], ['ES256', 'ES384', 'ES512'], true)) {
-            $tokenHandlerDefinition->replaceArgument(0, new Reference('security.access_token_handler.oidc.signature.'.$config['algorithm']));
-        } else {
-            $tokenHandlerDefinition->replaceArgument(0, (new ChildDefinition('security.access_token_handler.oidc.signature'))
-                ->replaceArgument(0, $config['algorithm'])
+        $tokenHandlerDefinition->replaceArgument(0, (new ChildDefinition('security.access_token_handler.oidc.signature'))
+            ->replaceArgument(0, $config['algorithms']));
+
+        if (isset($config['discovery'])) {
+            if (!ContainerBuilder::willBeAvailable('symfony/http-client', HttpClientInterface::class, ['symfony/security-bundle'])) {
+                throw new LogicException('You cannot use the "oidc" token handler with "discovery" since the HttpClient component is not installed. Try running "composer require symfony/http-client".');
+            }
+
+            // disable JWKSet argument
+            $tokenHandlerDefinition->replaceArgument(1, null);
+
+            $clients = [];
+            foreach ($config['discovery']['base_uri'] as $uri) {
+                $clients[] = (new ChildDefinition('security.access_token_handler.oidc_discovery.http_client'))
+                    ->replaceArgument(0, ['base_uri' => $uri]);
+            }
+
+            $tokenHandlerDefinition->addMethodCall('enableDiscovery', [
+                new Reference($config['discovery']['cache']['id']),
+                $clients,
+                "$id.oidc_configuration",
+                $config['discovery']['enforce_key_usage_verification'],
+            ]);
+
+            return;
+        }
+
+        $tokenHandlerDefinition->replaceArgument(1, (new ChildDefinition('security.access_token_handler.oidc.jwkset'))
+            ->replaceArgument(0, $config['keyset']));
+
+        if ($config['encryption']['enabled']) {
+            $algorithmManager = (new ChildDefinition('security.access_token_handler.oidc.encryption'))
+                ->replaceArgument(0, $config['encryption']['algorithms']);
+            $keyset = (new ChildDefinition('security.access_token_handler.oidc.jwkset'))
+                ->replaceArgument(0, $config['encryption']['keyset']);
+
+            $tokenHandlerDefinition->addMethodCall(
+                'enableJweSupport',
+                [
+                    $keyset,
+                    $algorithmManager,
+                    $config['encryption']['enforce'],
+                ]
             );
         }
 
-        $tokenHandlerDefinition->replaceArgument(1, (new ChildDefinition('security.access_token_handler.oidc.jwk'))
-            ->replaceArgument(0, $config['key'])
-        );
+        // Generate command
+        if (!class_exists(OidcTokenGenerateCommand::class)) {
+            return;
+        }
+
+        if (!$container->hasDefinition('security.access_token_handler.oidc.command.generate')) {
+            $container
+                ->register('security.access_token_handler.oidc.command.generate', OidcTokenGenerateCommand::class)
+                ->addTag('console.command')
+            ;
+        }
+
+        $firewall = substr($id, \strlen('security.access_token_handler.'));
+        $container->getDefinition('security.access_token_handler.oidc.command.generate')
+            ->addMethodCall('addGenerator', [
+                $firewall,
+                (new ChildDefinition('security.access_token_handler.oidc.generator'))
+                    ->replaceArgument(0, (new ChildDefinition('security.access_token_handler.oidc.signature'))->replaceArgument(0, $config['algorithms']))
+                    ->replaceArgument(1, (new ChildDefinition('security.access_token_handler.oidc.jwkset'))->replaceArgument(0, $config['keyset']))
+                    ->replaceArgument(2, $config['audience'])
+                    ->replaceArgument(3, $config['issuers'])
+                    ->replaceArgument(4, $config['claim']),
+                $config['algorithms'],
+                $config['issuers'],
+            ])
+        ;
     }
 
     public function getKey(): string
@@ -60,8 +122,35 @@ class OidcTokenHandlerFactory implements TokenHandlerFactoryInterface
     {
         $node
             ->arrayNode($this->getKey())
-                ->fixXmlConfig($this->getKey())
+                ->validate()
+                    ->ifTrue(static fn ($v) => !isset($v['discovery']) && !isset($v['keyset']))
+                    ->thenInvalid('You must set either "discovery" or "keyset".')
+                ->end()
                 ->children()
+                    ->arrayNode('discovery')
+                        ->info('Enable the OIDC discovery.')
+                        ->children()
+                            ->arrayNode('base_uri')
+                                ->acceptAndWrap(['string'])
+                                ->info('Base URI of the OIDC server.')
+                                ->isRequired()
+                                ->scalarPrototype()->end()
+                            ->end()
+                            ->arrayNode('cache')
+                                ->children()
+                                    ->scalarNode('id')
+                                        ->info('Cache service id to use to cache the OIDC discovery configuration.')
+                                        ->isRequired()
+                                        ->cannotBeEmpty()
+                                    ->end()
+                                ->end()
+                            ->end()
+                            ->booleanNode('enforce_key_usage_verification')
+                                ->info('When enabled (default), only keys explicitly designated for signature (via "use":"sig" or a "key_ops" entry containing "sign"/"verify") are accepted. When disabled, keys without any usage designation are also accepted; keys explicitly restricted to encryption are still rejected.')
+                                ->defaultTrue()
+                            ->end()
+                        ->end()
+                    ->end()
                     ->scalarNode('claim')
                         ->info('Claim which contains the user identifier (e.g.: sub, email..).')
                         ->defaultValue('sub')
@@ -70,18 +159,42 @@ class OidcTokenHandlerFactory implements TokenHandlerFactoryInterface
                         ->info('Audience set in the token, for validation purpose.')
                         ->isRequired()
                     ->end()
-                    ->arrayNode('issuers')
+                    ->arrayNode('issuers', 'issuer')
                         ->info('Issuers allowed to generate the token, for validation purpose.')
                         ->isRequired()
-                        ->prototype('scalar')->end()
+                        ->scalarPrototype()->end()
                     ->end()
-                    ->scalarNode('algorithm')
-                        ->info('Algorithm used to sign the token.')
+                    ->arrayNode('algorithms', 'algorithm')
+                        ->info('Algorithms used to sign the token.')
                         ->isRequired()
+                        ->scalarPrototype()->end()
                     ->end()
-                    ->scalarNode('key')
-                        ->info('JSON-encoded JWK used to sign the token (must contain a "kty" key).')
-                        ->isRequired()
+                    ->scalarNode('keyset')
+                        ->info('JSON-encoded JWKSet used to sign the token (must contain a list of valid public keys).')
+                    ->end()
+                    ->arrayNode('encryption')
+                        ->canBeEnabled()
+                        ->children()
+                            ->booleanNode('enforce')
+                                ->info('When enabled, the token shall be encrypted.')
+                                ->defaultFalse()
+                            ->end()
+                            ->arrayNode('algorithms', 'algorithm')
+                                ->info('Algorithms used to decrypt the token.')
+                                ->isRequired()
+                                ->requiresAtLeastOneElement()
+                                ->scalarPrototype()->end()
+                            ->end()
+                            ->scalarNode('keyset')
+                                ->info('JSON-encoded JWKSet used to decrypt the token (must contain a list of valid private keys).')
+                                ->isRequired()
+                            ->end()
+                        ->end()
+                    ->end()
+                    ->integerNode('allowed_time_drift')
+                        ->info('Allowed time drift in seconds for token validation (iat, nbf, exp claims).')
+                        ->defaultValue(0)
+                        ->min(0)
                     ->end()
                 ->end()
             ->end()

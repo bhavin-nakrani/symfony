@@ -20,13 +20,15 @@ use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Kernel\ServicesBundle;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\HttpUtils;
 
 class AddSessionDomainConstraintPassTest extends TestCase
 {
     public function testSessionCookie()
     {
-        $container = $this->createContainer(['cookie_domain' => '.symfony.com.', 'cookie_secure' => true]);
+        $container = $this->createContainer(['cookie_domain' => '.symfony.com.', 'cookie_secure' => true, 'cookie_samesite' => 'lax']);
 
         $utils = $container->get('security.http_utils');
         $request = Request::create('/', 'get');
@@ -41,7 +43,7 @@ class AddSessionDomainConstraintPassTest extends TestCase
 
     public function testSessionNoDomain()
     {
-        $container = $this->createContainer(['cookie_secure' => true]);
+        $container = $this->createContainer(['cookie_secure' => true, 'cookie_samesite' => 'lax']);
 
         $utils = $container->get('security.http_utils');
         $request = Request::create('/', 'get');
@@ -56,7 +58,7 @@ class AddSessionDomainConstraintPassTest extends TestCase
 
     public function testSessionNoSecure()
     {
-        $container = $this->createContainer(['cookie_domain' => '.symfony.com.']);
+        $container = $this->createContainer(['cookie_domain' => '.symfony.com.', 'cookie_samesite' => 'lax']);
 
         $utils = $container->get('security.http_utils');
         $request = Request::create('/', 'get');
@@ -92,17 +94,28 @@ class AddSessionDomainConstraintPassTest extends TestCase
         $utils = $container->get('security.http_utils');
         $request = Request::create('/', 'get');
 
-        $this->assertTrue($utils->createRedirectResponse($request, 'https://symfony.com/blog')->isRedirect('https://symfony.com/blog'));
-        $this->assertTrue($utils->createRedirectResponse($request, 'https://www.symfony.com/blog')->isRedirect('https://www.symfony.com/blog'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'https://symfony.com/blog')->isRedirect('http://localhost/'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'https://www.symfony.com/blog')->isRedirect('http://localhost/'));
         $this->assertTrue($utils->createRedirectResponse($request, 'https://localhost/foo')->isRedirect('https://localhost/foo'));
-        $this->assertTrue($utils->createRedirectResponse($request, 'https://www.localhost/foo')->isRedirect('https://www.localhost/foo'));
-        $this->assertTrue($utils->createRedirectResponse($request, 'http://symfony.com/blog')->isRedirect('http://symfony.com/blog'));
-        $this->assertTrue($utils->createRedirectResponse($request, 'http://pirate.com/foo')->isRedirect('http://pirate.com/foo'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'http://localhost/foo')->isRedirect('http://localhost/foo'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'https://www.localhost/foo')->isRedirect('http://localhost/'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'http://symfony.com/blog')->isRedirect('http://localhost/'));
+        $this->assertTrue($utils->createRedirectResponse($request, 'http://pirate.com/foo')->isRedirect('http://localhost/'));
+    }
+
+    public function testNoSessionInjectsCurrentHostConstraint()
+    {
+        $container = new ContainerBuilder();
+        $container->register('security.http_utils', HttpUtils::class);
+
+        (new AddSessionDomainConstraintPass())->process($container);
+
+        $this->assertSame(['{^https?://%%s$}i', null], $container->getDefinition('security.http_utils')->getArguments());
     }
 
     public function testSessionAutoSecure()
     {
-        $container = $this->createContainer(['cookie_domain' => '.symfony.com.', 'cookie_secure' => 'auto']);
+        $container = $this->createContainer(['cookie_domain' => '.symfony.com.', 'cookie_secure' => 'auto', 'cookie_samesite' => 'lax']);
 
         $utils = $container->get('security.http_utils');
         $request = Request::create('/', 'get');
@@ -138,14 +151,25 @@ class AddSessionDomainConstraintPassTest extends TestCase
         $container->setParameter('request_listener.https_port', 443);
 
         $config = [
+            'framework' => [
+                'csrf_protection' => false,
+                'router' => ['resource' => 'dummy'],
+            ],
+        ];
+
+        if (class_exists(ServicesBundle::class)) {
+            new ServicesBundle()->getContainerExtension()->load([], $container);
+        }
+
+        $ext = new FrameworkExtension();
+        $ext->load($config, $container);
+
+        $config = [
             'security' => [
                 'providers' => ['some_provider' => ['id' => 'foo']],
                 'firewalls' => ['some_firewall' => ['security' => false]],
             ],
         ];
-
-        $ext = new FrameworkExtension();
-        $ext->load(['framework' => ['annotations' => false, 'http_method_override' => false, 'csrf_protection' => false, 'router' => ['resource' => 'dummy', 'utf8' => true]]], $container);
 
         $ext = new SecurityExtension();
         $ext->load($config, $container);

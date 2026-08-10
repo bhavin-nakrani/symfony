@@ -35,7 +35,7 @@ class_exists(ArgumentServiceLocator::class);
  *
  * It gives access to object instances (services).
  * Services and parameters are simple key/pair stores.
- * The container can have four possible behaviors when a service
+ * The container can have five possible behaviors when a service
  * does not exist (or is not initialized for the last case):
  *
  *  * EXCEPTION_ON_INVALID_REFERENCE: Throws an exception at compilation time (the default)
@@ -50,16 +50,17 @@ class_exists(ArgumentServiceLocator::class);
  */
 class Container implements ContainerInterface, ResetInterface
 {
-    protected $parameterBag;
-    protected $services = [];
-    protected $privates = [];
-    protected $fileMap = [];
-    protected $methodMap = [];
-    protected $factories = [];
-    protected $aliases = [];
-    protected $loading = [];
-    protected $resolving = [];
-    protected $syntheticIds = [];
+    protected ParameterBagInterface $parameterBag;
+    protected array $services = [];
+    protected array $privates = [];
+    protected array $fileMap = [];
+    protected array $methodMap = [];
+    protected array $factories = [];
+    protected array $aliases = [];
+    protected array $loading = [];
+    protected array $resolving = [];
+    protected array $syntheticIds = [];
+    private ?\WeakMap $resetMap = null;
 
     private array $envCache = [];
     private bool $compiled = false;
@@ -67,7 +68,7 @@ class Container implements ContainerInterface, ResetInterface
 
     private static \Closure $make;
 
-    public function __construct(ParameterBagInterface $parameterBag = null)
+    public function __construct(?ParameterBagInterface $parameterBag = null)
     {
         $this->parameterBag = $parameterBag ?? new EnvPlaceholderParameterBag();
     }
@@ -79,16 +80,15 @@ class Container implements ContainerInterface, ResetInterface
      *
      *  * Parameter values are resolved;
      *  * The parameter bag is frozen.
-     *
-     * @return void
      */
-    public function compile()
+    public function compile(): void
     {
         $this->parameterBag->resolve();
 
         $this->parameterBag = new FrozenParameterBag(
             $this->parameterBag->all(),
-            $this->parameterBag instanceof ParameterBag ? $this->parameterBag->allDeprecated() : []
+            $this->parameterBag instanceof ParameterBag ? $this->parameterBag->allDeprecated() : [],
+            $this->parameterBag instanceof ParameterBag ? $this->parameterBag->allNonEmpty() : [],
         );
 
         $this->compiled = true;
@@ -113,11 +113,9 @@ class Container implements ContainerInterface, ResetInterface
     /**
      * Gets a parameter.
      *
-     * @return array|bool|string|int|float|\UnitEnum|null
-     *
      * @throws ParameterNotFoundException if the parameter is not defined
      */
-    public function getParameter(string $name)
+    public function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
     {
         return $this->parameterBag->get($name);
     }
@@ -127,10 +125,7 @@ class Container implements ContainerInterface, ResetInterface
         return $this->parameterBag->has($name);
     }
 
-    /**
-     * @return void
-     */
-    public function setParameter(string $name, array|bool|string|int|float|\UnitEnum|null $value)
+    public function setParameter(string $name, array|bool|string|int|float|\UnitEnum|null $value): void
     {
         $this->parameterBag->set($name, $value);
     }
@@ -140,10 +135,8 @@ class Container implements ContainerInterface, ResetInterface
      *
      * Setting a synthetic service to null resets it: has() returns false and get()
      * behaves in the same way as if the service was never created.
-     *
-     * @return void
      */
-    public function set(string $id, ?object $service)
+    public function set(string $id, ?object $service): void
     {
         // Runs the internal initializer; used by the dumped container to include always-needed files
         if (isset($this->privates['service_container']) && $this->privates['service_container'] instanceof \Closure) {
@@ -160,12 +153,12 @@ class Container implements ContainerInterface, ResetInterface
             if (isset($this->syntheticIds[$id]) || !isset($this->getRemovedIds()[$id])) {
                 // no-op
             } elseif (null === $service) {
-                throw new InvalidArgumentException(sprintf('The "%s" service is private, you cannot unset it.', $id));
+                throw new InvalidArgumentException(\sprintf('The "%s" service is private, you cannot unset it.', $id));
             } else {
-                throw new InvalidArgumentException(sprintf('The "%s" service is private, you cannot replace it.', $id));
+                throw new InvalidArgumentException(\sprintf('The "%s" service is private, you cannot replace it.', $id));
             }
         } elseif (isset($this->services[$id])) {
-            throw new InvalidArgumentException(sprintf('The "%s" service is already initialized, you cannot replace it.', $id));
+            throw new InvalidArgumentException(\sprintf('The "%s" service is already initialized, you cannot replace it.', $id));
         }
 
         if (isset($this->aliases[$id])) {
@@ -201,7 +194,6 @@ class Container implements ContainerInterface, ResetInterface
      *
      * @throws ServiceCircularReferenceException When a circular reference is detected
      * @throws ServiceNotFoundException          When the service is not defined
-     * @throws \Exception                        if an exception has been thrown when the service has been resolved
      *
      * @see Reference
      */
@@ -231,8 +223,8 @@ class Container implements ContainerInterface, ResetInterface
             } elseif (isset($container->methodMap[$id])) {
                 return /* self::IGNORE_ON_UNINITIALIZED_REFERENCE */ 4 === $invalidBehavior ? null : $container->{$container->methodMap[$id]}($container);
             }
-        } catch (\Exception $e) {
-            unset($container->services[$id]);
+        } catch (\Throwable $e) {
+            unset($container->services[$id], $container->privates[$id]);
 
             throw $e;
         } finally {
@@ -244,10 +236,10 @@ class Container implements ContainerInterface, ResetInterface
                 throw new ServiceNotFoundException($id);
             }
             if (isset($container->syntheticIds[$id])) {
-                throw new ServiceNotFoundException($id, null, null, [], sprintf('The "%s" service is synthetic, it needs to be set at boot time before it can be used.', $id));
+                throw new ServiceNotFoundException($id, null, null, [], \sprintf('The "%s" service is synthetic, it needs to be set at boot time before it can be used.', $id));
             }
             if (isset($container->getRemovedIds()[$id])) {
-                throw new ServiceNotFoundException($id, null, null, [], sprintf('The "%s" service or alias has been removed or inlined when the container was compiled. You should either make it public, or stop using the container directly and use dependency injection instead.', $id));
+                throw new ServiceNotFoundException($id, null, null, [], \sprintf('The "%s" service or alias has been removed or inlined when the container was compiled. You should either make it public, or stop using the container directly and use dependency injection instead.', $id));
             }
 
             $alternatives = [];
@@ -283,13 +275,9 @@ class Container implements ContainerInterface, ResetInterface
         return isset($this->services[$id]);
     }
 
-    /**
-     * @return void
-     */
-    public function reset()
+    public function reset(): void
     {
         $services = $this->services + $this->privates;
-        $this->services = $this->factories = $this->privates = [];
 
         foreach ($services as $service) {
             try {
@@ -300,6 +288,20 @@ class Container implements ContainerInterface, ResetInterface
                 continue;
             }
         }
+
+        $this->envCache = $this->services = $this->factories = $this->privates = [];
+        // Non-shared tracked instances are not reset here because Container::reset()
+        // tears down the entire container. ServicesResetter::reset() handles calling
+        // reset methods on tracked instances during the request lifecycle.
+        $this->resetMap = null;
+    }
+
+    /**
+     * @internal
+     */
+    public function resetEnvCache(): void
+    {
+        $this->envCache = [];
     }
 
     /**
@@ -338,10 +340,8 @@ class Container implements ContainerInterface, ResetInterface
 
     /**
      * Creates a service by requiring its factory file.
-     *
-     * @return mixed
      */
-    protected function load(string $file)
+    protected function load(string $file): mixed
     {
         return require $file;
     }
@@ -373,13 +373,9 @@ class Container implements ContainerInterface, ResetInterface
             $localName = $name;
         }
 
-        if ($processors->has($prefix)) {
-            $processor = $processors->get($prefix);
-        } else {
-            $processor = new EnvVarProcessor($this);
-            if (false === $i) {
-                $prefix = '';
-            }
+        $processor = $processors->has($prefix) ? $processors->get($prefix) : new EnvVarProcessor($this);
+        if (false === $i) {
+            $prefix = '';
         }
 
         $this->resolving[$envName] = true;
@@ -412,6 +408,31 @@ class Container implements ContainerInterface, ResetInterface
         }
 
         return ($factory = $this->factories[$id] ?? $this->factories['service_container'][$id] ?? null) ? $factory($this) : $this->load($method);
+    }
+
+    /**
+     * Registers an instance of a non-shared service for reset tracking.
+     *
+     * @param list<string> $resetMethods
+     *
+     * @internal
+     */
+    final protected function trackForReset(object $instance, array $resetMethods): object
+    {
+        $this->resetMap ??= new \WeakMap();
+        $this->resetMap[$instance] = $resetMethods;
+
+        return $instance;
+    }
+
+    /**
+     * Returns the WeakMap used to track non-shared service instances for reset.
+     *
+     * @internal
+     */
+    final protected function getResetMap(): \WeakMap
+    {
+        return $this->resetMap ??= new \WeakMap();
     }
 
     private function __clone()

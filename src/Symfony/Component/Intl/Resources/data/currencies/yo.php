@@ -518,9 +518,13 @@ return [
             'SHP',
             'Pọ́n-un Elena',
         ],
+        'SLE' => [
+            'SLE',
+            'Líónì Sira Líonì',
+        ],
         'SLL' => [
             'SLL',
-            'Líónì Sira Líonì',
+            'Líónì Sira Líonì (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -630,6 +634,10 @@ return [
             'EC$',
             'Dọ́là Ilà Oòrùn Karíbíà',
         ],
+        'XCG' => [
+            'Cg.',
+            'Owó ìlú Kùrásọ̀ àti Saint Mátìnì',
+        ],
         'XOF' => [
             'F CFA',
             'Faransì ìwọ̀-oorùn Afíríkà',
@@ -657,6 +665,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Dọla ti Orílẹ́ède Siibabuwe',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Owó ìlú Sìnbábúwè',
         ],
     ],
 ];

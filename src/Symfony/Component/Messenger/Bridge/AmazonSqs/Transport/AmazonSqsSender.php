@@ -11,7 +11,7 @@
 
 namespace Symfony\Component\Messenger\Bridge\AmazonSqs\Transport;
 
-use AsyncAws\Core\Exception\Http\HttpException;
+use AsyncAws\Core\Exception\Exception as AsyncAwsException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\TransportException;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
@@ -23,22 +23,20 @@ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
  */
 class AmazonSqsSender implements SenderInterface
 {
-    private Connection $connection;
-    private SerializerInterface $serializer;
-
-    public function __construct(Connection $connection, SerializerInterface $serializer)
-    {
-        $this->connection = $connection;
-        $this->serializer = $serializer;
+    public function __construct(
+        private Connection $connection,
+        private SerializerInterface $serializer,
+    ) {
     }
 
     public function send(Envelope $envelope): Envelope
     {
         $encodedMessage = $this->serializer->encode($envelope);
+        $encodedMessage = $this->complyWithAmazonSqsRequirements($encodedMessage);
 
         /** @var DelayStamp|null $delayStamp */
         $delayStamp = $envelope->last(DelayStamp::class);
-        $delay = null !== $delayStamp ? (int) ceil($delayStamp->getDelay() / 1000) : 0;
+        $delay = null !== $delayStamp ? (int) ceil($delayStamp->getDelay() / 1000) : null;
 
         $messageGroupId = null;
         $messageDeduplicationId = null;
@@ -63,10 +61,26 @@ class AmazonSqsSender implements SenderInterface
                 $messageDeduplicationId,
                 $xrayTraceId
             );
-        } catch (HttpException $e) {
+        } catch (AsyncAwsException $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
 
         return $envelope;
+    }
+
+    /**
+     * @see https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html
+     *
+     * @param array{body: string, headers?: array<string>} $encodedMessage
+     *
+     * @return array{body: string, headers?: array<string>}
+     */
+    private function complyWithAmazonSqsRequirements(array $encodedMessage): array
+    {
+        if (preg_match('/[^\x20-\x{D7FF}\xA\xD\x9\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', $encodedMessage['body'])) {
+            $encodedMessage['body'] = base64_encode($encodedMessage['body']);
+        }
+
+        return $encodedMessage;
     }
 }

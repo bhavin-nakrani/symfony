@@ -13,8 +13,11 @@ namespace Symfony\Component\DependencyInjection\Loader\Configurator;
 
 use Symfony\Bundle\FrameworkBundle\CacheWarmer\ValidatorCacheWarmer;
 use Symfony\Component\Cache\Adapter\PhpArrayAdapter;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
+use Symfony\Component\Form\Form;
 use Symfony\Component\Validator\Constraints\EmailValidator;
+use Symfony\Component\Validator\Constraints\ExpressionLanguageProvider;
 use Symfony\Component\Validator\Constraints\ExpressionValidator;
 use Symfony\Component\Validator\Constraints\NoSuspiciousCharactersValidator;
 use Symfony\Component\Validator\Constraints\NotCompromisedPasswordValidator;
@@ -27,7 +30,7 @@ use Symfony\Component\Validator\ValidatorBuilder;
 
 return static function (ContainerConfigurator $container) {
     $container->parameters()
-        ->set('validator.mapping.cache.file', param('kernel.cache_dir').'/validation.php');
+        ->set('validator.mapping.cache.file', '%kernel.build_dir%/validation.php');
 
     $validatorsDir = \dirname((new \ReflectionClass(EmailValidator::class))->getFileName());
 
@@ -40,6 +43,9 @@ return static function (ContainerConfigurator $container) {
             ->factory([Validation::class, 'createValidatorBuilder'])
             ->call('setConstraintValidatorFactory', [
                 service('validator.validator_factory'),
+            ])
+            ->call('setGroupProviderLocator', [
+                tagged_locator('validator.group_provider'),
             ])
             ->call('setTranslator', [
                 service('translator')->ignoreOnInvalid(),
@@ -69,10 +75,10 @@ return static function (ContainerConfigurator $container) {
             ])
 
         ->load('Symfony\Component\Validator\Constraints\\', $validatorsDir.'/*Validator.php')
-            ->exclude($validatorsDir.'/ExpressionLanguageSyntaxValidator.php')
             ->abstract()
             ->tag('container.excluded')
             ->tag('validator.constraint_validator')
+            ->bind(ClockInterface::class, service('clock')->nullOnInvalid())
 
         ->set('validator.expression', ExpressionValidator::class)
             ->args([service('validator.expression_language')->nullOnInvalid()])
@@ -82,10 +88,16 @@ return static function (ContainerConfigurator $container) {
 
         ->set('validator.expression_language', ExpressionLanguage::class)
             ->args([service('cache.validator_expression_language')->nullOnInvalid()])
+            ->call('registerProvider', [
+                service('validator.expression_language_provider')->ignoreOnInvalid(),
+            ])
 
         ->set('cache.validator_expression_language')
             ->parent('cache.system')
+            ->private()
             ->tag('cache.pool')
+
+        ->set('validator.expression_language_provider', ExpressionLanguageProvider::class)
 
         ->set('validator.email', EmailValidator::class)
             ->args([
@@ -118,5 +130,9 @@ return static function (ContainerConfigurator $container) {
                 service('property_info'),
             ])
             ->tag('validator.auto_mapper')
+
+        ->set('validator.form.attribute_metadata', Form::class)
+            ->tag('container.excluded')
+            ->tag('validator.attribute_metadata')
     ;
 };

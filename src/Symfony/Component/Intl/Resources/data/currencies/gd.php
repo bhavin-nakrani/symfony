@@ -492,11 +492,11 @@ return [
         ],
         'ILR' => [
             'ILR',
-            'Sheqel Iosraeleach (1980–1985)',
+            'Secel Iosraeleach (1980–1985)',
         ],
         'ILS' => [
             '₪',
-            'Sheqel ùr Iosraeleach',
+            'Secel ùr Iosraeleach',
         ],
         'INR' => [
             '₹',
@@ -1086,6 +1086,10 @@ return [
             'EC$',
             'Dolar Caraibeach earach',
         ],
+        'XCG' => [
+            'Cg.',
+            'Gulden Caraibeach',
+        ],
         'XEU' => [
             'XEU',
             'Aonad airgeadra Eòrpach',
@@ -1161,6 +1165,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Dolar Sìombabuthach (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Òr Sìombabuthach',
         ],
         'ZWL' => [
             'ZWL',

@@ -30,9 +30,9 @@ class FormValidator extends ConstraintValidator
     private \SplObjectStorage $resolvedGroups;
 
     /**
-     * @return void
+     * @psalm-suppress ParamNameMismatch
      */
-    public function validate(mixed $form, Constraint $formConstraint)
+    public function validate(mixed $form, Constraint $formConstraint): void
     {
         if (!$formConstraint instanceof Form) {
             throw new UnexpectedTypeException($formConstraint, Form::class);
@@ -42,7 +42,7 @@ class FormValidator extends ConstraintValidator
             return;
         }
 
-        /* @var FormInterface $form */
+        /** @var FormInterface $form */
         $config = $form->getConfig();
 
         $validator = $this->context->getValidator()->inContext($this->context);
@@ -59,7 +59,7 @@ class FormValidator extends ConstraintValidator
             // Validate the data against its own constraints
             $validateDataGraph = $form->isRoot()
                 && (\is_object($data) || \is_array($data))
-                && (($groups && \is_array($groups)) || ($groups instanceof GroupSequence && $groups->groups))
+                && (\is_array($groups) || ($groups instanceof GroupSequence && $groups->groups))
             ;
 
             // Validate the data against the constraints defined in the form
@@ -95,7 +95,7 @@ class FormValidator extends ConstraintValidator
                             $fieldFormConstraint = new Form();
                             $fieldFormConstraint->groups = $group;
                             $this->context->setNode($this->context->getValue(), $field, $this->context->getMetadata(), $this->context->getPropertyPath());
-                            $validator->atPath(sprintf('children[%s]', $field->getName()))->validate($field, $fieldFormConstraint, $group);
+                            $validator->atPath(\sprintf('children[%s]', $field->getName()))->validate($field, $fieldFormConstraint, $group);
                         }
                     }
 
@@ -123,7 +123,7 @@ class FormValidator extends ConstraintValidator
                     // Otherwise validate a constraint only once for the first
                     // matching group
                     foreach ($groups as $group) {
-                        if (\in_array($group, $constraint->groups)) {
+                        if (\in_array($group, $constraint->groups, true)) {
                             $groupedConstraints[$group][] = $constraint;
 
                             // Prevent duplicate validation
@@ -142,7 +142,7 @@ class FormValidator extends ConstraintValidator
                     if ($field->isSubmitted()) {
                         $this->resolvedGroups[$field] = $groups;
                         $this->context->setNode($this->context->getValue(), $field, $this->context->getMetadata(), $this->context->getPropertyPath());
-                        $validator->atPath(sprintf('children[%s]', $field->getName()))->validate($field, $formConstraint);
+                        $validator->atPath(\sprintf('children[%s]', $field->getName()))->validate($field, $formConstraint);
                     }
                 }
             }
@@ -159,7 +159,7 @@ class FormValidator extends ConstraintValidator
                 if (!$child->isSynchronized()) {
                     $childrenSynchronized = false;
                     $this->context->setNode($this->context->getValue(), $child, $this->context->getMetadata(), $this->context->getPropertyPath());
-                    $validator->atPath(sprintf('children[%s]', $child->getName()))->validate($child, $formConstraint);
+                    $validator->atPath(\sprintf('children[%s]', $child->getName()))->validate($child, $formConstraint);
                 }
             }
 
@@ -246,6 +246,8 @@ class FormValidator extends ConstraintValidator
      * Post-processes the validation groups option for a given form.
      *
      * @param string|GroupSequence|array<string|GroupSequence>|callable $groups The validation groups
+     *
+     * @param-immediately-invoked-callable $groups
      *
      * @return GroupSequence|array<string|GroupSequence>
      */

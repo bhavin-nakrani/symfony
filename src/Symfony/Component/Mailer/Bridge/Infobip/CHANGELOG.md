@@ -1,6 +1,16 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Add support of `ipPoolId` option
+
+7.2
+---
+
+* Add support of trackClicks, trackOpens and trackingUrl payload properties
+
 6.3
 ---
 

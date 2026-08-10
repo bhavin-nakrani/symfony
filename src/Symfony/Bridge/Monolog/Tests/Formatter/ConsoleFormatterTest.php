@@ -11,52 +11,28 @@
 
 namespace Symfony\Bridge\Monolog\Tests\Formatter;
 
-use Monolog\Logger;
-use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Monolog\Formatter\ConsoleFormatter;
 use Symfony\Bridge\Monolog\Tests\RecordFactory;
+use Symfony\Component\VarDumper\Cloner\VarCloner;
 
 class ConsoleFormatterTest extends TestCase
 {
-    /**
-     * @dataProvider providerFormatTests
-     */
-    public function testFormat(array|LogRecord $record, $expectedMessage)
+    public function testFormat()
     {
+        $record = RecordFactory::create(datetime: new \DateTimeImmutable('2013-01-13 12:34:56 Europe/Berlin'));
         $formatter = new ConsoleFormatter();
-        self::assertSame($expectedMessage, $formatter->format($record));
+
+        self::assertSame("12:34:56 <fg=cyan>WARNING  </> <comment>[test]</> test\n", $formatter->format($record));
     }
 
-    public static function providerFormatTests(): array
+    public function testPlaceholderInMessageWithDataContext()
     {
-        $currentDateTime = new \DateTimeImmutable();
+        $formatter = new ConsoleFormatter(['colors' => false]);
 
-        $tests = [
-            'record with DateTime object in datetime field' => [
-                'record' => RecordFactory::create(datetime: $currentDateTime),
-                'expectedMessage' => sprintf(
-                    "%s <fg=cyan>WARNING  </> <comment>[test]</> test\n",
-                    $currentDateTime->format(ConsoleFormatter::SIMPLE_DATE)
-                ),
-            ],
-        ];
+        // LogRecord::$context must be an array, so the Data object is nested inside it
+        $record = RecordFactory::create(message: 'Hello {user}', context: ['user' => (new VarCloner())->cloneVar('alice')]);
 
-        if (Logger::API < 3) {
-            $tests['record with string in datetime field'] = [
-                'record' => [
-                    'message' => 'test',
-                    'context' => [],
-                    'level' => Logger::WARNING,
-                    'level_name' => Logger::getLevelName(Logger::WARNING),
-                    'channel' => 'test',
-                    'datetime' => '2019-01-01T00:42:00+00:00',
-                    'extra' => [],
-                ],
-                'expectedMessage' => "2019-01-01T00:42:00+00:00 <fg=cyan>WARNING  </> <comment>[test]</> test\n",
-            ];
-        }
-
-        return $tests;
+        self::assertStringContainsString('Hello <comment>alice</>', $formatter->format($record));
     }
 }

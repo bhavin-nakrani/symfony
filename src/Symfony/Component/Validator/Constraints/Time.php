@@ -12,10 +12,10 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is a valid time that follows the H:i:s format.
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
@@ -30,22 +30,25 @@ class Time extends Constraint
         self::INVALID_TIME_ERROR => 'INVALID_TIME_ERROR',
     ];
 
+    public bool $withSeconds = true;
+    public string $message = 'This value is not a valid time.';
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param string[]|null $groups
+     * @param bool|null     $withSeconds Whether to allow seconds in the given value (defaults to true)
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $withSeconds = true;
-    public $message = 'This value is not a valid time.';
-
     public function __construct(
-        array $options = null,
-        string $message = null,
-        array $groups = null,
+        ?array $options = null,
+        ?string $message = null,
+        ?array $groups = null,
         mixed $payload = null,
-        bool $withSeconds = null,
+        ?bool $withSeconds = null,
     ) {
-        parent::__construct($options, $groups, $payload);
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        parent::__construct(null, $groups, $payload);
 
         $this->withSeconds = $withSeconds ?? $this->withSeconds;
         $this->message = $message ?? $this->message;

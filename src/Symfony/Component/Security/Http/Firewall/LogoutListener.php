@@ -12,7 +12,6 @@
 namespace Symfony\Component\Security\Http\Firewall;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Exception\LogoutException;
@@ -32,26 +31,23 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  */
 class LogoutListener extends AbstractListener
 {
-    private TokenStorageInterface $tokenStorage;
     private array $options;
-    private HttpUtils $httpUtils;
-    private ?CsrfTokenManagerInterface $csrfTokenManager;
-    private EventDispatcherInterface $eventDispatcher;
 
     /**
      * @param array $options An array of options to process a logout attempt
      */
-    public function __construct(TokenStorageInterface $tokenStorage, HttpUtils $httpUtils, EventDispatcherInterface $eventDispatcher, array $options = [], CsrfTokenManagerInterface $csrfTokenManager = null)
-    {
-        $this->tokenStorage = $tokenStorage;
-        $this->httpUtils = $httpUtils;
+    public function __construct(
+        private TokenStorageInterface $tokenStorage,
+        private HttpUtils $httpUtils,
+        private EventDispatcherInterface $eventDispatcher,
+        array $options = [],
+        private ?CsrfTokenManagerInterface $csrfTokenManager = null,
+    ) {
         $this->options = array_merge([
             'csrf_parameter' => '_csrf_token',
             'csrf_token_id' => 'logout',
             'logout_path' => '/logout',
         ], $options);
-        $this->csrfTokenManager = $csrfTokenManager;
-        $this->eventDispatcher = $eventDispatcher;
     }
 
     public function supports(Request $request): ?bool
@@ -66,14 +62,14 @@ class LogoutListener extends AbstractListener
      * validate the request.
      *
      * @throws LogoutException   if the CSRF token is invalid
-     * @throws \RuntimeException if the LogoutSuccessHandlerInterface instance does not return a response
+     * @throws \RuntimeException if the LogoutEvent listener does not set a response
      */
     public function authenticate(RequestEvent $event): void
     {
         $request = $event->getRequest();
 
         if (null !== $this->csrfTokenManager) {
-            $csrfToken = ParameterBagUtils::getRequestParameterValue($request, $this->options['csrf_parameter']);
+            $csrfToken = ParameterBagUtils::getRequestParameterValue($request, $this->options['csrf_parameter'], $request->request->all());
 
             if (!\is_string($csrfToken) || false === $this->csrfTokenManager->isTokenValid(new CsrfToken($this->options['csrf_token_id'], $csrfToken))) {
                 throw new LogoutException('Invalid CSRF token.');
@@ -83,13 +79,11 @@ class LogoutListener extends AbstractListener
         $logoutEvent = new LogoutEvent($request, $this->tokenStorage->getToken());
         $this->eventDispatcher->dispatch($logoutEvent);
 
-        if (!$response = $logoutEvent->getResponse()) {
-            throw new \RuntimeException('No logout listener set the Response, make sure at least the DefaultLogoutListener is registered.');
-        }
-
         $this->tokenStorage->setToken(null);
 
-        $event->setResponse($response);
+        if ($response = $logoutEvent->getResponse()) {
+            $event->setResponse($response);
+        }
     }
 
     /**

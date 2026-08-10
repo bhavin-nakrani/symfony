@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Loader\Configurator;
 
+use Symfony\Bundle\SecurityBundle\DataCollector\EventListener\SecurityDataCollectorListener;
 use Symfony\Bundle\SecurityBundle\DataCollector\SecurityDataCollector;
 
 return static function (ContainerConfigurator $container) {
@@ -23,11 +24,19 @@ return static function (ContainerConfigurator $container) {
                 service('security.access.decision_manager'),
                 service('security.firewall.map'),
                 service('debug.security.firewall')->nullOnInvalid(),
+                service('security.impersonate_url_generator')->nullOnInvalid(),
             ])
             ->tag('data_collector', [
                 'template' => '@Security/Collector/security.html.twig',
                 'id' => 'security',
                 'priority' => 270,
             ])
+
+        // removed by RemoveSecurityDataCollectorListenerPass when the profiler is not enabled
+        ->set('data_collector.security.listener', SecurityDataCollectorListener::class)
+            ->args([
+                service('data_collector.security'),
+            ])
+            ->tag('kernel.event_subscriber')
     ;
 };

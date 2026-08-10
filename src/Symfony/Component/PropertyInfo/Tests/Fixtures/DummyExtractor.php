@@ -17,7 +17,7 @@ use Symfony\Component\PropertyInfo\PropertyDescriptionExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyInitializableExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyListExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyTypeExtractorInterface;
-use Symfony\Component\PropertyInfo\Type;
+use Symfony\Component\TypeInfo\Type;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
@@ -34,14 +34,14 @@ class DummyExtractor implements PropertyListExtractorInterface, PropertyDescript
         return 'long';
     }
 
-    public function getTypes($class, $property, array $context = []): ?array
+    public function getType($class, $property, array $context = []): ?Type
     {
-        return [new Type(Type::BUILTIN_TYPE_INT)];
+        return Type::int();
     }
 
-    public function getTypesFromConstructor(string $class, string $property): ?array
+    public function getTypeFromConstructor(string $class, string $property): ?Type
     {
-        return [new Type(Type::BUILTIN_TYPE_STRING)];
+        return Type::string();
     }
 
     public function isReadable($class, $property, array $context = []): ?bool

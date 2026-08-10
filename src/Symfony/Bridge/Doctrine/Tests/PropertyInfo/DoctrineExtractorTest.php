@@ -19,15 +19,18 @@ use Doctrine\DBAL\Types\Type as DBALType;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\ORMSetup;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\PropertyInfo\DoctrineExtractor;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineDummy;
+use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineEmbeddable;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineEnum;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineGeneratedValue;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation;
+use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineWithEmbedded;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\EnumInt;
 use Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\EnumString;
-use Symfony\Component\PropertyInfo\Type;
+use Symfony\Component\TypeInfo\Type;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
@@ -38,9 +41,8 @@ class DoctrineExtractorTest extends TestCase
     {
         $config = ORMSetup::createConfiguration(true);
         $config->setMetadataDriverImpl(new AttributeDriver([__DIR__.'/../Tests/Fixtures' => 'Symfony\Bridge\Doctrine\Tests\Fixtures'], true));
-        if (class_exists(DefaultSchemaManagerFactory::class)) {
-            $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
-        }
+        $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
+        $config->enableNativeLazyObjects(true);
 
         $eventManager = new EventManager();
         $entityManager = new EntityManager(DriverManager::getConnection(['driver' => 'pdo_sqlite'], $config, $eventManager), $config, $eventManager);
@@ -62,7 +64,6 @@ class DoctrineExtractorTest extends TestCase
             'time',
             'timeImmutable',
             'dateInterval',
-            'jsonArray',
             'simpleArray',
             'float',
             'decimal',
@@ -104,135 +105,9 @@ class DoctrineExtractorTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider typesProvider
-     */
-    public function testExtract($property, array $type = null)
-    {
-        $this->assertEquals($type, $this->createExtractor()->getTypes(DoctrineDummy::class, $property, []));
-    }
-
-    public function testExtractWithEmbedded()
-    {
-        $expectedTypes = [new Type(
-            Type::BUILTIN_TYPE_OBJECT,
-            false,
-            'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineEmbeddable'
-        )];
-
-        $actualTypes = $this->createExtractor()->getTypes(
-            'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineWithEmbedded',
-            'embedded',
-            []
-        );
-
-        $this->assertEquals($expectedTypes, $actualTypes);
-    }
-
-    public function testExtractEnum()
-    {
-        $this->assertEquals([new Type(Type::BUILTIN_TYPE_OBJECT, false, EnumString::class)], $this->createExtractor()->getTypes(DoctrineEnum::class, 'enumString', []));
-        $this->assertEquals([new Type(Type::BUILTIN_TYPE_OBJECT, false, EnumInt::class)], $this->createExtractor()->getTypes(DoctrineEnum::class, 'enumInt', []));
-        $this->assertNull($this->createExtractor()->getTypes(DoctrineEnum::class, 'enumStringArray', []));
-        $this->assertEquals([new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_OBJECT, false, EnumInt::class))], $this->createExtractor()->getTypes(DoctrineEnum::class, 'enumIntArray', []));
-        $this->assertNull($this->createExtractor()->getTypes(DoctrineEnum::class, 'enumCustom', []));
-    }
-
-    public static function typesProvider(): array
-    {
-        return [
-            ['id', [new Type(Type::BUILTIN_TYPE_INT)]],
-            ['guid', [new Type(Type::BUILTIN_TYPE_STRING)]],
-            ['bigint', [new Type(Type::BUILTIN_TYPE_STRING)]],
-            ['time', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTime')]],
-            ['timeImmutable', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateTimeImmutable')]],
-            ['dateInterval', [new Type(Type::BUILTIN_TYPE_OBJECT, false, 'DateInterval')]],
-            ['float', [new Type(Type::BUILTIN_TYPE_FLOAT)]],
-            ['decimal', [new Type(Type::BUILTIN_TYPE_STRING)]],
-            ['bool', [new Type(Type::BUILTIN_TYPE_BOOL)]],
-            ['binary', [new Type(Type::BUILTIN_TYPE_RESOURCE)]],
-            ['jsonArray', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true)]],
-            ['foo', [new Type(Type::BUILTIN_TYPE_OBJECT, true, 'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation')]],
-            ['bar', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                'Doctrine\Common\Collections\Collection',
-                true,
-                new Type(Type::BUILTIN_TYPE_INT),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation')
-            )]],
-            ['indexedRguid', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                'Doctrine\Common\Collections\Collection',
-                true,
-                new Type(Type::BUILTIN_TYPE_STRING),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation')
-            )]],
-            ['indexedBar', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                'Doctrine\Common\Collections\Collection',
-                true,
-                new Type(Type::BUILTIN_TYPE_STRING),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation')
-            )]],
-            ['indexedFoo', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                'Doctrine\Common\Collections\Collection',
-                true,
-                new Type(Type::BUILTIN_TYPE_STRING),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, 'Symfony\Bridge\Doctrine\Tests\PropertyInfo\Fixtures\DoctrineRelation')
-            )]],
-            ['indexedBaz', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                Collection::class,
-                true,
-                new Type(Type::BUILTIN_TYPE_INT),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, DoctrineRelation::class)
-            )]],
-            ['simpleArray', [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_STRING))]],
-            ['customFoo', null],
-            ['notMapped', null],
-            ['indexedByDt', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                Collection::class,
-                true,
-                new Type(Type::BUILTIN_TYPE_OBJECT),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, DoctrineRelation::class)
-            )]],
-            ['indexedByCustomType', null],
-            ['indexedBuz', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                Collection::class,
-                true,
-                new Type(Type::BUILTIN_TYPE_STRING),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, DoctrineRelation::class)
-            )]],
-            ['dummyGeneratedValueList', [new Type(
-                Type::BUILTIN_TYPE_OBJECT,
-                false,
-                'Doctrine\Common\Collections\Collection',
-                true,
-                new Type(Type::BUILTIN_TYPE_INT),
-                new Type(Type::BUILTIN_TYPE_OBJECT, false, DoctrineRelation::class)
-            )]],
-            ['json', null],
-        ];
-    }
-
     public function testGetPropertiesCatchException()
     {
         $this->assertNull($this->createExtractor()->getProperties('Not\Exist'));
-    }
-
-    public function testGetTypesCatchException()
-    {
-        $this->assertNull($this->createExtractor()->getTypes('Not\Exist', 'baz'));
     }
 
     public function testGeneratedValueNotWritable()
@@ -242,5 +117,64 @@ class DoctrineExtractorTest extends TestCase
         $this->assertNull($extractor->isReadable(DoctrineGeneratedValue::class, 'id'));
         $this->assertNull($extractor->isWritable(DoctrineGeneratedValue::class, 'foo'));
         $this->assertNull($extractor->isReadable(DoctrineGeneratedValue::class, 'foo'));
+    }
+
+    public function testExtractWithEmbedded()
+    {
+        $this->assertEquals(
+            Type::object(DoctrineEmbeddable::class),
+            $this->createExtractor()->getType(DoctrineWithEmbedded::class, 'embedded'),
+        );
+    }
+
+    public function testExtractEnum()
+    {
+        $this->assertEquals(Type::enum(EnumString::class), $this->createExtractor()->getType(DoctrineEnum::class, 'enumString'));
+        $this->assertEquals(Type::enum(EnumInt::class), $this->createExtractor()->getType(DoctrineEnum::class, 'enumInt'));
+        $this->assertNull($this->createExtractor()->getType(DoctrineEnum::class, 'enumStringArray'));
+        $this->assertEquals(Type::list(Type::enum(EnumInt::class)), $this->createExtractor()->getType(DoctrineEnum::class, 'enumIntArray'));
+        $this->assertNull($this->createExtractor()->getType(DoctrineEnum::class, 'enumCustom'));
+    }
+
+    #[DataProvider('typeProvider')]
+    public function testExtract(string $property, ?Type $type)
+    {
+        $this->assertEquals($type, $this->createExtractor()->getType(DoctrineDummy::class, $property, []));
+    }
+
+    /**
+     * @return iterable<array{0: string, 1: ?Type}>
+     */
+    public static function typeProvider(): iterable
+    {
+        yield ['id', Type::int()];
+        yield ['guid', Type::string()];
+        yield ['bigint', Type::union(Type::int(), Type::string())];
+        yield ['time', Type::object(\DateTime::class)];
+        yield ['timeImmutable', Type::object(\DateTimeImmutable::class)];
+        yield ['dateInterval', Type::object(\DateInterval::class)];
+        yield ['float', Type::float()];
+        yield ['decimal', Type::string()];
+        yield ['bool', Type::bool()];
+        yield ['binary', Type::resource()];
+        yield ['foo', Type::nullable(Type::object(DoctrineRelation::class))];
+        yield ['bar', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::int())];
+        yield ['indexedRguid', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::string())];
+        yield ['indexedBar', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::string())];
+        yield ['indexedFoo', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::string())];
+        yield ['indexedBaz', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::int())];
+        yield ['simpleArray', Type::list(Type::string())];
+        yield ['customFoo', null];
+        yield ['notMapped', null];
+        yield ['indexedByDt', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::object())];
+        yield ['indexedByCustomType', null];
+        yield ['indexedBuz', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::string())];
+        yield ['dummyGeneratedValueList', Type::collection(Type::object(Collection::class), Type::object(DoctrineRelation::class), Type::int())];
+        yield ['json', null];
+    }
+
+    public function testGetTypeCatchException()
+    {
+        $this->assertNull($this->createExtractor()->getType('Not\Exist', 'baz'));
     }
 }

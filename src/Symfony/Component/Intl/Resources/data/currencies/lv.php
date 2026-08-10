@@ -614,9 +614,13 @@ return [
             'SKK',
             'Slovakijas krona',
         ],
+        'SLE' => [
+            'SLE',
+            'Sjerraleones leone',
+        ],
         'SLL' => [
             'SLL',
-            'Sjerraleones leone',
+            'Sjerraleones leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -750,6 +754,10 @@ return [
             'EC$',
             'Austrumkarību dolārs',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karību guldenis',
+        ],
         'XEU' => [
             'XEU',
             'Eiropas norēķinu vienība',
@@ -789,6 +797,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Zimbabves dolārs',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabves zelts',
         ],
         'ZWL' => [
             'ZWL',

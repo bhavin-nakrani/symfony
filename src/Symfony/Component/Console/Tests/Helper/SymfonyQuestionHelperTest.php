@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Console\Tests\Helper;
 
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Helper\HelperSet;
@@ -20,9 +21,7 @@ use Symfony\Component\Console\Output\StreamOutput;
 use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\Question;
 
-/**
- * @group tty
- */
+#[Group('tty')]
 class SymfonyQuestionHelperTest extends AbstractQuestionHelperTestCase
 {
     public function testAskChoice()
@@ -97,11 +96,52 @@ class SymfonyQuestionHelperTest extends AbstractQuestionHelperTestCase
         $this->assertOutputContains('What is your favorite superhero? [Batman]', $output);
     }
 
+    public function testAskChoiceDefaultRendersFormatterTagsInsteadOfEscapingThem()
+    {
+        $questionHelper = new SymfonyQuestionHelper();
+        $helperSet = new HelperSet([new FormatterHelper()]);
+        $questionHelper->setHelperSet($helperSet);
+
+        $choices = ['<comment>Add new tag</comment>', 'hello', 'world'];
+        $question = new ChoiceQuestion('Select a tag', $choices, 0);
+        $question->setMaxAttempts(1);
+
+        $this->assertSame($choices[0], $questionHelper->ask(
+            $this->createStreamableInputInterfaceMock($this->getInputStream("\n")),
+            $output = $this->createOutputInterface(),
+            $question
+        ));
+        // The default value in the brackets must match how the same choice is rendered
+        // in the choices list below, instead of leaking its raw formatter markup.
+        $this->assertOutputContains('Select a tag [Add new tag]:', $output);
+        $this->assertOutputNotContains('[<comment>Add new tag</comment>]', $output);
+    }
+
+    public function testAskMultiselectChoiceDefaultRendersFormatterTagsInsteadOfEscapingThem()
+    {
+        $questionHelper = new SymfonyQuestionHelper();
+        $helperSet = new HelperSet([new FormatterHelper()]);
+        $questionHelper->setHelperSet($helperSet);
+
+        $choices = ['<comment>Add new tag</comment>', 'hello', 'world'];
+        $question = new ChoiceQuestion('Select tags', $choices, '0,1');
+        $question->setMultiselect(true);
+        $question->setMaxAttempts(1);
+
+        $questionHelper->ask(
+            $this->createStreamableInputInterfaceMock($this->getInputStream("\n")),
+            $output = $this->createOutputInterface(),
+            $question
+        );
+        $this->assertOutputContains('Select tags [Add new tag, hello]:', $output);
+        $this->assertOutputNotContains('[<comment>Add new tag</comment>, hello]', $output);
+    }
+
     public function testAskReturnsNullIfValidatorAllowsIt()
     {
         $questionHelper = new SymfonyQuestionHelper();
         $question = new Question('What is your favorite superhero?');
-        $question->setValidator(fn ($value) => $value);
+        $question->setValidator(static fn ($value) => $value);
         $input = $this->createStreamableInputInterfaceMock($this->getInputStream("\n"));
         $this->assertNull($questionHelper->ask($input, $this->createOutputInterface(), $question));
     }
@@ -137,8 +177,7 @@ class SymfonyQuestionHelperTest extends AbstractQuestionHelperTestCase
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Aborted.');
-        $dialog = new SymfonyQuestionHelper();
-        $dialog->ask($this->createStreamableInputInterfaceMock($this->getInputStream('')), $this->createOutputInterface(), new Question('What\'s your name?'));
+        (new SymfonyQuestionHelper())->ask($this->createStreamableInputInterfaceMock($this->getInputStream('')), $this->createOutputInterface(), new Question('What\'s your name?'));
     }
 
     public function testChoiceQuestionPadding()
@@ -156,13 +195,15 @@ class SymfonyQuestionHelperTest extends AbstractQuestionHelperTestCase
         );
 
         $this->assertOutputContains(<<<EOT
- qqq:
-  [foo   ] foo
-  [żółw  ] bar
-  [łabądź] baz
- >
-EOT
-            , $output, true);
+             qqq:
+              [foo   ] foo
+              [żółw  ] bar
+              [łabądź] baz
+             >
+            EOT,
+            $output,
+            true
+        );
     }
 
     public function testChoiceQuestionCustomPrompt()
@@ -177,11 +218,13 @@ EOT
         );
 
         $this->assertOutputContains(<<<EOT
- qqq:
-  [0] foo
- >ccc>
-EOT
-            , $output, true);
+             qqq:
+              [0] foo
+             >ccc>
+            EOT,
+            $output,
+            true
+        );
     }
 
     protected function getInputStream($input)
@@ -203,8 +246,8 @@ EOT
 
     protected function createInputInterfaceMock($interactive = true)
     {
-        $mock = $this->createMock(InputInterface::class);
-        $mock->expects($this->any())
+        $mock = $this->createStub(InputInterface::class);
+        $mock
             ->method('isInteractive')
             ->willReturn($interactive);
 
@@ -221,6 +264,12 @@ EOT
         }
 
         $this->assertStringContainsString($expected, $stream);
+    }
+
+    private function assertOutputNotContains(string $unexpected, StreamOutput $output): void
+    {
+        rewind($output->getStream());
+        $this->assertStringNotContainsString($unexpected, stream_get_contents($output->getStream()));
     }
 
     public function testAskMultilineQuestionIncludesHelpText()

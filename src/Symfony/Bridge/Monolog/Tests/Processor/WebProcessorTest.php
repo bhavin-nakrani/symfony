@@ -11,7 +11,7 @@
 
 namespace Symfony\Bridge\Monolog\Tests\Processor;
 
-use Monolog\Logger;
+use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Monolog\Processor\WebProcessor;
@@ -91,12 +91,12 @@ class WebProcessorTest extends TestCase
         $request->server->replace($server);
         $request->headers->replace($server);
 
-        $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
+        $event = new RequestEvent($this->createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
 
         return [$event, $server];
     }
 
-    private function getRecord(int $level = Logger::WARNING, string $message = 'test'): array|LogRecord
+    private function getRecord(Level $level = Level::Warning, string $message = 'test'): LogRecord
     {
         return RecordFactory::create($level, $message);
     }

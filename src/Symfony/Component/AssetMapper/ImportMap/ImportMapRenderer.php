@@ -11,6 +11,14 @@
 
 namespace Symfony\Component\AssetMapper\ImportMap;
 
+use Psr\Link\EvolvableLinkProviderInterface;
+use Symfony\Component\Asset\Packages;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\WebLink\EventListener\AddLinkHeaderListener;
+use Symfony\Component\WebLink\GenericLinkProvider;
+use Symfony\Component\WebLink\Link;
+
 /**
  * @author Kévin Dunglas <kevin@dunglas.dev>
  * @author Ryan Weaver <ryan@symfonycasts.com>
@@ -19,64 +27,222 @@ namespace Symfony\Component\AssetMapper\ImportMap;
  */
 class ImportMapRenderer
 {
+    // https://generator.jspm.io/#S2NnYGAIzSvJLMlJTWEAAMYOgCAOAA
+    private const DEFAULT_ES_MODULE_SHIMS_POLYFILL_URL = 'https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js';
+    private const DEFAULT_ES_MODULE_SHIMS_POLYFILL_INTEGRITY = 'sha384-ie1x72Xck445i0j4SlNJ5W5iGeL3Dpa0zD48MZopgWsjNB/lt60SuG1iduZGNnJn';
+
+    private const LOADER_JSON = "export default (async()=>await(await fetch('%s')).json())()";
+    private const LOADER_CSS = "document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:'%s'%s}))";
+
     public function __construct(
-        private readonly ImportMapManager $importMapManager,
+        private readonly ImportMapGenerator $importMapGenerator,
+        private readonly ?Packages $assetPackages = null,
         private readonly string $charset = 'UTF-8',
-        private readonly string|false $polyfillUrl = ImportMapManager::POLYFILL_URL,
+        private readonly string|false $polyfillImportName = false,
         private readonly array $scriptAttributes = [],
+        private readonly ?RequestStack $requestStack = null,
     ) {
     }
 
-    public function render(string $entryPoint = null, array $attributes = []): string
+    public function render(string|array $entryPoint, array $attributes = []): string
     {
-        $attributeString = '';
+        $entryPoint = (array) $entryPoint;
 
-        $attributes += $this->scriptAttributes;
-        if (isset($attributes['src']) || isset($attributes['type'])) {
-            throw new \InvalidArgumentException(sprintf('The "src" and "type" attributes are not allowed on the <script> tag rendered by "%s".', self::class));
-        }
+        $importMapData = $this->importMapGenerator->getImportMapData($entryPoint);
+        $importMap = [];
+        $integrity = [];
+        $modulePreloads = [];
+        $webLinks = [];
+        $polyfillPath = null;
+        $polyfillIntegrity = null;
+        $styleIntegrity = [];
+        foreach ($importMapData as $importName => $data) {
+            $path = $data['path'];
 
-        foreach ($attributes as $name => $value) {
-            $attributeString .= ' ';
-            if (true === $value) {
-                $attributeString .= $name;
+            if ($this->assetPackages) {
+                // ltrim so the subdirectory (if needed) can be prepended
+                $path = $this->assetPackages->getUrl(ltrim($path, '/'));
+            }
 
+            // if this represents the polyfill, hide it from the import map
+            if ($importName === $this->polyfillImportName) {
+                $polyfillPath = $path;
+                $polyfillIntegrity = $data['integrity'] ?? null;
                 continue;
             }
-            $attributeString .= sprintf('%s="%s"', $name, $this->escapeAttributeValue($value));
+
+            // for subdirectories or CDNs, the import name needs to be the full URL
+            if (str_starts_with($importName, '/') && $this->assetPackages) {
+                $importName = $this->assetPackages->getUrl(ltrim($importName, '/'));
+            }
+
+            $preload = $data['preload'] ?? false;
+            if ('json' === $data['type']) {
+                $importMap[$importName] = 'data:application/javascript,'.str_replace('%', '%25', \sprintf(self::LOADER_JSON, addslashes($path)));
+                if ($preload) {
+                    $webLinks[$path] = 'fetch';
+                }
+            } elseif ('css' !== $data['type']) {
+                $importMap[$importName] = $path;
+                if (isset($data['integrity'])) {
+                    $integrity[$path] = $data['integrity'];
+                }
+                if ($preload) {
+                    $modulePreloads[$path] = $data['integrity'] ?? null;
+                }
+            } elseif ($preload) {
+                $webLinks[$path] = 'style';
+                $styleIntegrity[$path] = $data['integrity'] ?? null;
+                // importmap entry is a noop
+                $importMap[$importName] = 'data:application/javascript,';
+            } else {
+                $cssIntegrity = isset($data['integrity']) ? \sprintf(",integrity:'%s'", addslashes($data['integrity'])) : '';
+                $importMap[$importName] = 'data:application/javascript,'.str_replace('%', '%25', \sprintf(self::LOADER_CSS, addslashes($path), $cssIntegrity));
+            }
         }
 
-        $output = <<<HTML
-            <script type="importmap"{$attributeString}>
-            {$this->importMapManager->getImportMapJson()}
+        $output = '';
+        foreach ($webLinks as $url => $as) {
+            if ('style' === $as) {
+                $styleAttributes = isset($styleIntegrity[$url]) ? " integrity=\"{$this->escapeAttributeValue($styleIntegrity[$url])}\"" : '';
+                $output .= "\n<link rel=\"stylesheet\" href=\"{$this->escapeAttributeValue($url)}\"$styleAttributes>";
+            }
+        }
+
+        if (class_exists(AddLinkHeaderListener::class) && $request = $this->requestStack?->getCurrentRequest()) {
+            $this->addWebLinkPreloads($request, $webLinks);
+        }
+
+        $scriptAttributes = $attributes || $this->scriptAttributes ? ' '.$this->createAttributesString($attributes) : '';
+        $importMapConfig = ['imports' => $importMap ?: new \stdClass()];
+        if ($integrity) {
+            $importMapConfig['integrity'] = $integrity;
+        }
+        $importMapJson = json_encode($importMapConfig, \JSON_THROW_ON_ERROR | \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG);
+        $output .= <<<HTML
+
+            <script type="importmap"$scriptAttributes>
+            $importMapJson
             </script>
             HTML;
 
-        if ($this->polyfillUrl) {
-            $url = $this->escapeAttributeValue($this->polyfillUrl);
+        if (false !== $this->polyfillImportName && null === $polyfillPath) {
+            if ('es-module-shims' !== $this->polyfillImportName) {
+                throw new \InvalidArgumentException(\sprintf('The JavaScript module polyfill was not found in your import map. Either disable the polyfill or run "php bin/console importmap:require "%s"" to install it.', $this->polyfillImportName));
+            }
+
+            // a fallback for the default polyfill in case it's not in the importmap
+            $polyfillPath = self::DEFAULT_ES_MODULE_SHIMS_POLYFILL_URL;
+        }
+
+        if ($polyfillPath) {
+            $polyfillAttributes = $attributes + $this->scriptAttributes;
+
+            // Add security attributes for the default polyfill hosted on jspm.io
+            if (null !== $polyfillIntegrity) {
+                $polyfillAttributes = ['integrity' => $polyfillIntegrity] + $polyfillAttributes;
+            }
+
+            if (self::DEFAULT_ES_MODULE_SHIMS_POLYFILL_URL === $polyfillPath) {
+                $polyfillAttributes = [
+                    'crossorigin' => 'anonymous',
+                    'integrity' => self::DEFAULT_ES_MODULE_SHIMS_POLYFILL_INTEGRITY,
+                ] + $polyfillAttributes;
+            }
+
+            // The CSP nonce changes per request and must not be baked into the inlined script
+            // body — otherwise the rendered <head> changes on every render, which breaks Turbo's
+            // <head> signature check and any cache that keys on the response body. Propagate it
+            // at runtime from the parent <script> element instead.
+            unset($polyfillAttributes['nonce']);
 
             $output .= <<<HTML
-
-                <!-- ES Module Shims: Import maps polyfill for modules browsers without import maps support -->
-                <script async src="$url"$attributeString></script>
+                <script$scriptAttributes>
+                if (!HTMLScriptElement.supports || !HTMLScriptElement.supports('importmap')) (function () {
+                    const script = document.createElement('script');
+                    script.src = '{$this->escapeAttributeValue($polyfillPath, \ENT_NOQUOTES)}';
+                    if (document.currentScript?.nonce) script.nonce = document.currentScript.nonce;
+                    {$this->createAttributesString($polyfillAttributes, "script.setAttribute('%s', '%s');", "\n    ", \ENT_NOQUOTES)}
+                    document.head.appendChild(script);
+                })();
+                </script>
                 HTML;
         }
 
-        foreach ($this->importMapManager->getModulesToPreload() as $url) {
+        foreach ($modulePreloads as $url => $integrity) {
             $url = $this->escapeAttributeValue($url);
+            $integrity = null === $integrity ? '' : ' integrity="'.$this->escapeAttributeValue($integrity).'"';
 
-            $output .= "\n<link rel=\"modulepreload\" href=\"{$url}\">";
+            $output .= "\n<link rel=\"modulepreload\" href=\"$url\"$integrity>";
         }
 
-        if (null !== $entryPoint) {
-            $output .= "\n<script type=\"module\"$attributeString>import '".str_replace("'", "\\'", $entryPoint)."';</script>";
+        if (\count($entryPoint) > 0) {
+            $output .= "\n<script type=\"module\"$scriptAttributes>";
+            foreach ($entryPoint as $entryPointName) {
+                $entryPointName = $this->escapeAttributeValue($entryPointName);
+
+                $output .= "import '".str_replace("'", "\\'", $entryPointName)."';";
+            }
+            $output .= '</script>';
         }
 
         return $output;
     }
 
-    private function escapeAttributeValue(string $value): string
+    private function escapeAttributeValue(string $value, int $flags = \ENT_COMPAT | \ENT_SUBSTITUTE): string
     {
-        return htmlspecialchars($value, \ENT_COMPAT | \ENT_SUBSTITUTE, $this->charset);
+        $value = htmlspecialchars($value, $flags, $this->charset);
+
+        return \ENT_NOQUOTES & $flags ? addslashes($value) : $value;
+    }
+
+    private function createAttributesString(array $attributes, string $pattern = '%s="%s"', string $glue = ' ', int $flags = \ENT_COMPAT | \ENT_SUBSTITUTE): string
+    {
+        $attributeString = '';
+
+        $attributes += $this->scriptAttributes;
+        if (isset($attributes['src']) || isset($attributes['type'])) {
+            throw new \InvalidArgumentException(\sprintf('The "src" and "type" attributes are not allowed on the <script> tag rendered by "%s".', self::class));
+        }
+
+        foreach ($attributes as $name => $value) {
+            if ('' !== $attributeString) {
+                $attributeString .= $glue;
+            }
+            if (true === $value) {
+                $value = $name;
+            }
+            $attributeString .= \sprintf($pattern, $this->escapeAttributeValue($name, $flags), $this->escapeAttributeValue($value, $flags));
+        }
+
+        $attributeString = preg_replace('/\b([^ =]++)="\1"/', '\1', $attributeString);
+
+        return $attributeString;
+    }
+
+    private function addWebLinkPreloads(Request $request, array $links): void
+    {
+        foreach ($links as $url => $as) {
+            $links[$url] = (new Link('preload', $url))->withAttribute('as', $as);
+            if ('fetch' === $as) {
+                $links[$url] = $links[$url]->withAttribute('crossorigin', 'anonymous');
+            }
+        }
+
+        if (null === $linkProvider = $request->attributes->get('_links')) {
+            $request->attributes->set('_links', new GenericLinkProvider($links));
+
+            return;
+        }
+
+        if (!$linkProvider instanceof EvolvableLinkProviderInterface) {
+            return;
+        }
+
+        foreach ($links as $link) {
+            $linkProvider = $linkProvider->withLink($link);
+        }
+
+        $request->attributes->set('_links', $linkProvider);
     }
 }

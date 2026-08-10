@@ -60,10 +60,11 @@ bar';
 
     public function testLintFileNotReadable()
     {
-        $this->expectException(\RuntimeException::class);
         $tester = $this->createCommandTester();
         $filename = $this->createFile('');
         unlink($filename);
+
+        $this->expectException(\RuntimeException::class);
 
         $tester->execute(['filename' => $filename], ['decorated' => false]);
     }
@@ -72,10 +73,10 @@ bar';
     {
         $command = new YamlLintCommand();
         $expected = <<<EOF
-Or find all files in a bundle:
+            Or find all files in a bundle:
 
-  <info>php %command.full_name% @AcmeDemoBundle</info>
-EOF;
+              <info>php %command.full_name% @AcmeDemoBundle</info>
+            EOF;
 
         $this->assertStringContainsString($expected, $command->getHelp());
     }
@@ -106,14 +107,12 @@ EOF;
     {
         if (!$application) {
             $application = new BaseApplication();
-            $application->add(new YamlLintCommand());
+            $application->addCommand(new YamlLintCommand());
         }
 
         $command = $application->find('lint:yaml');
 
-        if ($application) {
-            $command->setApplication($application);
-        }
+        $command->setApplication($application);
 
         return new CommandTester($command);
     }
@@ -139,7 +138,6 @@ EOF;
             ->willReturn(new HelperSet());
 
         $application
-            ->expects($this->any())
             ->method('getDefinition')
             ->willReturn(new InputDefinition());
 

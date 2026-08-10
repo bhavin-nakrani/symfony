@@ -22,21 +22,18 @@ class Cookie
     public const SAMESITE_LAX = 'lax';
     public const SAMESITE_STRICT = 'strict';
 
-    protected $name;
-    protected $value;
-    protected $domain;
-    protected $expire;
-    protected $path;
-    protected $secure;
-    protected $httpOnly;
+    protected int $expire;
+    protected string $path;
 
-    private bool $raw;
     private ?string $sameSite = null;
     private bool $secureDefault = false;
 
     private const RESERVED_CHARS_LIST = "=,; \t\r\n\v\f";
     private const RESERVED_CHARS_FROM = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"];
     private const RESERVED_CHARS_TO = ['%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C'];
+
+    // same list as above minus "=", which PHP allows in the path and domain attributes
+    private const RESERVED_ATTR_CHARS_LIST = ",; \t\r\n\v\f";
 
     /**
      * Creates cookie from raw header string.
@@ -47,10 +44,11 @@ class Cookie
             'expires' => 0,
             'path' => '/',
             'domain' => null,
-            'secure' => false,
+            'secure' => null,
             'httponly' => false,
             'raw' => !$decode,
             'samesite' => null,
+            'partitioned' => false,
         ];
 
         $parts = HeaderUtils::split($cookie, ';=');
@@ -66,7 +64,7 @@ class Cookie
             $data['expires'] = time() + (int) $data['max-age'];
         }
 
-        return new static($name, $value, $data['expires'], $data['path'], $data['domain'], $data['secure'], $data['httponly'], $data['raw'], $data['samesite']);
+        return new static($name, $value, $data['expires'], $data['path'], $data['domain'], $data['secure'], $data['httponly'], $data['raw'], $data['samesite'], $data['partitioned']);
     }
 
     /**
@@ -74,9 +72,9 @@ class Cookie
      *
      * @param self::SAMESITE_*|''|null $sameSite
      */
-    public static function create(string $name, string $value = null, int|string|\DateTimeInterface $expire = 0, ?string $path = '/', string $domain = null, bool $secure = null, bool $httpOnly = true, bool $raw = false, ?string $sameSite = self::SAMESITE_LAX): self
+    public static function create(string $name, ?string $value = null, int|string|\DateTimeInterface $expire = 0, ?string $path = '/', ?string $domain = null, ?bool $secure = null, bool $httpOnly = true, bool $raw = false, ?string $sameSite = self::SAMESITE_LAX, bool $partitioned = false): self
     {
-        return new self($name, $value, $expire, $path, $domain, $secure, $httpOnly, $raw, $sameSite);
+        return new self($name, $value, $expire, $path, $domain, $secure, $httpOnly, $raw, $sameSite, $partitioned);
     }
 
     /**
@@ -92,25 +90,33 @@ class Cookie
      *
      * @throws \InvalidArgumentException
      */
-    public function __construct(string $name, string $value = null, int|string|\DateTimeInterface $expire = 0, ?string $path = '/', string $domain = null, bool $secure = null, bool $httpOnly = true, bool $raw = false, ?string $sameSite = self::SAMESITE_LAX)
-    {
+    public function __construct(
+        protected string $name,
+        protected ?string $value = null,
+        int|string|\DateTimeInterface $expire = 0,
+        ?string $path = '/',
+        protected ?string $domain = null,
+        protected ?bool $secure = null,
+        protected bool $httpOnly = true,
+        private bool $raw = false,
+        ?string $sameSite = self::SAMESITE_LAX,
+        private bool $partitioned = false,
+    ) {
         // from PHP source code
         if ($raw && false !== strpbrk($name, self::RESERVED_CHARS_LIST)) {
-            throw new \InvalidArgumentException(sprintf('The cookie name "%s" contains invalid characters.', $name));
+            throw new \InvalidArgumentException(\sprintf('The cookie name "%s" contains invalid characters.', $name));
         }
 
-        if (empty($name)) {
+        if (!$name) {
             throw new \InvalidArgumentException('The cookie name cannot be empty.');
         }
 
-        $this->name = $name;
-        $this->value = $value;
-        $this->domain = $domain;
+        self::validateAttribute('path', $path);
+        self::validateAttribute('domain', $domain);
+        self::validateNamePrefix($name, $secure, $domain, $path ?: '/');
+
         $this->expire = self::expiresTimestamp($expire);
-        $this->path = empty($path) ? '/' : $path;
-        $this->secure = $secure;
-        $this->httpOnly = $httpOnly;
-        $this->raw = $raw;
+        $this->path = $path ?: '/';
         $this->sameSite = $this->withSameSite($sameSite)->sameSite;
     }
 
@@ -130,6 +136,9 @@ class Cookie
      */
     public function withDomain(?string $domain): static
     {
+        self::validateAttribute('domain', $domain);
+        self::validateNamePrefix($this->name, $this->secure, $domain, $this->path);
+
         $cookie = clone $this;
         $cookie->domain = $domain;
 
@@ -167,10 +176,23 @@ class Cookie
     }
 
     /**
+     * Rejects the characters that PHP's setcookie() also rejects in the path and domain attributes.
+     */
+    private static function validateAttribute(string $attribute, ?string $value): void
+    {
+        if (null !== $value && false !== strpbrk($value, self::RESERVED_ATTR_CHARS_LIST)) {
+            throw new \InvalidArgumentException(\sprintf('The cookie %s "%s" contains invalid characters.', $attribute, $value));
+        }
+    }
+
+    /**
      * Creates a cookie copy with a new path on the server in which the cookie will be available on.
      */
     public function withPath(string $path): static
     {
+        self::validateAttribute('path', $path);
+        self::validateNamePrefix($this->name, $this->secure, $this->domain, '' === $path ? '/' : $path);
+
         $cookie = clone $this;
         $cookie->path = '' === $path ? '/' : $path;
 
@@ -182,6 +204,8 @@ class Cookie
      */
     public function withSecure(bool $secure = true): static
     {
+        self::validateNamePrefix($this->name, $secure, $this->domain, $this->path);
+
         $cookie = clone $this;
         $cookie->secure = $secure;
 
@@ -205,7 +229,7 @@ class Cookie
     public function withRaw(bool $raw = true): static
     {
         if ($raw && false !== strpbrk($this->name, self::RESERVED_CHARS_LIST)) {
-            throw new \InvalidArgumentException(sprintf('The cookie name "%s" contains invalid characters.', $this->name));
+            throw new \InvalidArgumentException(\sprintf('The cookie name "%s" contains invalid characters.', $this->name));
         }
 
         $cookie = clone $this;
@@ -233,6 +257,17 @@ class Cookie
 
         $cookie = clone $this;
         $cookie->sameSite = $sameSite;
+
+        return $cookie;
+    }
+
+    /**
+     * Creates a cookie copy that is tied to the top-level site in cross-site context.
+     */
+    public function withPartitioned(bool $partitioned = true): static
+    {
+        $cookie = clone $this;
+        $cookie->partitioned = $partitioned;
 
         return $cookie;
     }
@@ -268,16 +303,20 @@ class Cookie
             $str .= '; domain='.$this->getDomain();
         }
 
-        if (true === $this->isSecure()) {
+        if ($this->isSecure()) {
             $str .= '; secure';
         }
 
-        if (true === $this->isHttpOnly()) {
+        if ($this->isHttpOnly()) {
             $str .= '; httponly';
         }
 
         if (null !== $this->getSameSite()) {
             $str .= '; samesite='.$this->getSameSite();
+        }
+
+        if ($this->isPartitioned()) {
+            $str .= '; partitioned';
         }
 
         return $str;
@@ -322,7 +361,7 @@ class Cookie
     {
         $maxAge = $this->expire - time();
 
-        return 0 >= $maxAge ? 0 : $maxAge;
+        return max(0, $maxAge);
     }
 
     /**
@@ -366,6 +405,14 @@ class Cookie
     }
 
     /**
+     * Checks whether the cookie should be tied to the top-level site in cross-site context.
+     */
+    public function isPartitioned(): bool
+    {
+        return $this->partitioned;
+    }
+
+    /**
      * @return self::SAMESITE_*|null
      */
     public function getSameSite(): ?string
@@ -379,5 +426,29 @@ class Cookie
     public function setSecureDefault(bool $default): void
     {
         $this->secureDefault = $default;
+    }
+
+    /**
+     * Rejects a "__Host-" prefixed name combined with attributes that make browsers discard the cookie.
+     *
+     * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis#section-4.1.3
+     */
+    private static function validateNamePrefix(string $name, ?bool $secure, ?string $domain, string $path): void
+    {
+        if (false === $secure && (str_starts_with($name, '__Secure-') || str_starts_with($name, '__Host-'))) {
+            throw new \InvalidArgumentException(\sprintf('The cookie name "%s" uses a reserved prefix, which requires the "secure" flag to be enabled.', $name));
+        }
+
+        if (!str_starts_with($name, '__Host-')) {
+            return;
+        }
+
+        if ('' !== (string) $domain) {
+            throw new \InvalidArgumentException(\sprintf('The cookie name "%s" uses the "__Host-" prefix, which requires the cookie to have no "domain" attribute.', $name));
+        }
+
+        if ('/' !== $path) {
+            throw new \InvalidArgumentException(\sprintf('The cookie name "%s" uses the "__Host-" prefix, which requires the cookie path to be "/".', $name));
+        }
     }
 }

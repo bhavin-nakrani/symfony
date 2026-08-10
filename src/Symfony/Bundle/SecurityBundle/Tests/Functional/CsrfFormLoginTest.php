@@ -11,6 +11,7 @@
 
 namespace Symfony\Bundle\SecurityBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,14 +20,12 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 class CsrfFormLoginTest extends AbstractWebTestCase
 {
-    /**
-     * @dataProvider provideClientOptions
-     */
+    #[DataProvider('provideClientOptions')]
     public function testFormLoginAndLogoutWithCsrfTokens($options)
     {
         $client = $this->createClient($options);
 
-        $this->callInRequestContext($client, function () {
+        $this->callInRequestContext($client, static function () {
             static::getContainer()->get('security.csrf.token_storage')->setToken('foo', 'bar');
         });
 
@@ -56,18 +55,18 @@ class CsrfFormLoginTest extends AbstractWebTestCase
         });
     }
 
-    /**
-     * @dataProvider provideClientOptions
-     */
+    #[DataProvider('provideClientOptions')]
     public function testFormLoginWithInvalidCsrfToken($options)
     {
         $client = $this->createClient($options);
 
-        $this->callInRequestContext($client, function () {
+        $this->callInRequestContext($client, static function () {
             static::getContainer()->get('security.csrf.token_storage')->setToken('foo', 'bar');
         });
 
         $form = $client->request('GET', '/login')->selectButton('login')->form();
+        $form['user_login[username]'] = 'johannes';
+        $form['user_login[password]'] = 'test';
         $form['user_login[_token]'] = '';
         $client->submit($form);
 
@@ -81,9 +80,7 @@ class CsrfFormLoginTest extends AbstractWebTestCase
         });
     }
 
-    /**
-     * @dataProvider provideClientOptions
-     */
+    #[DataProvider('provideClientOptions')]
     public function testFormLoginWithCustomTargetPath($options)
     {
         $client = $this->createClient($options);
@@ -101,9 +98,7 @@ class CsrfFormLoginTest extends AbstractWebTestCase
         $this->assertStringContainsString('You\'re browsing to path "/foo".', $text);
     }
 
-    /**
-     * @dataProvider provideClientOptions
-     */
+    #[DataProvider('provideClientOptions')]
     public function testFormLoginRedirectsToProtectedResourceAfterLogin($options)
     {
         $client = $this->createClient($options);
@@ -122,7 +117,7 @@ class CsrfFormLoginTest extends AbstractWebTestCase
         $this->assertStringContainsString('You\'re browsing to path "/protected-resource".', $text);
     }
 
-    public static function provideClientOptions()
+    public static function provideClientOptions(): iterable
     {
         yield [['test_case' => 'CsrfFormLogin', 'root_config' => 'config.yml']];
         yield [['test_case' => 'CsrfFormLogin', 'root_config' => 'routes_as_path.yml']];
@@ -132,7 +127,7 @@ class CsrfFormLoginTest extends AbstractWebTestCase
     {
         /** @var EventDispatcherInterface $eventDispatcher */
         $eventDispatcher = static::getContainer()->get(EventDispatcherInterface::class);
-        $wrappedCallable = function (RequestEvent $event) use (&$callable) {
+        $wrappedCallable = static function (RequestEvent $event) use (&$callable) {
             $callable();
             $event->setResponse(new Response(''));
             $event->stopPropagation();
@@ -140,7 +135,7 @@ class CsrfFormLoginTest extends AbstractWebTestCase
 
         $eventDispatcher->addListener(KernelEvents::REQUEST, $wrappedCallable);
         try {
-            $client->request('GET', '/'.uniqid('', true));
+            $client->request('GET', '/not-existent');
         } finally {
             $eventDispatcher->removeListener(KernelEvents::REQUEST, $wrappedCallable);
         }

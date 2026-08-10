@@ -10,7 +10,6 @@ $container->loadFromExtension('framework', [
             'field_name' => '_csrf',
         ],
     ],
-    'http_method_override' => false,
     'trust_x_sendfile_type_header' => true,
     'esi' => [
         'enabled' => true,
@@ -35,13 +34,12 @@ $container->loadFromExtension('framework', [
         'cookie_path' => '/',
         'cookie_domain' => 'example.com',
         'cookie_secure' => true,
+        'cookie_samesite' => 'lax',
         'cookie_httponly' => false,
         'use_cookies' => true,
         'gc_maxlifetime' => 90000,
         'gc_divisor' => 108,
         'gc_probability' => 1,
-        'sid_length' => 22,
-        'sid_bits_per_character' => 4,
         'save_path' => '/path/to/sessions',
     ],
     'assets' => [
@@ -55,18 +53,25 @@ $container->loadFromExtension('framework', [
     ],
     'validation' => [
         'enabled' => true,
+        'email_validation_mode' => 'html5',
     ],
-    'annotations' => false,
     'serializer' => [
         'enabled' => true,
-        'enable_annotations' => true,
+        'enable_attributes' => true,
         'name_converter' => 'serializer.name_converter.camel_case_to_snake_case',
         'circular_reference_handler' => 'my.circular.reference.handler',
         'max_depth_handler' => 'my.max.depth.handler',
         'default_context' => ['enable_max_depth' => true],
+        'named_serializers' => [
+            'api' => [
+                'include_built_in_normalizers' => true,
+                'include_built_in_encoders' => true,
+                'default_context' => ['enable_max_depth' => false],
+            ],
+        ],
     ],
     'property_info' => true,
-    'ide' => 'file%%link%%format',
+    'type_info' => true,
     'request' => [
         'formats' => [
             'csv' => [

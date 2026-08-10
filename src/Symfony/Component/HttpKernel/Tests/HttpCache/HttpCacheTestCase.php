@@ -30,7 +30,7 @@ abstract class HttpCacheTestCase extends TestCase
     protected $responses;
     protected $catch;
     protected $esi;
-    protected Store $store;
+    protected ?Store $store = null;
 
     protected function setUp(): void
     {
@@ -115,14 +115,12 @@ abstract class HttpCacheTestCase extends TestCase
 
         $this->kernel->reset();
 
-        $this->store = new Store(sys_get_temp_dir().'/http_cache');
+        if (!$this->store) {
+            $this->store = $this->createStore();
+        }
 
         if (!isset($this->cacheConfig['debug'])) {
             $this->cacheConfig['debug'] = true;
-        }
-
-        if (!isset($this->cacheConfig['terminate_on_cache_hit'])) {
-            $this->cacheConfig['terminate_on_cache_hit'] = false;
         }
 
         $this->esi = $esi ? new Esi() : null;
@@ -146,7 +144,7 @@ abstract class HttpCacheTestCase extends TestCase
     }
 
     // A basic response with 200 status code and a tiny body.
-    public function setNextResponse($statusCode = 200, array $headers = [], $body = 'Hello World', \Closure $customizer = null, EventDispatcher $eventDispatcher = null)
+    public function setNextResponse($statusCode = 200, array $headers = [], $body = 'Hello World', ?\Closure $customizer = null, ?EventDispatcher $eventDispatcher = null)
     {
         $this->kernel = new TestHttpKernel($body, $statusCode, $headers, $customizer, $eventDispatcher);
     }
@@ -169,7 +167,7 @@ abstract class HttpCacheTestCase extends TestCase
 
         $fp = opendir($directory);
         while (false !== $file = readdir($fp)) {
-            if (!\in_array($file, ['.', '..'])) {
+            if (!\in_array($file, ['.', '..'], true)) {
                 if (is_link($directory.'/'.$file)) {
                     unlink($directory.'/'.$file);
                 } elseif (is_dir($directory.'/'.$file)) {
@@ -182,5 +180,10 @@ abstract class HttpCacheTestCase extends TestCase
         }
 
         closedir($fp);
+    }
+
+    protected function createStore(): Store
+    {
+        return new Store(sys_get_temp_dir().'/http_cache');
     }
 }

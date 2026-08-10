@@ -14,7 +14,14 @@ namespace Symfony\Component\Validator\Mapping\Loader;
 use Symfony\Component\PropertyInfo\PropertyAccessExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyListExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyTypeExtractorInterface;
-use Symfony\Component\PropertyInfo\Type as PropertyInfoType;
+use Symfony\Component\TypeInfo\Type as TypeInfoType;
+use Symfony\Component\TypeInfo\Type\BuiltinType;
+use Symfony\Component\TypeInfo\Type\CollectionType;
+use Symfony\Component\TypeInfo\Type\CompositeTypeInterface;
+use Symfony\Component\TypeInfo\Type\NullableType;
+use Symfony\Component\TypeInfo\Type\ObjectType;
+use Symfony\Component\TypeInfo\Type\WrappingTypeInterface;
+use Symfony\Component\TypeInfo\TypeIdentifier;
 use Symfony\Component\Validator\Constraints\All;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotNull;
@@ -31,17 +38,12 @@ final class PropertyInfoLoader implements LoaderInterface
 {
     use AutoMappingTrait;
 
-    private PropertyListExtractorInterface $listExtractor;
-    private PropertyTypeExtractorInterface $typeExtractor;
-    private PropertyAccessExtractorInterface $accessExtractor;
-    private ?string $classValidatorRegexp;
-
-    public function __construct(PropertyListExtractorInterface $listExtractor, PropertyTypeExtractorInterface $typeExtractor, PropertyAccessExtractorInterface $accessExtractor, string $classValidatorRegexp = null)
-    {
-        $this->listExtractor = $listExtractor;
-        $this->typeExtractor = $typeExtractor;
-        $this->accessExtractor = $accessExtractor;
-        $this->classValidatorRegexp = $classValidatorRegexp;
+    public function __construct(
+        private PropertyListExtractorInterface $listExtractor,
+        private PropertyTypeExtractorInterface $typeExtractor,
+        private PropertyAccessExtractorInterface $accessExtractor,
+        private ?string $classValidatorRegexp = null,
+    ) {
     }
 
     public function loadClassMetadata(ClassMetadata $metadata): bool
@@ -62,8 +64,8 @@ final class PropertyInfoLoader implements LoaderInterface
                 continue;
             }
 
-            $types = $this->typeExtractor->getTypes($className, $property);
-            if (null === $types) {
+            $type = $this->typeExtractor->getType($className, $property);
+            if (null === $type) {
                 continue;
             }
 
@@ -100,31 +102,27 @@ final class PropertyInfoLoader implements LoaderInterface
             }
 
             $loaded = true;
-            $builtinTypes = [];
-            $nullable = false;
-            $scalar = true;
-            foreach ($types as $type) {
-                $builtinTypes[] = $type->getBuiltinType();
 
-                if ($scalar && !\in_array($type->getBuiltinType(), [PropertyInfoType::BUILTIN_TYPE_INT, PropertyInfoType::BUILTIN_TYPE_FLOAT, PropertyInfoType::BUILTIN_TYPE_STRING, PropertyInfoType::BUILTIN_TYPE_BOOL], true)) {
-                    $scalar = false;
-                }
-
-                if (!$nullable && $type->isNullable()) {
-                    $nullable = true;
-                }
+            if ($hasTypeConstraint) {
+                continue;
             }
-            if (!$hasTypeConstraint) {
-                if (1 === \count($builtinTypes)) {
-                    if ($types[0]->isCollection() && \count($collectionValueType = $types[0]->getCollectionValueTypes()) > 0) {
-                        [$collectionValueType] = $collectionValueType;
-                        $this->handleAllConstraint($property, $allConstraint, $collectionValueType, $metadata);
-                    }
 
-                    $metadata->addPropertyConstraint($property, $this->getTypeConstraint($builtinTypes[0], $types[0]));
-                } elseif ($scalar) {
-                    $metadata->addPropertyConstraint($property, new Type(['type' => 'scalar']));
-                }
+            $nullable = $type->isNullable();
+
+            if ($type instanceof NullableType) {
+                $type = $type->getWrappedType();
+            }
+
+            if ($type instanceof NullableType) {
+                $type = $type->getWrappedType();
+            }
+
+            if ($type instanceof CollectionType) {
+                $this->handleAllConstraint($property, $allConstraint, $type->getCollectionValueType(), $metadata);
+            }
+
+            if (null !== $typeConstraint = $this->getTypeConstraint($type)) {
+                $metadata->addPropertyConstraint($property, $typeConstraint);
             }
 
             if (!$nullable && !$hasNotBlankConstraint && !$hasNotNullConstraint) {
@@ -135,16 +133,35 @@ final class PropertyInfoLoader implements LoaderInterface
         return $loaded;
     }
 
-    private function getTypeConstraint(string $builtinType, PropertyInfoType $type): Type
+    private function getTypeConstraint(TypeInfoType $type): ?Type
     {
-        if (PropertyInfoType::BUILTIN_TYPE_OBJECT === $builtinType && null !== $className = $type->getClassName()) {
-            return new Type(['type' => $className]);
+        if ($type instanceof CompositeTypeInterface) {
+            return $type->isIdentifiedBy(
+                TypeIdentifier::INT,
+                TypeIdentifier::FLOAT,
+                TypeIdentifier::STRING,
+                TypeIdentifier::BOOL,
+                TypeIdentifier::TRUE,
+                TypeIdentifier::FALSE,
+            ) ? new Type(type: 'scalar') : null;
         }
 
-        return new Type(['type' => $builtinType]);
+        while ($type instanceof WrappingTypeInterface) {
+            $type = $type->getWrappedType();
+        }
+
+        if ($type instanceof ObjectType) {
+            return new Type(type: $type->getClassName());
+        }
+
+        if ($type instanceof BuiltinType && TypeIdentifier::MIXED !== $type->getTypeIdentifier()) {
+            return new Type(type: $type->getTypeIdentifier()->value);
+        }
+
+        return null;
     }
 
-    private function handleAllConstraint(string $property, ?All $allConstraint, PropertyInfoType $propertyInfoType, ClassMetadata $metadata): void
+    private function handleAllConstraint(string $property, ?All $allConstraint, TypeInfoType $type, ClassMetadata $metadata): void
     {
         $containsTypeConstraint = false;
         $containsNotNullConstraint = false;
@@ -159,16 +176,20 @@ final class PropertyInfoLoader implements LoaderInterface
         }
 
         $constraints = [];
-        if (!$containsNotNullConstraint && !$propertyInfoType->isNullable()) {
+        if (!$containsNotNullConstraint && !$type->isNullable()) {
             $constraints[] = new NotNull();
         }
 
-        if (!$containsTypeConstraint) {
-            $constraints[] = $this->getTypeConstraint($propertyInfoType->getBuiltinType(), $propertyInfoType);
+        if (!$containsTypeConstraint && null !== $typeConstraint = $this->getTypeConstraint($type)) {
+            $constraints[] = $typeConstraint;
+        }
+
+        if (!$constraints) {
+            return;
         }
 
         if (null === $allConstraint) {
-            $metadata->addPropertyConstraint($property, new All(['constraints' => $constraints]));
+            $metadata->addPropertyConstraint($property, new All(constraints: $constraints));
         } else {
             $allConstraint->constraints = array_merge($allConstraint->constraints, $constraints);
         }

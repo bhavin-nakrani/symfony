@@ -21,10 +21,7 @@ use Symfony\Component\DependencyInjection\Reference;
  */
 class TestServiceContainerRealRefPass implements CompilerPassInterface
 {
-    /**
-     * @return void
-     */
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition('test.private_services_locator')) {
             return;
@@ -65,6 +62,18 @@ class TestServiceContainerRealRefPass implements CompilerPassInterface
 
         if ($container->hasDefinition('test.service_container') && $renamedIds) {
             $container->getDefinition('test.service_container')->setArgument(2, $renamedIds);
+        }
+
+        $nonSharedServices = [];
+
+        foreach ($definitions as $id => $definition) {
+            if (($id && '.' !== $id[0] || isset($privateServices[$id])) && !$definition->isShared() && !$definition->hasErrors() && !$definition->isAbstract()) {
+                $nonSharedServices[$id] = true;
+            }
+        }
+
+        if ($container->hasDefinition('test.service_container') && $nonSharedServices) {
+            $container->getDefinition('test.service_container')->setArgument(3, $nonSharedServices);
         }
     }
 }

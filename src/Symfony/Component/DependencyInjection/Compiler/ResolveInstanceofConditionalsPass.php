@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
+use Symfony\Component\VarExporter\DeepCloner;
 
 /**
  * Applies instanceof conditionals to definitions.
@@ -24,14 +25,11 @@ use Symfony\Component\DependencyInjection\Exception\RuntimeException;
  */
 class ResolveInstanceofConditionalsPass implements CompilerPassInterface
 {
-    /**
-     * @return void
-     */
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         foreach ($container->getAutoconfiguredInstanceof() as $interface => $definition) {
             if ($definition->getArguments()) {
-                throw new InvalidArgumentException(sprintf('Autoconfigured instanceof for type "%s" defines arguments but these are not supported and should be removed.', $interface));
+                throw new InvalidArgumentException(\sprintf('Autoconfigured instanceof for type "%s" defines arguments but these are not supported and should be removed.', $interface));
             }
         }
 
@@ -85,7 +83,7 @@ class ResolveInstanceofConditionalsPass implements CompilerPassInterface
                 /** @var ChildDefinition $instanceofDef */
                 $instanceofDef = clone $instanceofDef;
                 $instanceofDef->setAbstract(true)->setParent($parent ?: '.abstract.instanceof.'.$id);
-                $parent = '.instanceof.'.$interface.'.'.$key.'.'.$id;
+                $parent = '.instanceof.'.strtr($interface, "\0\r\n", '---').'.'.$key.'.'.$id;
                 $container->setDefinition($parent, $instanceofDef);
                 $instanceofTags[] = [$interface, $instanceofDef->getTags()];
                 $instanceofBindings = $instanceofDef->getBindings() + $instanceofBindings;
@@ -108,19 +106,21 @@ class ResolveInstanceofConditionalsPass implements CompilerPassInterface
             $bindings = $definition->getBindings();
             $abstract = $container->setDefinition('.abstract.instanceof.'.$id, $definition);
             $definition->setBindings([]);
-            $definition = serialize($definition);
-
-            if (Definition::class === $abstract::class) {
-                // cast Definition to ChildDefinition
-                $definition = substr_replace($definition, '53', 2, 2);
-                $definition = substr_replace($definition, 'Child', 44, 0);
-            }
-            /** @var ChildDefinition $definition */
-            $definition = unserialize($definition);
+            $definition = (new DeepCloner($definition))->cloneAs(ChildDefinition::class);
             $definition->setParent($parent);
 
             if (null !== $shared && !isset($definition->getChanges()['shared'])) {
                 $definition->setShared($shared);
+            }
+
+            // Tags are added from the most specific type to the least specific one
+            if (1 < \count($instanceofTags)) {
+                $depths = [];
+                foreach ($instanceofTags as [$interface]) {
+                    $depths[$interface] ??= \count(class_parents($interface) ?: []) + \count(class_implements($interface) ?: []);
+                }
+                uasort($instanceofTags, static fn ($a, $b) => $depths[$a[0]] <=> $depths[$b[0]]);
+                $instanceofTags = array_values($instanceofTags);
             }
 
             // Don't add tags to service decorators
@@ -130,7 +130,13 @@ class ResolveInstanceofConditionalsPass implements CompilerPassInterface
                 foreach ($tags as $k => $v) {
                     if (null === $definition->getDecoratedService() || $interface === $definition->getClass() || \in_array($k, $tagsToKeep, true)) {
                         foreach ($v as $v) {
-                            if ($definition->hasTag($k) && \in_array($v, $definition->getTag($k))) {
+                            if (self::isLazyTagAttributes($v)) {
+                                if (!($r = $container->getReflectionClass($class, false)) || !$r->isInstantiable()) {
+                                    continue;
+                                }
+                                $v = self::resolveTagAttributes($v, $class, $k, $interface);
+                            }
+                            if ($definition->hasTag($k) && \in_array($v, $definition->getTag($k), true)) {
                                 continue;
                             }
                             $definition->addTag($k, $v);
@@ -152,18 +158,23 @@ class ResolveInstanceofConditionalsPass implements CompilerPassInterface
                 ->setAbstract(true);
         }
 
+        if ($definition->isSynthetic()) {
+            // Ignore container.excluded tag on synthetic services
+            $definition->clearTag('container.excluded');
+        }
+
         return $definition;
     }
 
     private function mergeConditionals(array $autoconfiguredInstanceof, array $instanceofConditionals, ContainerBuilder $container): array
     {
         // make each value an array of ChildDefinition
-        $conditionals = array_map(fn ($childDef) => [$childDef], $autoconfiguredInstanceof);
+        $conditionals = array_map(static fn ($childDef) => [$childDef], $autoconfiguredInstanceof);
 
         foreach ($instanceofConditionals as $interface => $instanceofDef) {
             // make sure the interface/class exists (but don't validate automaticInstanceofConditionals)
             if (!$container->getReflectionClass($interface)) {
-                throw new RuntimeException(sprintf('"%s" is set as an "instanceof" conditional, but it does not exist.', $interface));
+                throw new RuntimeException(\sprintf('"%s" is set as an "instanceof" conditional, but it does not exist.', $interface));
             }
 
             if (!isset($autoconfiguredInstanceof[$interface])) {
@@ -174,5 +185,52 @@ class ResolveInstanceofConditionalsPass implements CompilerPassInterface
         }
 
         return $conditionals;
+    }
+
+    /**
+     * Whether a tag attribute-set is a lazily-computed one to be resolved per concrete class: either a
+     * [\Closure] (a closure wrapped in an array so it survives addTag()) or a [class-string, method] callable.
+     */
+    private static function isLazyTagAttributes(mixed $attributes): bool
+    {
+        if (!\is_array($attributes)) {
+            return false;
+        }
+
+        if ([0] === array_keys($attributes) && $attributes[0] instanceof \Closure) {
+            return true;
+        }
+
+        return [0, 1] === array_keys($attributes)
+            && \is_string($attributes[0])
+            && \is_string($attributes[1])
+            && (class_exists($attributes[0]) || interface_exists($attributes[0]));
+    }
+
+    /**
+     * Computes the attributes of a tag whose attribute-set is a wrapped closure or a [class-string, method] callable.
+     */
+    private static function resolveTagAttributes(array $attributes, string $class, string $tag, string $interface): array
+    {
+        if ($attributes[0] instanceof \Closure) {
+            $resolved = $attributes[0]($class);
+            $source = \sprintf('The closure passed to the "%s" tag of "%s"', $tag, $interface);
+        } else {
+            [$declaringClass, $method] = $attributes;
+            if (!is_a($class, $declaringClass, true)) {
+                throw new InvalidArgumentException(\sprintf('Cannot tag "%s" through "%s::%s()" because it is not a subtype of "%s".', $class, $declaringClass, $method, $declaringClass));
+            }
+            if (!method_exists($class, $method)) {
+                throw new InvalidArgumentException(\sprintf('Cannot tag "%s" through "%s::%s()" because that method does not exist.', $class, $declaringClass, $method));
+            }
+            $resolved = $class::$method();
+            $source = \sprintf('The "%s::%s()" method computing the "%s" tag attributes', $declaringClass, $method, $tag);
+        }
+
+        if (!\is_array($resolved)) {
+            throw new InvalidArgumentException(\sprintf('%s must return an array of attributes, "%s" returned.', $source, get_debug_type($resolved)));
+        }
+
+        return $resolved;
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'UserAssignedNames' => [],
     'Names' => [
         'AD' => 'Andora',
         'AE' => 'Leta Zunze Ubumwe z’Abarabu',
@@ -92,7 +93,6 @@ return [
         'IE' => 'Irilandi',
         'IL' => 'Isiraheli',
         'IN' => 'Ubuhindi',
-        'IO' => 'Intara y’Ubwongereza yo mu birwa by’Abahindi',
         'IQ' => 'Iraki',
         'IR' => 'Irani',
         'IS' => 'Ayisilandi',

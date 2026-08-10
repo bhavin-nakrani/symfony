@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Notifier\Tests\Message;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Notifier\Message\MessageInterface;
 use Symfony\Component\Notifier\Message\NullMessage;
@@ -20,9 +21,7 @@ use Symfony\Component\Notifier\Message\NullMessage;
  */
 class NullMessageTest extends TestCase
 {
-    /**
-     * @dataProvider messageDataProvider
-     */
+    #[DataProvider('messageDataProvider')]
     public function testCanBeConstructed(MessageInterface $message)
     {
         $nullMessage = new NullMessage($message);
@@ -30,10 +29,7 @@ class NullMessageTest extends TestCase
         $this->assertSame($message->getSubject(), $nullMessage->getSubject());
         $this->assertSame($message->getRecipientId(), $nullMessage->getRecipientId());
         $this->assertSame($message->getOptions(), $nullMessage->getOptions());
-
-        (null === $message->getTransport())
-            ? $this->assertSame('null', $nullMessage->getTransport())
-            : $this->assertSame($message->getTransport(), $nullMessage->getTransport());
+        $this->assertSame($message->getTransport(), $nullMessage->getTransport());
     }
 
     public static function messageDataProvider(): \Generator

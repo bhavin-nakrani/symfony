@@ -18,6 +18,7 @@ use Symfony\Component\Workflow\Event\EnterEvent;
 use Symfony\Component\Workflow\Event\GuardEvent;
 use Symfony\Component\Workflow\Event\LeaveEvent;
 use Symfony\Component\Workflow\Event\TransitionEvent;
+use Symfony\Component\Workflow\Exception\InvalidArgumentException;
 use Symfony\Component\Workflow\Exception\LogicException;
 use Symfony\Component\Workflow\Exception\NotEnabledTransitionException;
 use Symfony\Component\Workflow\Exception\UndefinedTransitionException;
@@ -52,28 +53,65 @@ class Workflow implements WorkflowInterface
         WorkflowEvents::ANNOUNCE => self::DISABLE_ANNOUNCE_EVENT,
     ];
 
-    private Definition $definition;
+    private const DISPATCHABLE_EVENTS = [
+        WorkflowEvents::LEAVE,
+        WorkflowEvents::TRANSITION,
+        WorkflowEvents::ENTER,
+        WorkflowEvents::ENTERED,
+        WorkflowEvents::COMPLETED,
+        WorkflowEvents::ANNOUNCE,
+    ];
+
     private MarkingStoreInterface $markingStore;
-    private ?EventDispatcherInterface $dispatcher;
-    private string $name;
 
     /**
-     * When `null` fire all events (the default behaviour).
-     * Setting this to an empty array `[]` means no events are dispatched (except the Guard Event).
-     * Passing an array with WorkflowEvents will allow only those events to be dispatched plus
-     * the Guard Event.
-     *
-     * @var array|string[]|null
+     * @param string[]|null $eventsToDispatch Controls which {@see WorkflowEvents} are dispatched:
+     *                                        - `null` (default): fire all events.
+     *                                        - `[]`: fire no event (except the {@see GuardEvent}).
+     *                                        - allow-list, e.g. `['workflow.transition', 'workflow.enter']`: fire only the listed
+     *                                        events plus the {@see GuardEvent}.
+     *                                        - block-list, e.g. `['!workflow.announce']`: fire every event except the listed ones;
+     *                                        future {@see WorkflowEvents} are dispatched by default. The {@see GuardEvent} can
+     *                                        never be suppressed; blocking it with `!workflow.guard` throws an
+     *                                        {@see InvalidArgumentException}.
+     *                                        Mixing allow-list and block-list entries in the same array is not supported and throws
+     *                                        an {@see InvalidArgumentException}.
      */
-    private ?array $eventsToDispatch = null;
-
-    public function __construct(Definition $definition, MarkingStoreInterface $markingStore = null, EventDispatcherInterface $dispatcher = null, string $name = 'unnamed', array $eventsToDispatch = null)
-    {
-        $this->definition = $definition;
+    public function __construct(
+        private Definition $definition,
+        ?MarkingStoreInterface $markingStore = null,
+        private ?EventDispatcherInterface $dispatcher = null,
+        private string $name = 'unnamed',
+        private ?array $eventsToDispatch = null,
+    ) {
         $this->markingStore = $markingStore ?? new MethodMarkingStore();
-        $this->dispatcher = $dispatcher;
-        $this->name = $name;
-        $this->eventsToDispatch = $eventsToDispatch;
+
+        if (null !== $this->eventsToDispatch && [] !== $this->eventsToDispatch) {
+            $hasAllowList = false;
+            $hasBlockList = false;
+            foreach ($this->eventsToDispatch as $entry) {
+                if (str_starts_with($entry, '!')) {
+                    $hasBlockList = true;
+                } else {
+                    $hasAllowList = true;
+                }
+            }
+            if ($hasAllowList && $hasBlockList) {
+                throw new InvalidArgumentException(\sprintf('Cannot mix allow-list and block-list entries in $eventsToDispatch for workflow "%s": every entry must start with "!" (block-list mode) or none of them must (allow-list mode).', $name));
+            }
+
+            if ($hasBlockList) {
+                $blockedEvents = [];
+                foreach ($this->eventsToDispatch as $entry) {
+                    $eventName = substr($entry, 1);
+                    if (WorkflowEvents::GUARD === $eventName) {
+                        throw new InvalidArgumentException(\sprintf('The "%s" event cannot be disabled in $eventsToDispatch for workflow "%s": it is always dispatched.', WorkflowEvents::GUARD, $name));
+                    }
+                    $blockedEvents[] = $eventName;
+                }
+                $this->eventsToDispatch = array_values(array_diff(self::DISPATCHABLE_EVENTS, $blockedEvents));
+            }
+        }
     }
 
     public function getMarking(object $subject, array $context = []): Marking
@@ -83,7 +121,7 @@ class Workflow implements WorkflowInterface
         // check if the subject is already in the workflow
         if (!$marking->getPlaces()) {
             if (!$this->definition->getInitialPlaces()) {
-                throw new LogicException(sprintf('The Marking is empty and there is no initial place for workflow "%s".', $this->name));
+                throw new LogicException(\sprintf('The Marking is empty and there is no initial place for workflow "%s".', $this->name));
             }
             foreach ($this->definition->getInitialPlaces() as $place) {
                 $marking->mark($place);
@@ -103,7 +141,7 @@ class Workflow implements WorkflowInterface
         $places = $this->definition->getPlaces();
         foreach ($marking->getPlaces() as $placeName => $nbToken) {
             if (!isset($places[$placeName])) {
-                $message = sprintf('Place "%s" is not valid for workflow "%s".', $placeName, $this->name);
+                $message = \sprintf('Place "%s" is not valid for workflow "%s".', $placeName, $this->name);
                 if (!$places) {
                     $message .= ' It seems you forgot to add places to the current workflow.';
                 }
@@ -289,8 +327,8 @@ class Workflow implements WorkflowInterface
 
     private function buildTransitionBlockerListForTransition(object $subject, Marking $marking, Transition $transition): TransitionBlockerList
     {
-        foreach ($transition->getFroms() as $place) {
-            if (!$marking->has($place)) {
+        foreach ($transition->getFroms(true) as $arc) {
+            if ($marking->getTokenCount($arc->place) < $arc->weight) {
                 return new TransitionBlockerList([
                     TransitionBlocker::createBlockedByMarking($marking),
                 ]);
@@ -319,29 +357,29 @@ class Workflow implements WorkflowInterface
         $event = new GuardEvent($subject, $marking, $transition, $this);
 
         $this->dispatcher->dispatch($event, WorkflowEvents::GUARD);
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.guard', $this->name));
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.guard.%s', $this->name, $transition->getName()));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.guard', $this->name));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.guard.%s', $this->name, $transition->getName()));
 
         return $event;
     }
 
     private function leave(object $subject, Transition $transition, Marking $marking, array $context = []): void
     {
-        $places = $transition->getFroms();
+        $arcs = $transition->getFroms(true);
 
         if ($this->shouldDispatchEvent(WorkflowEvents::LEAVE, $context)) {
             $event = new LeaveEvent($subject, $marking, $transition, $this, $context);
 
             $this->dispatcher->dispatch($event, WorkflowEvents::LEAVE);
-            $this->dispatcher->dispatch($event, sprintf('workflow.%s.leave', $this->name));
+            $this->dispatcher->dispatch($event, \sprintf('workflow.%s.leave', $this->name));
 
-            foreach ($places as $place) {
-                $this->dispatcher->dispatch($event, sprintf('workflow.%s.leave.%s', $this->name, $place));
+            foreach ($arcs as $arc) {
+                $this->dispatcher->dispatch($event, \sprintf('workflow.%s.leave.%s', $this->name, $arc->place));
             }
         }
 
-        foreach ($places as $place) {
-            $marking->unmark($place);
+        foreach ($arcs as $arc) {
+            $marking->unmark($arc->place, $arc->weight);
         }
     }
 
@@ -354,29 +392,29 @@ class Workflow implements WorkflowInterface
         $event = new TransitionEvent($subject, $marking, $transition, $this, $context);
 
         $this->dispatcher->dispatch($event, WorkflowEvents::TRANSITION);
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.transition', $this->name));
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.transition.%s', $this->name, $transition->getName()));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.transition', $this->name));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.transition.%s', $this->name, $transition->getName()));
 
         return $event->getContext();
     }
 
     private function enter(object $subject, Transition $transition, Marking $marking, array $context): void
     {
-        $places = $transition->getTos();
+        $arcs = $transition->getTos(true);
 
         if ($this->shouldDispatchEvent(WorkflowEvents::ENTER, $context)) {
             $event = new EnterEvent($subject, $marking, $transition, $this, $context);
 
             $this->dispatcher->dispatch($event, WorkflowEvents::ENTER);
-            $this->dispatcher->dispatch($event, sprintf('workflow.%s.enter', $this->name));
+            $this->dispatcher->dispatch($event, \sprintf('workflow.%s.enter', $this->name));
 
-            foreach ($places as $place) {
-                $this->dispatcher->dispatch($event, sprintf('workflow.%s.enter.%s', $this->name, $place));
+            foreach ($arcs as $arc) {
+                $this->dispatcher->dispatch($event, \sprintf('workflow.%s.enter.%s', $this->name, $arc->place));
             }
         }
 
-        foreach ($places as $place) {
-            $marking->mark($place);
+        foreach ($arcs as $arc) {
+            $marking->mark($arc->place, $arc->weight);
         }
     }
 
@@ -389,10 +427,16 @@ class Workflow implements WorkflowInterface
         $event = new EnteredEvent($subject, $marking, $transition, $this, $context);
 
         $this->dispatcher->dispatch($event, WorkflowEvents::ENTERED);
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.entered', $this->name));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.entered', $this->name));
 
-        foreach ($marking->getPlaces() as $placeName => $nbToken) {
-            $this->dispatcher->dispatch($event, sprintf('workflow.%s.entered.%s', $this->name, $placeName));
+        $placeNames = [];
+        if ($transition) {
+            $placeNames = array_column($transition->getTos(true), 'place');
+        } elseif ($this->definition->getInitialPlaces()) {
+            $placeNames = $this->definition->getInitialPlaces();
+        }
+        foreach ($placeNames as $placeName) {
+            $this->dispatcher->dispatch($event, \sprintf('workflow.%s.entered.%s', $this->name, $placeName));
         }
     }
 
@@ -405,8 +449,8 @@ class Workflow implements WorkflowInterface
         $event = new CompletedEvent($subject, $marking, $transition, $this, $context);
 
         $this->dispatcher->dispatch($event, WorkflowEvents::COMPLETED);
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.completed', $this->name));
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.completed.%s', $this->name, $transition->getName()));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.completed', $this->name));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.completed.%s', $this->name, $transition->getName()));
     }
 
     private function announce(object $subject, Transition $initialTransition, Marking $marking, array $context): void
@@ -418,10 +462,10 @@ class Workflow implements WorkflowInterface
         $event = new AnnounceEvent($subject, $marking, $initialTransition, $this, $context);
 
         $this->dispatcher->dispatch($event, WorkflowEvents::ANNOUNCE);
-        $this->dispatcher->dispatch($event, sprintf('workflow.%s.announce', $this->name));
+        $this->dispatcher->dispatch($event, \sprintf('workflow.%s.announce', $this->name));
 
         foreach ($this->getEnabledTransitions($subject) as $transition) {
-            $this->dispatcher->dispatch($event, sprintf('workflow.%s.announce.%s', $this->name, $transition->getName()));
+            $this->dispatcher->dispatch($event, \sprintf('workflow.%s.announce.%s', $this->name, $transition->getName()));
         }
     }
 

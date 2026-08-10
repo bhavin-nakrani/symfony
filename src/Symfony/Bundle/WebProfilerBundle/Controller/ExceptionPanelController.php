@@ -25,13 +25,10 @@ use Symfony\Component\HttpKernel\Profiler\Profiler;
  */
 class ExceptionPanelController
 {
-    private HtmlErrorRenderer $errorRenderer;
-    private ?Profiler $profiler;
-
-    public function __construct(HtmlErrorRenderer $errorRenderer, Profiler $profiler = null)
-    {
-        $this->errorRenderer = $errorRenderer;
-        $this->profiler = $profiler;
+    public function __construct(
+        private HtmlErrorRenderer $errorRenderer,
+        private ?Profiler $profiler = null,
+    ) {
     }
 
     /**
@@ -57,5 +54,13 @@ class ExceptionPanelController
     public function stylesheet(): Response
     {
         return new Response($this->errorRenderer->getStylesheet(), 200, ['Content-Type' => 'text/css']);
+    }
+
+    /**
+     * Renders the exception panel JavaScript.
+     */
+    public function javascript(): Response
+    {
+        return new Response($this->errorRenderer->getJavaScript(), 200, ['Content-Type' => 'text/javascript']);
     }
 }

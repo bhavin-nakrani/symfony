@@ -16,7 +16,6 @@ use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Messenger\Stamp\ErrorDetailsStamp;
@@ -35,33 +34,50 @@ class FailedMessagesShowCommand extends AbstractFailedMessagesCommand
             ->setDefinition([
                 new InputArgument('id', InputArgument::OPTIONAL, 'Specific message id to show'),
                 new InputOption('max', null, InputOption::VALUE_REQUIRED, 'Maximum number of messages to list', 50),
-                new InputOption('transport', null, InputOption::VALUE_OPTIONAL, 'Use a specific failure transport', self::DEFAULT_TRANSPORT_OPTION),
+                new InputOption('transport', null, InputOption::VALUE_REQUIRED, 'Use a specific failure transport', self::DEFAULT_TRANSPORT_OPTION),
                 new InputOption('stats', null, InputOption::VALUE_NONE, 'Display the message count by class'),
                 new InputOption('class-filter', null, InputOption::VALUE_REQUIRED, 'Filter by a specific class name'),
+                new InputOption('failed-after', null, InputOption::VALUE_REQUIRED, 'Only select messages that failed at or after this date; messages with no known failure time are never selected'),
+                new InputOption('failed-before', null, InputOption::VALUE_REQUIRED, 'Only select messages that failed at or before this date; messages with no known failure time are never selected'),
             ])
             ->setHelp(<<<'EOF'
-The <info>%command.name%</info> shows message that are pending in the failure transport.
+                The <info>%command.name%</info> shows message that are pending in the failure transport.
 
-    <info>php %command.full_name%</info>
+                    <info>php %command.full_name%</info>
 
-Or look at a specific message by its id:
+                Or look at a specific message by its id:
 
-    <info>php %command.full_name% {id}</info>
-EOF
+                    <info>php %command.full_name% {id}</info>
+
+                The listing can be narrowed down by class name, by failure time, or by both:
+
+                    <info>php %command.full_name% --class-filter='App\Message\SendEmail'</info>
+                    <info>php %command.full_name% --failed-after='-1 hour'</info>
+                    <info>php %command.full_name% --failed-after='2024-05-01 08:00' --failed-before='2024-05-01 09:30'</info>
+
+                The "--failed-after" and "--failed-before" options accept any expression supported by
+                DateTimeImmutable and both bounds are inclusive. The failure time is the one shown in the
+                "Failed at" column, so messages that were never redelivered are never selected by these
+                options. Filters cannot be combined with a message id and they also narrow down "--stats".
+                EOF
             )
         ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io = new SymfonyStyle($input, $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output);
+        $io = new SymfonyStyle($input, $output);
+        $errorIo = $io->getErrorStyle();
+
+        $id = $input->getArgument('id');
+        [$classFilter, $failedAfter, $failedBefore] = $this->getFilters($input, null !== $id);
 
         $failureTransportName = $input->getOption('transport');
         if (self::DEFAULT_TRANSPORT_OPTION === $failureTransportName) {
-            $this->printWarningAvailableFailureTransports($io, $this->getGlobalFailureReceiverName());
+            $this->printWarningAvailableFailureTransports($errorIo, $this->getGlobalFailureReceiverName());
         }
         if ('' === $failureTransportName || null === $failureTransportName) {
-            $failureTransportName = $this->interactiveChooseFailureTransport($io);
+            $failureTransportName = $this->interactiveChooseFailureTransport($errorIo);
         }
         $failureTransportName = self::DEFAULT_TRANSPORT_OPTION === $failureTransportName ? $this->getGlobalFailureReceiverName() : $failureTransportName;
 
@@ -70,49 +86,50 @@ EOF
         $this->printPendingMessagesMessage($receiver, $io);
 
         if (!$receiver instanceof ListableReceiverInterface) {
-            throw new RuntimeException(sprintf('The "%s" receiver does not support listing or showing specific messages.', $failureTransportName));
+            throw new RuntimeException(\sprintf('The "%s" receiver does not support listing or showing specific messages.', $failureTransportName));
         }
 
         if ($input->getOption('stats')) {
-            $this->listMessagesPerClass($failureTransportName, $io, $input->getOption('max'));
-        } elseif (null === $id = $input->getArgument('id')) {
-            $this->listMessages($failureTransportName, $io, $input->getOption('max'), $input->getOption('class-filter'));
+            $max = $input->hasParameterOption(['--max'], true) ? $input->getOption('max') : null;
+            $this->listMessagesPerClass($receiver, $io, $max, $classFilter, $failedAfter, $failedBefore);
+        } elseif (null === $id) {
+            $this->listMessages($receiver, $failureTransportName, $io, $errorIo, $input->getOption('max'), $classFilter, $failedAfter, $failedBefore);
         } else {
-            $this->showMessage($failureTransportName, $id, $io);
+            $this->showMessage($receiver, $failureTransportName, $id, $io, $errorIo);
         }
 
         return 0;
     }
 
-    private function listMessages(?string $failedTransportName, SymfonyStyle $io, int $max, string $classFilter = null): void
+    private function listMessages(ListableReceiverInterface $receiver, string $failedTransportName, SymfonyStyle $io, SymfonyStyle $errorIo, int $max, ?string $classFilter, ?\DateTimeImmutable $failedAfter, ?\DateTimeImmutable $failedBefore): void
     {
-        /** @var ListableReceiverInterface $receiver */
-        $receiver = $this->getReceiver($failedTransportName);
         $envelopes = $receiver->all($max);
 
         $rows = [];
 
         if ($classFilter) {
-            $io->comment(sprintf('Displaying only \'%s\' messages', $classFilter));
+            $errorIo->comment(\sprintf('Displaying only \'%s\' messages', $classFilter));
+        }
+        if ($failedAfter) {
+            $errorIo->comment(\sprintf('Displaying only messages that failed after %s', $failedAfter->format('Y-m-d H:i:s')));
+        }
+        if ($failedBefore) {
+            $errorIo->comment(\sprintf('Displaying only messages that failed before %s', $failedBefore->format('Y-m-d H:i:s')));
         }
 
         $this->phpSerializer?->acceptPhpIncompleteClass();
         try {
             foreach ($envelopes as $envelope) {
-                $currentClassName = $envelope->getMessage()::class;
-
-                if ($classFilter && $classFilter !== $currentClassName) {
+                if (!$this->matchesFilter($envelope, $classFilter, $failedAfter, $failedBefore)) {
                     continue;
                 }
 
-                /** @var RedeliveryStamp|null $lastRedeliveryStamp */
                 $lastRedeliveryStamp = $envelope->last(RedeliveryStamp::class);
-                /** @var ErrorDetailsStamp|null $lastErrorDetailsStamp */
                 $lastErrorDetailsStamp = $envelope->last(ErrorDetailsStamp::class);
 
                 $rows[] = [
                     $this->getMessageId($envelope),
-                    $currentClassName,
+                    $envelope->getMessage()::class,
                     null === $lastRedeliveryStamp ? '' : $lastRedeliveryStamp->getRedeliveredAt()->format('Y-m-d H:i:s'),
                     $lastErrorDetailsStamp?->getExceptionMessage() ?? '',
                 ];
@@ -132,18 +149,16 @@ EOF
         $io->table(['Id', 'Class', 'Failed at', 'Error'], $rows);
 
         if ($rowsCount === $max) {
-            $io->comment(sprintf('Showing first %d messages.', $max));
-        } elseif ($classFilter) {
-            $io->comment(sprintf('Showing %d message(s).', $rowsCount));
+            $errorIo->comment(\sprintf('Showing first %d messages.', $max));
+        } elseif ($classFilter || $failedAfter || $failedBefore) {
+            $errorIo->comment(\sprintf('Showing %d message(s).', $rowsCount));
         }
 
-        $io->comment(sprintf('Run <comment>messenger:failed:show {id} --transport=%s -vv</comment> to see message details.', $failedTransportName));
+        $errorIo->comment(\sprintf('Run <comment>messenger:failed:show {id} --transport=%s -vv</comment> to see message details.', $failedTransportName));
     }
 
-    private function listMessagesPerClass(?string $failedTransportName, SymfonyStyle $io, int $max): void
+    private function listMessagesPerClass(ListableReceiverInterface $receiver, SymfonyStyle $io, ?int $max, ?string $classFilter, ?\DateTimeImmutable $failedAfter, ?\DateTimeImmutable $failedBefore): void
     {
-        /** @var ListableReceiverInterface $receiver */
-        $receiver = $this->getReceiver($failedTransportName);
         $envelopes = $receiver->all($max);
 
         $countPerClass = [];
@@ -151,6 +166,10 @@ EOF
         $this->phpSerializer?->acceptPhpIncompleteClass();
         try {
             foreach ($envelopes as $envelope) {
+                if (!$this->matchesFilter($envelope, $classFilter, $failedAfter, $failedBefore)) {
+                    continue;
+                }
+
                 $c = $envelope->getMessage()::class;
 
                 if (!isset($countPerClass[$c])) {
@@ -172,10 +191,8 @@ EOF
         $io->table(['Class', 'Count'], $countPerClass);
     }
 
-    private function showMessage(?string $failedTransportName, string $id, SymfonyStyle $io): void
+    private function showMessage(ListableReceiverInterface $receiver, string $failedTransportName, string $id, SymfonyStyle $io, SymfonyStyle $errorIo): void
     {
-        /** @var ListableReceiverInterface $receiver */
-        $receiver = $this->getReceiver($failedTransportName);
         $this->phpSerializer?->acceptPhpIncompleteClass();
         try {
             $envelope = $receiver->find($id);
@@ -183,15 +200,15 @@ EOF
             $this->phpSerializer?->rejectPhpIncompleteClass();
         }
         if (null === $envelope) {
-            throw new RuntimeException(sprintf('The message "%s" was not found.', $id));
+            throw new RuntimeException(\sprintf('The message "%s" was not found.', $id));
         }
 
-        $this->displaySingleMessage($envelope, $io);
+        $this->displaySingleMessage($envelope, $io, $errorIo);
 
         $io->writeln([
             '',
-            sprintf(' Run <comment>messenger:failed:retry %s --transport=%s</comment> to retry this message.', $id, $failedTransportName),
-            sprintf(' Run <comment>messenger:failed:remove %s --transport=%s</comment> to delete it.', $id, $failedTransportName),
+            \sprintf(' Run <comment>messenger:failed:retry %s --transport=%s</comment> to retry this message.', $id, $failedTransportName),
+            \sprintf(' Run <comment>messenger:failed:remove %s --transport=%s</comment> to delete it.', $id, $failedTransportName),
         ]);
     }
 }

@@ -16,17 +16,16 @@ use Symfony\Component\Cache\Adapter\NullAdapter;
 use Symfony\Component\Cache\Adapter\PhpArrayAdapter;
 use Symfony\Component\Config\Resource\ClassExistenceResource;
 use Symfony\Component\HttpKernel\CacheWarmer\CacheWarmerInterface;
+use Symfony\Component\VarExporter\DeepCloner;
 
 abstract class AbstractPhpFileCacheWarmer implements CacheWarmerInterface
 {
-    private string $phpArrayFile;
-
     /**
      * @param string $phpArrayFile The PHP file where metadata are cached
      */
-    public function __construct(string $phpArrayFile)
-    {
-        $this->phpArrayFile = $phpArrayFile;
+    public function __construct(
+        private string $phpArrayFile,
+    ) {
     }
 
     public function isOptional(): bool
@@ -34,26 +33,33 @@ abstract class AbstractPhpFileCacheWarmer implements CacheWarmerInterface
         return true;
     }
 
-    /**
-     * @return string[] A list of classes to preload on PHP 7.4+
-     */
-    public function warmUp(string $cacheDir): array
+    public function warmUp(string $cacheDir, ?string $buildDir = null): array
     {
         $arrayAdapter = new ArrayAdapter();
 
         spl_autoload_register([ClassExistenceResource::class, 'throwOnRequiredClass']);
         try {
-            if (!$this->doWarmUp($cacheDir, $arrayAdapter)) {
+            if (!$this->doWarmUp($cacheDir, $arrayAdapter, $buildDir)) {
                 return [];
             }
         } finally {
             spl_autoload_unregister([ClassExistenceResource::class, 'throwOnRequiredClass']);
         }
 
-        // the ArrayAdapter stores the values serialized
-        // to avoid mutation of the data after it was written to the cache
-        // so here we un-serialize the values first
-        $values = array_map(fn ($val) => null !== $val ? unserialize($val) : null, $arrayAdapter->getValues());
+        // the ArrayAdapter stores deep clones of the values to avoid mutation of
+        // the cached data afterwards; older versions store them serialized
+        // instead, so unserialize those (a serialized payload holds a colon,
+        // which the adapter never leaves in a raw string) for backward compatibility
+        $values = $arrayAdapter->getValues(true);
+        foreach ($values as $key => $value) {
+            if (null === $value) {
+                unset($values[$key]);
+            } elseif ($value instanceof DeepCloner) {
+                $values[$key] = $value->clone(null, true);
+            } elseif (\is_string($value) && str_contains($value, ':')) {
+                $values[$key] = unserialize($value, ['allowed_classes' => true]);
+            }
+        }
 
         return $this->warmUpPhpArrayAdapter(new PhpArrayAdapter($this->phpArrayFile, new NullAdapter()), $values);
     }
@@ -63,7 +69,7 @@ abstract class AbstractPhpFileCacheWarmer implements CacheWarmerInterface
      */
     protected function warmUpPhpArrayAdapter(PhpArrayAdapter $phpArrayAdapter, array $values): array
     {
-        return (array) $phpArrayAdapter->warmUp($values);
+        return $phpArrayAdapter->warmUp($values);
     }
 
     /**
@@ -80,5 +86,5 @@ abstract class AbstractPhpFileCacheWarmer implements CacheWarmerInterface
     /**
      * @return bool false if there is nothing to warm-up
      */
-    abstract protected function doWarmUp(string $cacheDir, ArrayAdapter $arrayAdapter): bool;
+    abstract protected function doWarmUp(string $cacheDir, ArrayAdapter $arrayAdapter, ?string $buildDir = null): bool;
 }

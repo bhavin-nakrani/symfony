@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Cache\Tests\Adapter;
 
+use PHPUnit\Framework\Attributes\Group;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -18,18 +19,17 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\ProxyAdapter;
 use Symfony\Component\Cache\CacheItem;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class ProxyAdapterTest extends AdapterTestCase
 {
     protected $skippedTests = [
         'testDeferredSaveWithoutCommit' => 'Assumes a shared cache which ArrayAdapter is not.',
         'testSaveWithoutExpire' => 'Assumes a shared cache which ArrayAdapter is not.',
         'testPrune' => 'ProxyAdapter just proxies',
+        'testClearWithInvalidPrefix' => 'Inner ArrayAdapter does not validate the prefix.',
     ];
 
-    public function createCachePool(int $defaultLifetime = 0, string $testMethod = null): CacheItemPoolInterface
+    public function createCachePool(int $defaultLifetime = 0, ?string $testMethod = null): CacheItemPoolInterface
     {
         if ('testGetMetadata' === $testMethod) {
             return new ProxyAdapter(new FilesystemAdapter(), '', $defaultLifetime);
@@ -40,14 +40,16 @@ class ProxyAdapterTest extends AdapterTestCase
 
     public function testProxyfiedItem()
     {
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('OK bar');
         $item = new CacheItem();
         $pool = new ProxyAdapter(new TestingArrayAdapter($item));
 
         $proxyItem = $pool->getItem('foo');
 
         $this->assertNotSame($item, $proxyItem);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('OK bar');
+
         $pool->save($proxyItem->set('bar'));
     }
 }

@@ -11,6 +11,7 @@
 
 namespace Symfony\Bridge\Twig\Tests\Extension;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bridge\Twig\Extension\FormExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Bridge\Twig\Form\TwigRendererEngine;
@@ -18,40 +19,12 @@ use Symfony\Bridge\Twig\Tests\Extension\Fixtures\StubTranslator;
 use Symfony\Component\Form\ChoiceList\View\ChoiceView;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\FormView;
-use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Component\Security\Csrf\CsrfTokenManager;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
 class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
 {
-    use RuntimeLoaderProvider;
-
-    private FormRenderer $renderer;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $loader = new FilesystemLoader([
-            __DIR__.'/../../Resources/views/Form',
-            __DIR__.'/Fixtures/templates/form',
-        ]);
-
-        $environment = new Environment($loader, ['strict_variables' => true]);
-        $environment->addExtension(new TranslationExtension(new StubTranslator()));
-        $environment->addGlobal('global', '');
-        // the value can be any template that exists
-        $environment->addGlobal('dynamic_template_name', 'child_label');
-        $environment->addExtension(new FormExtension());
-
-        $rendererEngine = new TwigRendererEngine([
-            'form_div_layout.html.twig',
-            'custom_widgets.html.twig',
-        ], $environment);
-        $this->renderer = new FormRenderer($rendererEngine, $this->createMock(CsrfTokenManagerInterface::class));
-        $this->registerTwigRuntimeLoader($environment, $this->renderer);
-    }
-
     public function testThemeBlockInheritanceUsingUse()
     {
         $view = $this->factory
@@ -96,7 +69,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         );
     }
 
-    public static function isSelectedChoiceProvider()
+    public static function isSelectedChoiceProvider(): array
     {
         return [
             [true, '0', '0'],
@@ -112,9 +85,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         ];
     }
 
-    /**
-     * @dataProvider isSelectedChoiceProvider
-     */
+    #[DataProvider('isSelectedChoiceProvider')]
     public function testIsChoiceSelected($expected, $choice, $value)
     {
         $choice = new ChoiceView($choice, $choice, $choice.' label');
@@ -146,7 +117,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         $this->assertSame('<form name="form" method="get" action="0">', $html);
     }
 
-    public static function isRootFormProvider()
+    public static function isRootFormProvider(): array
     {
         return [
             [true, new FormView()],
@@ -154,9 +125,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         ];
     }
 
-    /**
-     * @dataProvider isRootFormProvider
-     */
+    #[DataProvider('isRootFormProvider')]
     public function testIsRootForm($expected, FormView $formView)
     {
         $this->assertSame($expected, \Symfony\Bridge\Twig\Extension\twig_is_root_form($formView));
@@ -176,7 +145,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
             'form_div_layout.html.twig',
             'custom_widgets.html.twig',
         ], $environment);
-        $this->renderer = new FormRenderer($rendererEngine, $this->createMock(CsrfTokenManagerInterface::class));
+        $this->renderer = new FormRenderer($rendererEngine, new CsrfTokenManager());
         $this->registerTwigRuntimeLoader($environment, $this->renderer);
 
         $view = $this->factory
@@ -184,7 +153,7 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
             ->createView()
         ;
 
-        $this->assertSame('&euro; <input type="text" id="name" name="name" required="required">', $this->renderWidget($view));
+        $this->assertSame('&euro; <input type="text" id="name" name="name" required="required" inputmode="decimal" />', $this->renderWidget($view));
     }
 
     public function testHelpAttr()
@@ -205,6 +174,67 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
     [.="[trans]Help text test![/trans]"]
 '
         );
+    }
+
+    public function testExpandedChoiceHelpIsRenderedAndDescribesTheChoice()
+    {
+        if (new \ReflectionClass(ChoiceView::class)->getConstructor()->getNumberOfParameters() < 6) {
+            $this->markTestSkipped('The "choice_help" option requires symfony/form 8.2+');
+        }
+
+        $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', null, [
+            'choices' => ['Apple' => 'a', 'Banana' => 'b'],
+            'choice_help' => ['Apple' => 'A fruit', 'Banana' => 'Yellow'],
+            'expanded' => true,
+        ]);
+
+        $this->assertWidgetMatchesXpath($form->createView(), [],
+            '/div
+    [
+        ./input[@type="radio"][@id="name_0"][@aria-describedby="name_0_help"]
+        /following-sibling::label[@for="name_0"]
+        /following-sibling::div[@id="name_0_help"][.="[trans]A fruit[/trans]"]
+        /following-sibling::input[@type="radio"][@id="name_1"][@aria-describedby="name_1_help"]
+        /following-sibling::label[@for="name_1"]
+        /following-sibling::div[@id="name_1_help"][.="[trans]Yellow[/trans]"]
+    ]
+'
+        );
+    }
+
+    public function testExpandedChoiceWithoutHelpRendersNoHelpElement()
+    {
+        if (new \ReflectionClass(ChoiceView::class)->getConstructor()->getNumberOfParameters() < 6) {
+            $this->markTestSkipped('The "choice_help" option requires symfony/form 8.2+');
+        }
+
+        $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', null, [
+            'choices' => ['Apple' => 'a'],
+            'choice_help' => ['Banana' => 'Yellow'],
+            'expanded' => true,
+        ]);
+
+        $html = $this->renderWidget($form->createView());
+
+        $this->assertMatchesXpath($html, '//div[@id="name_0_help"]', 0);
+        $this->assertMatchesXpath($html, '//input[@aria-describedby]', 0);
+    }
+
+    public function testCollapsedChoiceHelpIsNotRenderedButStaysOnTheView()
+    {
+        if (new \ReflectionClass(ChoiceView::class)->getConstructor()->getNumberOfParameters() < 6) {
+            $this->markTestSkipped('The "choice_help" option requires symfony/form 8.2+');
+        }
+
+        $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', null, [
+            'choices' => ['Apple' => 'a'],
+            'choice_help' => ['Apple' => 'A fruit'],
+        ]);
+
+        $view = $form->createView();
+
+        $this->assertMatchesXpath($this->renderWidget($view), '//div[@class="help-text"]', 0);
+        $this->assertSame('A fruit', $view->vars['choices'][0]->help);
     }
 
     public function testHelpHtmlDefaultIsFalse()
@@ -323,12 +353,12 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         $this->assertMatchesXpath($html, '/label[@for="name"][@class="my&class required"]/b[.="Bolded label"]');
     }
 
-    protected function renderForm(FormView $view, array $vars = [])
+    protected function renderForm(FormView $view, array $vars = []): string
     {
         return $this->renderer->renderBlock($view, 'form', $vars);
     }
 
-    protected function renderLabel(FormView $view, $label = null, array $vars = [])
+    protected function renderLabel(FormView $view, $label = null, array $vars = []): string
     {
         if (null !== $label) {
             $vars += ['label' => $label];
@@ -337,57 +367,76 @@ class FormExtensionDivLayoutTest extends AbstractDivLayoutTestCase
         return $this->renderer->searchAndRenderBlock($view, 'label', $vars);
     }
 
-    protected function renderHelp(FormView $view)
+    protected function renderHelp(FormView $view): string
     {
         return $this->renderer->searchAndRenderBlock($view, 'help');
     }
 
-    protected function renderErrors(FormView $view)
+    protected function renderErrors(FormView $view): string
     {
         return $this->renderer->searchAndRenderBlock($view, 'errors');
     }
 
-    protected function renderWidget(FormView $view, array $vars = [])
+    protected function renderWidget(FormView $view, array $vars = []): string
     {
         return $this->renderer->searchAndRenderBlock($view, 'widget', $vars);
     }
 
-    protected function renderRow(FormView $view, array $vars = [])
+    protected function renderRow(FormView $view, array $vars = []): string
     {
         return $this->renderer->searchAndRenderBlock($view, 'row', $vars);
     }
 
-    protected function renderRest(FormView $view, array $vars = [])
+    protected function renderRest(FormView $view, array $vars = []): string
     {
         return $this->renderer->searchAndRenderBlock($view, 'rest', $vars);
     }
 
-    protected function renderStart(FormView $view, array $vars = [])
+    protected function renderStart(FormView $view, array $vars = []): string
     {
         return $this->renderer->renderBlock($view, 'form_start', $vars);
     }
 
-    protected function renderEnd(FormView $view, array $vars = [])
+    protected function renderEnd(FormView $view, array $vars = []): string
     {
         return $this->renderer->renderBlock($view, 'form_end', $vars);
     }
 
-    protected function setTheme(FormView $view, array $themes, $useDefaultThemes = true)
+    protected function setTheme(FormView $view, array $themes, $useDefaultThemes = true): void
     {
         $this->renderer->setTheme($view, $themes, $useDefaultThemes);
     }
 
-    public static function themeBlockInheritanceProvider()
+    protected function getTemplatePaths(): array
     {
         return [
-            [['theme.html.twig']],
+            __DIR__.'/../../Resources/views/Form',
+            __DIR__.'/Fixtures/templates/form',
         ];
     }
 
-    public static function themeInheritanceProvider()
+    protected function getTwigExtensions(): array
     {
         return [
-            [['parent_label.html.twig'], ['child_label.html.twig']],
+            new TranslationExtension(new StubTranslator()),
+            new FormExtension(),
+        ];
+    }
+
+    protected function getTwigGlobals(): array
+    {
+        return [
+            'global' => '',
+            // the value can be any template that exists
+            'dynamic_template_name' => 'child_label',
+        ];
+    }
+
+    protected function getThemes(): array
+    {
+        return [
+            'form_div_layout.html.twig',
+            'custom_widgets.html.twig',
         ];
     }
 }

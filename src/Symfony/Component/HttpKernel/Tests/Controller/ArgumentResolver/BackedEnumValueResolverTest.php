@@ -11,30 +11,23 @@
 
 namespace Symfony\Component\HttpKernel\Tests\Controller\ArgumentResolver;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolver\BackedEnumValueResolver;
 use Symfony\Component\HttpKernel\ControllerMetadata\ArgumentMetadata;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Tests\Fixtures\IntEnum;
 use Symfony\Component\HttpKernel\Tests\Fixtures\Suit;
 
 class BackedEnumValueResolverTest extends TestCase
 {
-    /**
-     * In Symfony 7, keep this test case but remove the call to supports().
-     *
-     * @group legacy
-     *
-     * @dataProvider provideTestSupportsData
-     */
+    #[DataProvider('provideTestSupportsData')]
     public function testSupports(Request $request, ArgumentMetadata $metadata, bool $expectedSupport)
     {
         $resolver = new BackedEnumValueResolver();
 
-        if (!$expectedSupport) {
-            $this->assertSame([], $resolver->resolve($request, $metadata));
-        }
-        self::assertSame($expectedSupport, $resolver->supports($request, $metadata));
+        $this->assertCount((int) $expectedSupport, $resolver->resolve($request, $metadata));
     }
 
     public static function provideTestSupportsData(): iterable
@@ -74,9 +67,7 @@ class BackedEnumValueResolverTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideTestResolveData
-     */
+    #[DataProvider('provideTestResolveData')]
     public function testResolve(Request $request, ArgumentMetadata $metadata, $expected)
     {
         $resolver = new BackedEnumValueResolver();
@@ -128,8 +119,20 @@ class BackedEnumValueResolverTest extends TestCase
         $request = self::createRequest(['suit' => false]);
         $metadata = self::createArgumentMetadata('suit', Suit::class);
 
-        $this->expectException(\LogicException::class);
+        $this->expectException(NotFoundHttpException::class);
         $this->expectExceptionMessage('Could not resolve the "Symfony\Component\HttpKernel\Tests\Fixtures\Suit $suit" controller argument: expecting an int or string, got "bool".');
+
+        $resolver->resolve($request, $metadata);
+    }
+
+    public function testResolveThrowsOnTypeError()
+    {
+        $resolver = new BackedEnumValueResolver();
+        $request = self::createRequest(['suit' => 'value']);
+        $metadata = self::createArgumentMetadata('suit', IntEnum::class);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->expectExceptionMessage('Could not resolve the "Symfony\Component\HttpKernel\Tests\Fixtures\IntEnum $suit" controller argument: Symfony\Component\HttpKernel\Tests\Fixtures\IntEnum::from(): Argument #1 ($value) must be of type int, string given');
 
         $resolver->resolve($request, $metadata);
     }

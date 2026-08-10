@@ -12,6 +12,7 @@
 namespace Symfony\Bundle\SecurityBundle\DependencyInjection\Compiler;
 
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
+use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\Compiler\PriorityTaggedServiceTrait;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -29,16 +30,14 @@ class AddSecurityVotersPass implements CompilerPassInterface
 {
     use PriorityTaggedServiceTrait;
 
-    /**
-     * @return void
-     */
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition('security.access.decision_manager')) {
             return;
         }
 
-        $voters = $this->findAndSortTaggedServices('security.voter', $container);
+        $voters = $this->findAndSortTaggedServices(new TaggedIteratorArgument('security.voter'), $container);
+
         if (!$voters) {
             throw new LogicException('No security voters found. You need to tag at least one with "security.voter".');
         }
@@ -52,7 +51,7 @@ class AddSecurityVotersPass implements CompilerPassInterface
             $class = $container->getParameterBag()->resolveValue($definition->getClass());
 
             if (!is_a($class, VoterInterface::class, true)) {
-                throw new LogicException(sprintf('"%s" must implement the "%s" when used as a voter.', $class, VoterInterface::class));
+                throw new LogicException(\sprintf('"%s" must implement the "%s" when used as a voter.', $class, VoterInterface::class));
             }
 
             if ($debug) {

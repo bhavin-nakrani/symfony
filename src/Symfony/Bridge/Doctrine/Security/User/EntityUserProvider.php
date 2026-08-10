@@ -18,6 +18,7 @@ use Doctrine\Persistence\ObjectRepository;
 use Doctrine\Persistence\Proxy;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
+use Symfony\Component\Security\Core\User\AttributesBasedUserProviderInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\PasswordUpgraderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -33,39 +34,39 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
  *
  * @template TUser of UserInterface
  *
- * @template-implements UserProviderInterface<TUser>
+ * @template-implements AttributesBasedUserProviderInterface<TUser>
  */
-class EntityUserProvider implements UserProviderInterface, PasswordUpgraderInterface
+class EntityUserProvider implements AttributesBasedUserProviderInterface, PasswordUpgraderInterface
 {
-    private ManagerRegistry $registry;
-    private ?string $managerName;
-    private string $classOrAlias;
     private string $class;
-    private ?string $property;
 
-    public function __construct(ManagerRegistry $registry, string $classOrAlias, string $property = null, string $managerName = null)
-    {
-        $this->registry = $registry;
-        $this->managerName = $managerName;
-        $this->classOrAlias = $classOrAlias;
-        $this->property = $property;
+    public function __construct(
+        private readonly ManagerRegistry $registry,
+        private readonly string $classOrAlias,
+        private readonly ?string $property = null,
+        private readonly ?string $managerName = null,
+    ) {
     }
 
-    public function loadUserByIdentifier(string $identifier): UserInterface
+    public function loadUserByIdentifier(string $identifier, ?array $attributes = null): UserInterface
     {
         $repository = $this->getRepository();
         if (null !== $this->property) {
             $user = $repository->findOneBy([$this->property => $identifier]);
         } else {
             if (!$repository instanceof UserLoaderInterface) {
-                throw new \InvalidArgumentException(sprintf('You must either make the "%s" entity Doctrine Repository ("%s") implement "Symfony\Bridge\Doctrine\Security\User\UserLoaderInterface" or set the "property" option in the corresponding entity provider configuration.', $this->classOrAlias, get_debug_type($repository)));
+                throw new \InvalidArgumentException(\sprintf('You must either make the "%s" entity Doctrine Repository ("%s") implement "Symfony\Bridge\Doctrine\Security\User\UserLoaderInterface" or set the "property" option in the corresponding entity provider configuration.', $this->classOrAlias, get_debug_type($repository)));
             }
 
-            $user = $repository->loadUserByIdentifier($identifier);
+            if (null === $attributes) {
+                $user = $repository->loadUserByIdentifier($identifier);
+            } else {
+                $user = $repository->loadUserByIdentifier($identifier, $attributes);
+            }
         }
 
         if (null === $user) {
-            $e = new UserNotFoundException(sprintf('User "%s" not found.', $identifier));
+            $e = new UserNotFoundException(\sprintf('User "%s" not found.', $identifier));
             $e->setUserIdentifier($identifier);
 
             throw $e;
@@ -78,7 +79,7 @@ class EntityUserProvider implements UserProviderInterface, PasswordUpgraderInter
     {
         $class = $this->getClass();
         if (!$user instanceof $class) {
-            throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', get_debug_type($user)));
+            throw new UnsupportedUserException(\sprintf('Instances of "%s" are not supported.', get_debug_type($user)));
         }
 
         $repository = $this->getRepository();
@@ -104,6 +105,8 @@ class EntityUserProvider implements UserProviderInterface, PasswordUpgraderInter
 
         if ($refreshedUser instanceof Proxy && !$refreshedUser->__isInitialized()) {
             $refreshedUser->__load();
+        } elseif (($r = new \ReflectionClass($refreshedUser))->isUninitializedLazyObject($refreshedUser)) {
+            $r->initializeLazyObject($refreshedUser);
         }
 
         return $refreshedUser;
@@ -121,7 +124,7 @@ class EntityUserProvider implements UserProviderInterface, PasswordUpgraderInter
     {
         $class = $this->getClass();
         if (!$user instanceof $class) {
-            throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', get_debug_type($user)));
+            throw new UnsupportedUserException(\sprintf('Instances of "%s" are not supported.', get_debug_type($user)));
         }
 
         $repository = $this->getRepository();

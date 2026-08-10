@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Notifier\Bridge\Firebase\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Firebase\FirebaseOptions;
@@ -28,7 +29,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  */
 final class FirebaseTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): FirebaseTransport
+    public static function createTransport(?HttpClientInterface $client = null): FirebaseTransport
     {
         return new FirebaseTransport('username:password', $client ?? new MockHttpClient());
     }
@@ -49,9 +50,7 @@ final class FirebaseTransportTest extends TransportTestCase
         yield [new DummyMessage()];
     }
 
-    /**
-     * @dataProvider sendWithErrorThrowsExceptionProvider
-     */
+    #[DataProvider('sendWithErrorThrowsExceptionProvider')]
     public function testSendWithErrorThrowsTransportException(ResponseInterface $response)
     {
         $this->expectException(TransportException::class);

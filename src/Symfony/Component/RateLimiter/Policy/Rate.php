@@ -20,13 +20,15 @@ use Symfony\Component\RateLimiter\Util\TimeUtil;
  */
 final class Rate
 {
-    private \DateInterval $refillTime;
-    private int $refillAmount;
+    /**
+     * ~68 years, the largest duration that still fits an int on 32-bit platforms.
+     */
+    private const MAX_SECONDS = 2147483647;
 
-    public function __construct(\DateInterval $refillTime, int $refillAmount = 1)
-    {
-        $this->refillTime = $refillTime;
-        $this->refillAmount = $refillAmount;
+    public function __construct(
+        private \DateInterval $refillTime,
+        private int $refillAmount = 1,
+    ) {
     }
 
     public static function perSecond(int $rate = 1): self
@@ -71,12 +73,15 @@ final class Rate
 
     /**
      * Calculates the time needed to free up the provided number of tokens in seconds.
+     *
+     * The result is capped at self::MAX_SECONDS, as the exact value overflows the
+     * integer range for very large numbers of tokens.
      */
     public function calculateTimeForTokens(int $tokens): int
     {
         $cyclesRequired = ceil($tokens / $this->refillAmount);
 
-        return TimeUtil::dateIntervalToSeconds($this->refillTime) * $cyclesRequired;
+        return (int) min(self::MAX_SECONDS, TimeUtil::dateIntervalToSeconds($this->refillTime) * $cyclesRequired);
     }
 
     /**
@@ -97,6 +102,18 @@ final class Rate
         $cycles = floor($duration / TimeUtil::dateIntervalToSeconds($this->refillTime));
 
         return $cycles * $this->refillAmount;
+    }
+
+    /**
+     * Calculates total amount in seconds of refill intervals during $duration (for maintain strict refill frequency).
+     *
+     * @param float $duration interval in seconds
+     */
+    public function calculateRefillInterval(float $duration): int
+    {
+        $cycleTime = TimeUtil::dateIntervalToSeconds($this->refillTime);
+
+        return floor($duration / $cycleTime) * $cycleTime;
     }
 
     public function __toString(): string

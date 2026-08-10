@@ -12,6 +12,7 @@
 namespace Symfony\Bridge\PsrHttpMessage\Tests\Factory;
 
 use Nyholm\Psr7\Factory\Psr17Factory;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -35,9 +36,7 @@ class PsrHttpFactoryTest extends TestCase
         $this->tmpDir = sys_get_temp_dir();
     }
 
-    /**
-     * @dataProvider provideFactories
-     */
+    #[DataProvider('provideFactories')]
     public function testCreateRequest(PsrHttpFactory $factory)
     {
         $stdClass = new \stdClass();
@@ -131,15 +130,13 @@ class PsrHttpFactoryTest extends TestCase
 
     private function createUploadedFile(string $content, string $originalName, string $mimeType, int $error): UploadedFile
     {
-        $path = tempnam($this->tmpDir, uniqid());
+        $path = $this->createTempFile();
         file_put_contents($path, $content);
 
         return new UploadedFile($path, $originalName, $mimeType, $error, true);
     }
 
-    /**
-     * @dataProvider provideFactories
-     */
+    #[DataProvider('provideFactories')]
     public function testCreateResponse(PsrHttpFactory $factory)
     {
         $response = new Response(
@@ -167,7 +164,7 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testCreateResponseFromStreamed()
     {
-        $response = new StreamedResponse(function () {
+        $response = new StreamedResponse(static function () {
             echo "Line 1\n";
             flush();
 
@@ -182,7 +179,7 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testCreateResponseFromBinaryFile()
     {
-        $path = tempnam($this->tmpDir, uniqid());
+        $path = $this->createTempFile();
         file_put_contents($path, 'Binary');
 
         $response = new BinaryFileResponse($path);
@@ -194,7 +191,7 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testCreateResponseFromBinaryFileWithRange()
     {
-        $path = tempnam($this->tmpDir, uniqid());
+        $path = $this->createTempFile();
         file_put_contents($path, 'Binary');
 
         $request = new Request();
@@ -211,10 +208,7 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testUploadErrNoFile()
     {
-        $file = new UploadedFile('', '', null, \UPLOAD_ERR_NO_FILE, true);
-
-        $this->assertSame(\UPLOAD_ERR_NO_FILE, $file->getError());
-        $this->assertFalse($file->getSize(), 'SplFile::getSize() returns false on error');
+        $file = new UploadedFile(__FILE__, '', null, \UPLOAD_ERR_NO_FILE, true);
 
         $request = new Request(
             [],
@@ -222,14 +216,14 @@ class PsrHttpFactoryTest extends TestCase
             [],
             [],
             [
-            'f1' => $file,
-            'f2' => ['name' => null, 'type' => null, 'tmp_name' => null, 'error' => \UPLOAD_ERR_NO_FILE, 'size' => 0],
-          ],
+                'f1' => $file,
+                'f2' => ['name' => null, 'type' => null, 'tmp_name' => null, 'error' => \UPLOAD_ERR_NO_FILE, 'size' => 0],
+            ],
             [
-            'REQUEST_METHOD' => 'POST',
-            'HTTP_HOST' => 'dunglas.fr',
-            'HTTP_X_SYMFONY' => '2.8',
-          ],
+                'REQUEST_METHOD' => 'POST',
+                'HTTP_HOST' => 'dunglas.fr',
+                'HTTP_X_SYMFONY' => '2.8',
+            ],
             'Content'
         );
 
@@ -243,10 +237,6 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testJsonContent()
     {
-        if (!method_exists(Request::class, 'getPayload')) {
-            $this->markTestSkipped();
-        }
-
         $headers = [
             'HTTP_HOST' => 'http_host.fr',
             'CONTENT_TYPE' => 'application/json',
@@ -259,10 +249,6 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testEmptyJsonContent()
     {
-        if (!method_exists(Request::class, 'getPayload')) {
-            $this->markTestSkipped();
-        }
-
         $headers = [
             'HTTP_HOST' => 'http_host.fr',
             'CONTENT_TYPE' => 'application/json',
@@ -275,10 +261,6 @@ class PsrHttpFactoryTest extends TestCase
 
     public function testWrongJsonContent()
     {
-        if (!method_exists(Request::class, 'getPayload')) {
-            $this->markTestSkipped();
-        }
-
         $headers = [
             'HTTP_HOST' => 'http_host.fr',
             'CONTENT_TYPE' => 'application/json',
@@ -292,7 +274,7 @@ class PsrHttpFactoryTest extends TestCase
     public static function provideFactories(): \Generator
     {
         yield 'Discovery' => [new PsrHttpFactory()];
-        yield 'incomplete dependencies' => [new PsrHttpFactory(responseFactory: new Psr17Factory())];
+        yield 'incomplete dependencies' => [new PsrHttpFactory(null, null, null, new Psr17Factory())];
         yield 'Nyholm' => [self::buildHttpMessageFactory()];
     }
 
@@ -301,5 +283,10 @@ class PsrHttpFactoryTest extends TestCase
         $factory = new Psr17Factory();
 
         return new PsrHttpFactory($factory, $factory, $factory, $factory);
+    }
+
+    private function createTempFile(): string
+    {
+        return tempnam($this->tmpDir, 'sftest');
     }
 }

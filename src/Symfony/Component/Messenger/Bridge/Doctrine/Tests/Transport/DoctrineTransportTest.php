@@ -16,10 +16,13 @@ use Doctrine\DBAL\Schema\Schema;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Bridge\Doctrine\Tests\Fixtures\DummyMessage;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
+use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineReceivedStamp;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Transport\Serialization\Serializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
+use Symfony\Component\Serializer as SerializerComponent;
 
 class DoctrineTransportTest extends TestCase
 {
@@ -34,7 +37,7 @@ class DoctrineTransportTest extends TestCase
     {
         $transport = $this->getTransport(
             $serializer = $this->createMock(SerializerInterface::class),
-            $connection = $this->createMock(Connection::class)
+            $connection = $this->createStub(Connection::class)
         );
 
         $decodedMessage = new DummyMessage('Decoded.');
@@ -45,11 +48,39 @@ class DoctrineTransportTest extends TestCase
             'headers' => ['my' => 'header'],
         ];
 
-        $serializer->method('decode')->with(['body' => 'body', 'headers' => ['my' => 'header']])->willReturn(new Envelope($decodedMessage));
-        $connection->method('get')->willReturn($doctrineEnvelope);
+        $serializer->expects($this->once())->method('decode')->with(['body' => 'body', 'headers' => ['my' => 'header']])->willReturn(new Envelope($decodedMessage));
+        $connection->method('get')->willReturn([$doctrineEnvelope]);
 
         $envelopes = $transport->get();
         $this->assertSame($decodedMessage, $envelopes[0]->getMessage());
+    }
+
+    public function testAll()
+    {
+        $serializer = $this->createSerializer();
+
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->once())->method('findAll')->with(50)->willReturn([
+            $this->createDoctrineEnvelope(),
+            $this->createDoctrineEnvelope(),
+        ]);
+
+        $transport = $this->getTransport($serializer, $connection);
+
+        $envelopes = [...$transport->all(50)];
+        $this->assertEquals(new DummyMessage('Hi'), $envelopes[0]->getMessage());
+    }
+
+    public function testFind()
+    {
+        $serializer = $this->createSerializer();
+
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->once())->method('find')->with('5')->willReturn($this->createDoctrineEnvelope());
+
+        $transport = $this->getTransport($serializer, $connection);
+
+        $this->assertEquals(new DummyMessage('Hi'), $transport->find('5')->getMessage());
     }
 
     public function testConfigureSchema()
@@ -60,20 +91,55 @@ class DoctrineTransportTest extends TestCase
         );
 
         $schema = new Schema();
-        $dbalConnection = $this->createMock(DbalConnection::class);
+        $dbalConnection = $this->createStub(DbalConnection::class);
 
+        $isSameDatabaseChecker = static fn () => true;
         $connection->expects($this->once())
             ->method('configureSchema')
-            ->with($schema, $dbalConnection, static fn () => true);
+            ->with($schema, $dbalConnection, $isSameDatabaseChecker);
 
-        $transport->configureSchema($schema, $dbalConnection, static fn () => true);
+        $transport->configureSchema($schema, $dbalConnection, $isSameDatabaseChecker);
     }
 
-    private function getTransport(SerializerInterface $serializer = null, Connection $connection = null): DoctrineTransport
+    public function testKeepalive()
     {
-        $serializer ??= $this->createMock(SerializerInterface::class);
-        $connection ??= $this->createMock(Connection::class);
+        $transport = $this->getTransport(
+            null,
+            $connection = $this->createMock(Connection::class)
+        );
+
+        $envelope = new Envelope(new \stdClass(), [new DoctrineReceivedStamp('1')]);
+
+        $connection->expects($this->once())
+            ->method('keepalive')
+            ->with('1');
+
+        $transport->keepalive($envelope);
+    }
+
+    private function getTransport(?SerializerInterface $serializer = null, ?Connection $connection = null): DoctrineTransport
+    {
+        $serializer ??= $this->createStub(SerializerInterface::class);
+        $connection ??= $this->createStub(Connection::class);
 
         return new DoctrineTransport($connection, $serializer);
+    }
+
+    private function createDoctrineEnvelope(): array
+    {
+        return [
+            'id' => 1,
+            'body' => '{"message": "Hi"}',
+            'headers' => [
+                'type' => DummyMessage::class,
+            ],
+        ];
+    }
+
+    private function createSerializer(): Serializer
+    {
+        return new Serializer(
+            new SerializerComponent\Serializer([new SerializerComponent\Normalizer\ObjectNormalizer()], ['json' => new SerializerComponent\Encoder\JsonEncoder()])
+        );
     }
 }

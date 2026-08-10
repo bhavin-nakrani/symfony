@@ -3,6 +3,7 @@ imports:
 
 parameters:
     env(JSON): '[1, "2.5", 3]'
+    env(APP_FOO): 'foo'
 
 services:
     _defaults: { public: true }
@@ -33,5 +34,24 @@ services:
             - '%env(REAL)%'
             - '%env(int:key:2:json:JSON)%'
             - '%env(float:key:2:json:JSON)%'
+    useEnv:
+        class: stdClass
+        arguments:
+            - '%env(REAL)%'
+            - '%env(REAL)%'
+            - '%env(APP_BAZ)%'
     Symfony\Bundle\FrameworkBundle\Tests\Fixtures\ContainerExcluded:
         tags: ['container.excluded']
+
+    original_service:
+        class: Symfony\Bundle\FrameworkBundle\Tests\Fixtures\DeclaredClass
+
+    decorator_1:
+        class: Symfony\Bundle\FrameworkBundle\Tests\Fixtures\WarmedClass
+        decorates: original_service
+        arguments: ['@.inner']
+
+    decorator_2:
+        class: Symfony\Bundle\FrameworkBundle\Tests\Fixtures\BackslashClass
+        decorates: decorator_1
+        arguments: ['@.inner']

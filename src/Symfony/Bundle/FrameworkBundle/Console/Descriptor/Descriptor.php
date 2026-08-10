@@ -15,6 +15,7 @@ use Symfony\Component\Config\Resource\ClassExistenceResource;
 use Symfony\Component\Console\Descriptor\DescriptorInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Alias;
+use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\Compiler\AnalyzeServiceReferencesPass;
 use Symfony\Component\DependencyInjection\Compiler\ServiceReferenceGraphEdge;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -43,21 +44,26 @@ abstract class Descriptor implements DescriptorInterface
             (new AnalyzeServiceReferencesPass(false, false))->process($object);
         }
 
+        $deprecatedParameters = [];
+        if ($object instanceof ContainerBuilder && isset($options['parameter']) && ($parameterBag = $object->getParameterBag()) instanceof ParameterBag) {
+            $deprecatedParameters = $parameterBag->allDeprecated();
+        }
+
         match (true) {
-            $object instanceof RouteCollection => $this->describeRouteCollection($object, $options),
+            $object instanceof RouteCollection => $this->describeRouteCollection($this->sortRouteCollection($this->filterRoutesByHttpMethod($object, $options['method'] ?? ''), $options['sort'] ?? null), $options),
             $object instanceof Route => $this->describeRoute($object, $options),
             $object instanceof ParameterBag => $this->describeContainerParameters($object, $options),
             $object instanceof ContainerBuilder && !empty($options['env-vars']) => $this->describeContainerEnvVars($this->getContainerEnvVars($object), $options),
             $object instanceof ContainerBuilder && isset($options['group_by']) && 'tags' === $options['group_by'] => $this->describeContainerTags($object, $options),
             $object instanceof ContainerBuilder && isset($options['id']) => $this->describeContainerService($this->resolveServiceDefinition($object, $options['id']), $options, $object),
-            $object instanceof ContainerBuilder && isset($options['parameter']) => $this->describeContainerParameter($object->resolveEnvPlaceholders($object->getParameter($options['parameter'])), $options),
+            $object instanceof ContainerBuilder && isset($options['parameter']) => $this->describeContainerParameter($object->resolveEnvPlaceholders($object->getParameter($options['parameter'])), $deprecatedParameters[$options['parameter']] ?? null, $options),
             $object instanceof ContainerBuilder && isset($options['deprecations']) => $this->describeContainerDeprecations($object, $options),
             $object instanceof ContainerBuilder => $this->describeContainerServices($object, $options),
             $object instanceof Definition => $this->describeContainerDefinition($object, $options),
             $object instanceof Alias => $this->describeContainerAlias($object, $options),
             $object instanceof EventDispatcherInterface => $this->describeEventDispatcherListeners($object, $options),
             \is_callable($object) => $this->describeCallable($object, $options),
-            default => throw new \InvalidArgumentException(sprintf('Object of type "%s" is not describable.', get_debug_type($object))),
+            default => throw new \InvalidArgumentException(\sprintf('Object of type "%s" is not describable.', get_debug_type($object))),
         };
 
         if ($object instanceof ContainerBuilder) {
@@ -91,7 +97,7 @@ abstract class Descriptor implements DescriptorInterface
      *
      * @param Definition|Alias|object $service
      */
-    abstract protected function describeContainerService(object $service, array $options = [], ContainerBuilder $container = null): void;
+    abstract protected function describeContainerService(object $service, array $options = [], ?ContainerBuilder $container = null): void;
 
     /**
      * Describes container services.
@@ -103,11 +109,11 @@ abstract class Descriptor implements DescriptorInterface
 
     abstract protected function describeContainerDeprecations(ContainerBuilder $container, array $options = []): void;
 
-    abstract protected function describeContainerDefinition(Definition $definition, array $options = [], ContainerBuilder $container = null): void;
+    abstract protected function describeContainerDefinition(Definition $definition, array $options = [], ?ContainerBuilder $container = null): void;
 
-    abstract protected function describeContainerAlias(Alias $alias, array $options = [], ContainerBuilder $container = null): void;
+    abstract protected function describeContainerAlias(Alias $alias, array $options = [], ?ContainerBuilder $container = null): void;
 
-    abstract protected function describeContainerParameter(mixed $parameter, array $options = []): void;
+    abstract protected function describeContainerParameter(mixed $parameter, ?array $deprecation, array $options = []): void;
 
     abstract protected function describeContainerEnvVars(array $envs, array $options = []): void;
 
@@ -128,7 +134,7 @@ abstract class Descriptor implements DescriptorInterface
         }
 
         if (\is_object($value)) {
-            return sprintf('object(%s)', $value::class);
+            return \sprintf('object(%s)', $value::class);
         }
 
         if (\is_string($value)) {
@@ -238,7 +244,7 @@ abstract class Descriptor implements DescriptorInterface
                 }
             }
         }
-        uasort($maxPriority, fn ($a, $b) => $b <=> $a);
+        uasort($maxPriority, static fn ($a, $b) => $b <=> $a);
 
         return array_keys($maxPriority);
     }
@@ -253,14 +259,51 @@ abstract class Descriptor implements DescriptorInterface
         return $sortedTags;
     }
 
+    protected function resolvePriorityServiceTags(ContainerBuilder $container, Definition $definition, ?string $tagName = null): array
+    {
+        $tags = null !== $tagName ? $definition->getTag($tagName) : $definition->getTags();
+
+        $priority = ($container->getReflectionClass($definition->getClass())?->getAttributes(AsTaggedItem::class)[0] ?? null)?->newInstance()->priority;
+        if (!$priority) {
+            return $tags;
+        }
+
+        if (null !== $tagName) {
+            foreach ($tags as &$tag) {
+                $tag['priority'] ??= $priority;
+            }
+        } else {
+            foreach ($tags as &$tagConfigs) {
+                foreach ($tagConfigs as &$tag) {
+                    $tag['priority'] ??= $priority;
+                }
+            }
+        }
+
+        return $tags;
+    }
+
     protected function sortByPriority(array $tag): array
     {
-        usort($tag, fn ($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
+        usort($tag, static fn ($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
 
         return $tag;
     }
 
-    public static function getClassDescription(string $class, string &$resolvedClass = null): string
+    /**
+     * @return array<string, string[]>
+     */
+    protected function getReverseAliases(RouteCollection $routes): array
+    {
+        $reverseAliases = [];
+        foreach ($routes->getAliases() as $name => $alias) {
+            $reverseAliases[$alias->getId()][] = $name;
+        }
+
+        return $reverseAliases;
+    }
+
+    public static function getClassDescription(string $class, ?string &$resolvedClass = null): string
     {
         $resolvedClass = $class;
         try {
@@ -285,17 +328,26 @@ abstract class Descriptor implements DescriptorInterface
 
     private function getContainerEnvVars(ContainerBuilder $container): array
     {
-        if (!$container->hasParameter('debug.container.dump')) {
+        if (!$container->hasParameter('.debug.container.env_vars')) {
             return [];
         }
 
-        if (!$container->getParameter('debug.container.dump') || !is_file($container->getParameter('debug.container.dump'))) {
-            return [];
+        // a chain ending on the separator, as in "not:default:kernel.runtime_mode.web:", reads a
+        // container parameter rather than the environment, so it has no name to report
+        $envVars = array_values(array_filter($container->getParameter('.debug.container.env_vars'), static fn (string $env): bool => '' !== self::splitEnvName($env)[0]));
+
+        $used = [];
+        foreach ($envVars as $env) {
+            $used[self::splitEnvName($env)[0]] = true;
         }
 
-        $file = file_get_contents($container->getParameter('debug.container.dump'));
-        preg_match_all('{%env\(((?:\w++:)*+\w++)\)%}', $file, $envVars);
-        $envVars = array_unique($envVars[1]);
+        // variables declared in .env that the container never references: they are the point of
+        // the listing, and the compiler knows nothing about them
+        foreach ($this->getDotenvVars() as $name) {
+            if (!isset($used[$name])) {
+                $envVars[] = $name;
+            }
+        }
 
         $bag = $container->getParameterBag();
         $getDefaultParameter = fn (string $name) => parent::get($name);
@@ -306,16 +358,13 @@ abstract class Descriptor implements DescriptorInterface
         $envs = [];
 
         foreach ($envVars as $env) {
-            $processor = 'string';
-            if (false !== $i = strrpos($name = $env, ':')) {
-                $name = substr($env, $i + 1);
-                $processor = substr($env, 0, $i);
-            }
+            [$name, $processor] = self::splitEnvName($env);
             $defaultValue = ($hasDefault = $container->hasParameter("env($name)")) ? $getDefaultParameter("env($name)") : null;
             if (false === ($runtimeValue = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name))) {
                 $runtimeValue = null;
             }
             $processedValue = ($hasRuntime = null !== $runtimeValue) || $hasDefault ? $getEnvReflection->invoke($container, $env) : null;
+
             $envs["$name$processor"] = [
                 'name' => $name,
                 'processor' => $processor,
@@ -324,6 +373,7 @@ abstract class Descriptor implements DescriptorInterface
                 'runtime_available' => $hasRuntime,
                 'runtime_value' => $runtimeValue,
                 'processed_value' => $processedValue,
+                'used' => isset($used[$name]),
             ];
         }
         ksort($envs);
@@ -331,15 +381,121 @@ abstract class Descriptor implements DescriptorInterface
         return array_values($envs);
     }
 
+    /**
+     * @return array{string, string} the variable name and the processor chain applied to it
+     */
+    private static function splitEnvName(string $env): array
+    {
+        if (false === $i = strrpos($env, ':')) {
+            return [$env, 'string'];
+        }
+
+        return [substr($env, $i + 1), substr($env, 0, $i)];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getDotenvVars(): array
+    {
+        return array_filter(explode(',', $_SERVER['SYMFONY_DOTENV_VARS'] ?? $_ENV['SYMFONY_DOTENV_VARS'] ?? ''));
+    }
+
     protected function getServiceEdges(ContainerBuilder $container, string $serviceId): array
     {
         try {
             return array_values(array_unique(array_map(
-                fn (ServiceReferenceGraphEdge $edge) => $edge->getSourceNode()->getId(),
+                static fn (ServiceReferenceGraphEdge $edge) => $edge->getSourceNode()->getId(),
                 $container->getCompiler()->getServiceReferenceGraph()->getNode($serviceId)->getInEdges()
             )));
         } catch (InvalidArgumentException $exception) {
             return [];
         }
+    }
+
+    /**
+     * @return array<array{id: string, class: ?string, priority: int}>
+     */
+    protected function getDecorationStack(ContainerBuilder $container, string $id): array
+    {
+        $stack = [];
+
+        while ($container->hasDefinition($id) || $container->hasAlias($id)) {
+            // resolve Alias and continue
+            if ($container->hasAlias($id)) {
+                $id = (string) $container->getAlias($id);
+                continue;
+            }
+
+            $definition = $container->getDefinition($id);
+            $class = $definition->getClass();
+            $priority = $definition->decorationPriority ?? 0;
+
+            $stack[] = ['id' => $id, 'class' => $class, 'priority' => $priority];
+
+            if (!$nextId = $definition->innerServiceId) {
+                break;
+            }
+
+            $id = $nextId;
+        }
+
+        return $stack;
+    }
+
+    private function filterRoutesByHttpMethod(RouteCollection $routes, string $method): RouteCollection
+    {
+        if (!$method) {
+            return $routes;
+        }
+        $filteredRoutes = clone $routes;
+
+        foreach ($filteredRoutes as $routeName => $route) {
+            if ($route->getMethods() && !\in_array($method, $route->getMethods(), true)) {
+                $filteredRoutes->remove($routeName);
+            }
+        }
+
+        return $filteredRoutes;
+    }
+
+    private function sortRouteCollection(RouteCollection $routes, ?string $sort): RouteCollection
+    {
+        if (null === $sort) {
+            return $routes;
+        }
+
+        $sort = strtolower($sort);
+        $routesArray = $routes->all();
+
+        $getSortValue = match ($sort) {
+            'name' => static fn (string $name, Route $route) => strtolower($name),
+            'path' => static fn (string $name, Route $route) => strtolower($route->getPath()),
+            'method' => static fn (string $name, Route $route) => $route->getMethods() ? strtolower(implode('|', $route->getMethods())) : '',
+            'scheme' => static fn (string $name, Route $route) => $route->getSchemes() ? strtolower(implode('|', $route->getSchemes())) : '',
+            'host' => static fn (string $name, Route $route) => strtolower($route->getHost()),
+            default => throw new \InvalidArgumentException(\sprintf('The sort column "%s" is not supported.', $sort)),
+        };
+
+        $sortValues = [];
+        foreach ($routesArray as $name => $route) {
+            $sortValues[$name] = $getSortValue($name, $route);
+        }
+        asort($sortValues);
+
+        $sortedRoutes = new RouteCollection();
+        foreach (array_keys($sortValues) as $name) {
+            $sortedRoutes->add($name, $routesArray[$name]);
+        }
+
+        foreach ($routes->getAliases() as $aliasName => $alias) {
+            $newAlias = $sortedRoutes->addAlias($aliasName, $alias->getId());
+            if ($alias->isDeprecated()) {
+                $deprecation = $alias->getDeprecation($aliasName);
+                $newAlias->setDeprecated($deprecation['package'], $deprecation['version'], str_replace($aliasName, '%alias_id%', $deprecation['message']));
+            }
+        }
+
+        return $sortedRoutes;
     }
 }

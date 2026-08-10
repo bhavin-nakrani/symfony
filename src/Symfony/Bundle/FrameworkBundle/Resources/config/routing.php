@@ -15,7 +15,7 @@ use Psr\Container\ContainerInterface;
 use Symfony\Bundle\FrameworkBundle\CacheWarmer\RouterCacheWarmer;
 use Symfony\Bundle\FrameworkBundle\Controller\RedirectController;
 use Symfony\Bundle\FrameworkBundle\Controller\TemplateController;
-use Symfony\Bundle\FrameworkBundle\Routing\AnnotatedRouteControllerLoader;
+use Symfony\Bundle\FrameworkBundle\Routing\AttributeRouteControllerLoader;
 use Symfony\Bundle\FrameworkBundle\Routing\DelegatingLoader;
 use Symfony\Bundle\FrameworkBundle\Routing\RedirectableCompiledUrlMatcher;
 use Symfony\Bundle\FrameworkBundle\Routing\Router;
@@ -24,14 +24,14 @@ use Symfony\Component\HttpKernel\EventListener\RouterListener;
 use Symfony\Component\Routing\Generator\CompiledUrlGenerator;
 use Symfony\Component\Routing\Generator\Dumper\CompiledUrlGeneratorDumper;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Routing\Loader\AnnotationDirectoryLoader;
-use Symfony\Component\Routing\Loader\AnnotationFileLoader;
+use Symfony\Component\Routing\Loader\AttributeDirectoryLoader;
+use Symfony\Component\Routing\Loader\AttributeFileLoader;
+use Symfony\Component\Routing\Loader\AttributeServicesLoader;
 use Symfony\Component\Routing\Loader\ContainerLoader;
 use Symfony\Component\Routing\Loader\DirectoryLoader;
 use Symfony\Component\Routing\Loader\GlobFileLoader;
 use Symfony\Component\Routing\Loader\PhpFileLoader;
 use Symfony\Component\Routing\Loader\Psr4DirectoryLoader;
-use Symfony\Component\Routing\Loader\XmlFileLoader;
 use Symfony\Component\Routing\Loader\YamlFileLoader;
 use Symfony\Component\Routing\Matcher\Dumper\CompiledUrlMatcherDumper;
 use Symfony\Component\Routing\Matcher\ExpressionLanguageProvider;
@@ -49,13 +49,6 @@ return static function (ContainerConfigurator $container) {
 
     $container->services()
         ->set('routing.resolver', LoaderResolver::class)
-
-        ->set('routing.loader.xml', XmlFileLoader::class)
-            ->args([
-                service('file_locator'),
-                '%kernel.environment%',
-            ])
-            ->tag('routing.loader')
 
         ->set('routing.loader.yml', YamlFileLoader::class)
             ->args([
@@ -92,23 +85,29 @@ return static function (ContainerConfigurator $container) {
             ])
             ->tag('routing.loader')
 
-        ->set('routing.loader.annotation', AnnotatedRouteControllerLoader::class)
+        ->set('routing.loader.attribute', AttributeRouteControllerLoader::class)
             ->args([
                 '%kernel.environment%',
             ])
             ->tag('routing.loader', ['priority' => -10])
 
-        ->set('routing.loader.annotation.directory', AnnotationDirectoryLoader::class)
+        ->set('routing.loader.attribute.services', AttributeServicesLoader::class)
             ->args([
-                service('file_locator'),
-                service('routing.loader.annotation'),
+                abstract_arg('classes tagged with "routing.controller"'),
             ])
             ->tag('routing.loader', ['priority' => -10])
 
-        ->set('routing.loader.annotation.file', AnnotationFileLoader::class)
+        ->set('routing.loader.attribute.directory', AttributeDirectoryLoader::class)
             ->args([
                 service('file_locator'),
-                service('routing.loader.annotation'),
+                service('routing.loader.attribute'),
+            ])
+            ->tag('routing.loader', ['priority' => -10])
+
+        ->set('routing.loader.attribute.file', AttributeFileLoader::class)
+            ->args([
+                service('file_locator'),
+                service('routing.loader.attribute'),
             ])
             ->tag('routing.loader', ['priority' => -10])
 
@@ -159,15 +158,15 @@ return static function (ContainerConfigurator $container) {
             ->factory([RequestContext::class, 'fromUri'])
             ->args([
                 param('router.request_context.base_url'),
-                param('router.request_context.host'),
-                param('router.request_context.scheme'),
+                abstract_arg('Set in FrameworkExtension from the "router.request_context.host" parameter'),
+                abstract_arg('Set in FrameworkExtension from the "router.request_context.scheme" parameter'),
                 param('request_listener.http_port'),
                 param('request_listener.https_port'),
             ])
-            ->call('setParameter', [
-                '_functions',
-                service('router.expression_language_provider')->ignoreOnInvalid(),
-            ])
+            ->call('setParameters', [[
+                '_functions' => service('router.expression_language_provider')->ignoreOnInvalid(),
+                '_locale' => '%kernel.default_locale%',
+            ]])
         ->alias(RequestContext::class, 'router.request_context')
 
         ->set('router.expression_language_provider', ExpressionLanguageProvider::class)

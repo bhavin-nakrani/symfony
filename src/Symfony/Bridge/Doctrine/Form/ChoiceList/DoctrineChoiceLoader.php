@@ -22,10 +22,8 @@ use Symfony\Component\Form\Exception\LogicException;
  */
 class DoctrineChoiceLoader extends AbstractChoiceLoader
 {
-    private ObjectManager $manager;
-    private string $class;
-    private ?IdReader $idReader;
-    private ?EntityLoaderInterface $objectLoader;
+    /** @var class-string */
+    private readonly string $class;
 
     /**
      * Creates a new choice loader.
@@ -36,18 +34,17 @@ class DoctrineChoiceLoader extends AbstractChoiceLoader
      *
      * @param string $class The class name of the loaded objects
      */
-    public function __construct(ObjectManager $manager, string $class, IdReader $idReader = null, EntityLoaderInterface $objectLoader = null)
-    {
-        $classMetadata = $manager->getClassMetadata($class);
-
+    public function __construct(
+        private readonly ObjectManager $manager,
+        string $class,
+        private readonly ?IdReader $idReader = null,
+        private readonly ?EntityLoaderInterface $objectLoader = null,
+    ) {
         if ($idReader && !$idReader->isSingleId()) {
-            throw new \InvalidArgumentException(sprintf('The second argument "$idReader" of "%s" must be null when the query cannot be optimized because of composite id fields.', __METHOD__));
+            throw new \InvalidArgumentException(\sprintf('The "$idReader" argument of "%s" must be null when the query cannot be optimized because of composite id fields.', __METHOD__));
         }
 
-        $this->manager = $manager;
-        $this->class = $classMetadata->getName();
-        $this->idReader = $idReader;
-        $this->objectLoader = $objectLoader;
+        $this->class = $manager->getClassMetadata($class)->getName();
     }
 
     protected function loadChoices(): iterable
@@ -69,6 +66,9 @@ class DoctrineChoiceLoader extends AbstractChoiceLoader
         return parent::doLoadValuesForChoices($choices);
     }
 
+    /**
+     * @param-immediately-invoked-callable $value
+     */
     protected function doLoadChoicesForValues(array $values, ?callable $value): array
     {
         if ($this->idReader && null === $value) {
@@ -78,8 +78,13 @@ class DoctrineChoiceLoader extends AbstractChoiceLoader
         $idReader = null;
         if (\is_array($value) && $value[0] instanceof IdReader) {
             $idReader = $value[0];
-        } elseif ($value instanceof \Closure && ($rThis = (new \ReflectionFunction($value))->getClosureThis()) instanceof IdReader) {
-            $idReader = $rThis;
+        } elseif ($value instanceof \Closure) {
+            $ref = new \ReflectionFunction($value);
+            if (($rThis = $ref->getClosureThis()) instanceof IdReader) {
+                $idReader = $rThis;
+            } elseif (($usedVariables = $ref->getClosureUsedVariables()) && ($usedVariables['idReader'] ?? null) instanceof IdReader) {
+                $idReader = $usedVariables['idReader'];
+            }
         }
 
         // Optimize performance in case we have an object loader and
@@ -93,7 +98,7 @@ class DoctrineChoiceLoader extends AbstractChoiceLoader
             // "INDEX BY" clause to the Doctrine query in the loader,
             // but I'm not sure whether that's doable in a generic fashion.
             foreach ($this->objectLoader->getEntitiesByIds($idReader->getIdField(), $values) as $object) {
-                $objectsById[$idReader->getIdValue($object)] = $object;
+                $objectsById[$value($object) ?? ''] = $object;
             }
 
             foreach ($values as $i => $id) {

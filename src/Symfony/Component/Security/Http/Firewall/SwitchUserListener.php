@@ -19,6 +19,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\SwitchUserToken;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\AccessDecision;
 use Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationCredentialsNotFoundException;
@@ -26,7 +27,11 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
+use Symfony\Component\Security\Csrf\CsrfToken;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Component\Security\Http\Event\SwitchUserEvent;
+use Symfony\Component\Security\Http\HttpUtils;
+use Symfony\Component\Security\Http\ParameterBagUtils;
 use Symfony\Component\Security\Http\SecurityEvents;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -42,46 +47,55 @@ class SwitchUserListener extends AbstractListener
 {
     public const EXIT_VALUE = '_exit';
 
-    private TokenStorageInterface $tokenStorage;
-    private UserProviderInterface $provider;
-    private UserCheckerInterface $userChecker;
-    private string $firewallName;
-    private AccessDecisionManagerInterface $accessDecisionManager;
-    private string $usernameParameter;
-    private string $role;
-    private ?LoggerInterface $logger;
-    private ?EventDispatcherInterface $dispatcher;
-    private bool $stateless;
-    private ?UrlGeneratorInterface $urlGenerator;
-    private ?string $targetRoute;
-
-    public function __construct(TokenStorageInterface $tokenStorage, UserProviderInterface $provider, UserCheckerInterface $userChecker, string $firewallName, AccessDecisionManagerInterface $accessDecisionManager, LoggerInterface $logger = null, string $usernameParameter = '_switch_user', string $role = 'ROLE_ALLOWED_TO_SWITCH', EventDispatcherInterface $dispatcher = null, bool $stateless = false, UrlGeneratorInterface $urlGenerator = null, string $targetRoute = null)
-    {
+    public function __construct(
+        private TokenStorageInterface $tokenStorage,
+        private UserProviderInterface $provider,
+        private UserCheckerInterface $userChecker,
+        private string $firewallName,
+        private AccessDecisionManagerInterface $accessDecisionManager,
+        private ?LoggerInterface $logger = null,
+        private string $usernameParameter = '_switch_user',
+        private string $role = 'ROLE_ALLOWED_TO_SWITCH',
+        private ?EventDispatcherInterface $dispatcher = null,
+        private bool $stateless = false,
+        private ?UrlGeneratorInterface $urlGenerator = null,
+        private ?string $targetRoute = null,
+        private ?HttpUtils $httpUtils = null,
+        private ?string $path = null,
+        private ?CsrfTokenManagerInterface $csrfTokenManager = null,
+        private string $csrfParameter = '_csrf_token',
+        private string $csrfTokenId = 'switch_user',
+    ) {
         if ('' === $firewallName) {
             throw new \InvalidArgumentException('$firewallName must not be empty.');
         }
 
-        $this->tokenStorage = $tokenStorage;
-        $this->provider = $provider;
-        $this->userChecker = $userChecker;
-        $this->firewallName = $firewallName;
-        $this->accessDecisionManager = $accessDecisionManager;
-        $this->usernameParameter = $usernameParameter;
-        $this->role = $role;
-        $this->logger = $logger;
-        $this->dispatcher = $dispatcher;
-        $this->stateless = $stateless;
-        $this->urlGenerator = $urlGenerator;
-        $this->targetRoute = $targetRoute;
+        if (null !== $path && null === $httpUtils) {
+            throw new \InvalidArgumentException(\sprintf('A "%s" instance must be provided when the "path" option is set.', HttpUtils::class));
+        }
     }
 
     public function supports(Request $request): ?bool
     {
-        // usernames can be falsy
-        $username = $request->get($this->usernameParameter);
+        if (null !== $this->path) {
+            // when scoped to a dedicated path, the parameter carries the target
+            // identity but no longer triggers the listener on every request
+            if (!$this->httpUtils->checkRequestPath($request, $this->path)) {
+                return false;
+            }
 
-        if (null === $username || '' === $username) {
-            $username = $request->headers->get($this->usernameParameter);
+            $username = ParameterBagUtils::getRequestParameterValue($request, $this->usernameParameter);
+
+            if (!\is_string($username)) {
+                $username = null;
+            }
+        } else {
+            // usernames can be falsy
+            $username = $request->query->get($this->usernameParameter) ?? (!\in_array($request->getMethod(), ['GET', 'HEAD'], true) ? $request->request->get($this->usernameParameter) : null);
+
+            if (null === $username || '' === $username) {
+                $username = $request->headers->get($this->usernameParameter);
+            }
         }
 
         // if it's still "empty", nothing to do.
@@ -106,12 +120,20 @@ class SwitchUserListener extends AbstractListener
         $username = $request->attributes->get('_switch_user_username');
         $request->attributes->remove('_switch_user_username');
 
+        if (null !== $this->csrfTokenManager) {
+            $csrfToken = ParameterBagUtils::getRequestParameterValue($request, $this->csrfParameter);
+
+            if (!\is_string($csrfToken) || !$this->csrfTokenManager->isTokenValid(new CsrfToken($this->csrfTokenId, $csrfToken))) {
+                throw new AccessDeniedException('Invalid CSRF token.');
+            }
+        }
+
         if (null === $this->tokenStorage->getToken()) {
             throw new AuthenticationCredentialsNotFoundException('Could not find original Token object.');
         }
 
         if (self::EXIT_VALUE === $username) {
-            $this->tokenStorage->setToken($this->attemptExitUser($request));
+            $this->attemptExitUser($request);
         } else {
             try {
                 $this->tokenStorage->setToken($this->attemptSwitchUser($request, $username));
@@ -121,13 +143,35 @@ class SwitchUserListener extends AbstractListener
             }
         }
 
-        if (!$this->stateless) {
-            $request->query->remove($this->usernameParameter);
-            $request->server->set('QUERY_STRING', http_build_query($request->query->all(), '', '&'));
-            $response = new RedirectResponse($this->urlGenerator && $this->targetRoute ? $this->urlGenerator->generate($this->targetRoute) : $request->getUri(), 302);
-
-            $event->setResponse($response);
+        if ($this->stateless) {
+            return;
         }
+
+        if (null !== $this->path) {
+            // on a dedicated endpoint there is no "current page" to return to,
+            // so resolve an explicit target: submitted path, then target_route, then "/"
+            $targetUrl = ParameterBagUtils::getRequestParameterValue($request, '_target_path');
+
+            if (!\is_string($targetUrl) || !str_starts_with($targetUrl, '/')) {
+                $targetUrl = $this->urlGenerator && $this->targetRoute && self::EXIT_VALUE !== $username ? $this->urlGenerator->generate($this->targetRoute) : '/';
+            }
+
+            $event->setResponse($this->httpUtils->createRedirectResponse($request, $targetUrl));
+
+            return;
+        }
+
+        $request->query->remove($this->usernameParameter);
+
+        if (null !== $this->csrfTokenManager) {
+            // keep the token out of the address bar, the history, the logs and the Referer of the landing page
+            $request->query->remove($this->csrfParameter);
+        }
+
+        $request->server->set('QUERY_STRING', http_build_query($request->query->all(), '', '&'));
+        $response = new RedirectResponse($this->urlGenerator && $this->targetRoute && self::EXIT_VALUE !== $username ? $this->urlGenerator->generate($this->targetRoute) : $request->getUri(), 302);
+
+        $event->setResponse($response);
     }
 
     /**
@@ -167,20 +211,21 @@ class SwitchUserListener extends AbstractListener
 
             throw $e;
         }
+        $accessDecision = new AccessDecision();
 
-        if (false === $this->accessDecisionManager->decide($token, [$this->role], $user)) {
-            $exception = new AccessDeniedException();
-            $exception->setAttributes($this->role);
+        if (!$accessDecision->isGranted = $this->accessDecisionManager->decide($token, [$this->role], $user, $accessDecision)) {
+            $e = new AccessDeniedException($accessDecision->getMessage());
+            $e->setAttributes($this->role);
+            $e->setAccessDecision($accessDecision);
 
-            throw $exception;
+            throw $e;
         }
 
         $this->logger?->info('Attempting to switch to user.', ['username' => $username]);
 
-        $this->userChecker->checkPostAuth($user);
+        $this->userChecker->checkPostAuth($user, $token);
 
         $roles = $user->getRoles();
-        $roles[] = 'ROLE_PREVIOUS_ADMIN';
         $originatedFromUri = str_replace('/&', '/?', preg_replace('#[&?]'.$this->usernameParameter.'=[^&]*#', '', $request->getRequestUri()));
         $token = new SwitchUserToken($user, $this->firewallName, $roles, $token, $originatedFromUri);
 
@@ -212,6 +257,8 @@ class SwitchUserListener extends AbstractListener
             $this->dispatcher->dispatch($switchEvent, SecurityEvents::SWITCH_USER);
             $original = $switchEvent->getToken();
         }
+
+        $this->tokenStorage->setToken($original);
 
         return $original;
     }

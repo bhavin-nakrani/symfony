@@ -29,10 +29,7 @@ class DecoratorServicePass extends AbstractRecursivePass
 {
     protected bool $skipScalars = true;
 
-    /**
-     * @return void
-     */
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         $definitions = new \SplPriorityQueue();
         $order = \PHP_INT_MAX;
@@ -46,6 +43,10 @@ class DecoratorServicePass extends AbstractRecursivePass
         $decoratingDefinitions = [];
         $decoratedIds = [];
 
+        // Behavior-describing tags must stay on the decorated service;
+        // role-describing tags (e.g. "kernel.event_listener") move to its decorators.
+        // The parameter is consumed and removed by ResolveInstanceofConditionalsPass, which runs
+        // before this pass; it's read here for container builders that keep it around.
         $tagsToKeep = $container->hasParameter('container.behavior_describing_tags')
             ? $container->getParameter('container.behavior_describing_tags')
             : ['proxy', 'container.do_not_inline', 'container.service_locator', 'container.service_subscriber', 'container.service_subscriber.locator'];
@@ -67,6 +68,7 @@ class DecoratorServicePass extends AbstractRecursivePass
 
             $definition->innerServiceId = $renamedId;
             $definition->decorationOnInvalid = $invalidBehavior;
+            $definition->decorationPriority = $decoratedService[2];
 
             // we create a new alias/service for the service we are replacing
             // to be able to reference it in the new one
@@ -92,7 +94,7 @@ class DecoratorServicePass extends AbstractRecursivePass
             }
 
             if ($decoratedDefinition?->isSynthetic()) {
-                throw new InvalidArgumentException(sprintf('A synthetic service cannot be decorated: service "%s" cannot decorate "%s".', $id, $inner));
+                throw new InvalidArgumentException(\sprintf('A synthetic service cannot be decorated: service "%s" cannot decorate "%s".', $id, $inner));
             }
 
             if (isset($decoratingDefinitions[$inner])) {
@@ -101,7 +103,6 @@ class DecoratorServicePass extends AbstractRecursivePass
                 $decoratingTags = $decoratingDefinition->getTags();
                 $resetTags = [];
 
-                // Behavior-describing tags must not be transferred out to decorators
                 foreach ($tagsToKeep as $containerTag) {
                     if (isset($decoratingTags[$containerTag])) {
                         $resetTags[$containerTag] = $decoratingTags[$containerTag];

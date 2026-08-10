@@ -1,6 +1,23 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Add argument `$deprecationsNamespacesMapping` to `DebugClassLoader::enable()` to configure namespace-to-vendor remapping for deprecation checks
+ * Trigger `@method` deprecation notices on abstract classes
+ * Add `MaxExecutionTimeError` and skip `http_response_code()` / `header()` calls in the default exception renderer for `OutOfMemoryError` and `MaxExecutionTimeError` to avoid PHP 8.5+ warnings
+
+7.3
+---
+
+ * Add `error:dump` command
+
+7.1
+---
+
+ * Increase log level to "error" at least for all PHP errors
+
 6.4
 ---
 

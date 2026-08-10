@@ -16,6 +16,8 @@ use Symfony\Component\Config\Definition\Exception\UnsetKeyException;
 /**
  * This class builds an if expression.
  *
+ * @template T of NodeDefinition
+ *
  * @author Johannes M. Schmitt <schmittjoh@gmail.com>
  * @author Christophe Coevoet <stof@notk.org>
  */
@@ -25,16 +27,20 @@ class ExprBuilder
     public const TYPE_STRING = 'string';
     public const TYPE_NULL = 'null';
     public const TYPE_ARRAY = 'array';
+    public const TYPE_BOOL = 'bool';
+    public const TYPE_INT = 'int';
+    public const TYPE_BACKED_ENUM = 'backed-enum';
 
-    protected $node;
+    public string $allowedTypes;
+    public ?\Closure $ifPart = null;
+    public ?\Closure $thenPart = null;
 
-    public $allowedTypes;
-    public $ifPart;
-    public $thenPart;
-
-    public function __construct(NodeDefinition $node)
-    {
-        $this->node = $node;
+    /**
+     * @param T $node
+     */
+    public function __construct(
+        protected NodeDefinition $node,
+    ) {
     }
 
     /**
@@ -42,7 +48,7 @@ class ExprBuilder
      *
      * @return $this
      */
-    public function always(\Closure $then = null): static
+    public function always(?\Closure $then = null): static
     {
         $this->ifPart = static fn () => true;
         $this->allowedTypes = self::TYPE_ANY;
@@ -61,10 +67,25 @@ class ExprBuilder
      *
      * @return $this
      */
-    public function ifTrue(\Closure $closure = null): static
+    public function ifTrue(?\Closure $closure = null): static
     {
         $this->ifPart = $closure ?? static fn ($v) => true === $v;
-        $this->allowedTypes = self::TYPE_ANY;
+        $this->allowedTypes = $closure ? self::TYPE_ANY : self::TYPE_BOOL;
+
+        return $this;
+    }
+
+    /**
+     * Sets a closure to use as tests.
+     *
+     * The default one tests if the value is false.
+     *
+     * @return $this
+     */
+    public function ifFalse(?\Closure $closure = null): static
+    {
+        $this->ifPart = $closure ? static fn ($v) => !$closure($v) : static fn ($v) => false === $v;
+        $this->allowedTypes = $closure ? self::TYPE_ANY : self::TYPE_BOOL;
 
         return $this;
     }
@@ -102,7 +123,7 @@ class ExprBuilder
      */
     public function ifEmpty(): static
     {
-        $this->ifPart = static fn ($v) => empty($v);
+        $this->ifPart = static fn ($v) => !$v;
         $this->allowedTypes = self::TYPE_ANY;
 
         return $this;
@@ -196,7 +217,7 @@ class ExprBuilder
      */
     public function thenInvalid(string $message): static
     {
-        $this->thenPart = static fn ($v) => throw new \InvalidArgumentException(sprintf($message, json_encode($v)));
+        $this->thenPart = static fn ($v) => throw new \InvalidArgumentException(\sprintf($message, json_encode($v)));
 
         return $this;
     }
@@ -218,9 +239,11 @@ class ExprBuilder
     /**
      * Returns the related node.
      *
+     * @return T
+     *
      * @throws \RuntimeException
      */
-    public function end(): NodeDefinition|ArrayNodeDefinition|VariableNodeDefinition
+    public function end(): NodeDefinition
     {
         if (null === $this->ifPart) {
             throw new \RuntimeException('You must specify an if part.');
@@ -235,7 +258,9 @@ class ExprBuilder
     /**
      * Builds the expressions.
      *
-     * @param ExprBuilder[] $expressions An array of ExprBuilder instances to build
+     * @param (ExprBuilder|\Closure)[] $expressions
+     *
+     * @return \Closure[]
      */
     public static function buildExpressions(array $expressions): array
     {

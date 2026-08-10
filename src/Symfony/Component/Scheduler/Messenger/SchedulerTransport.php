@@ -24,7 +24,10 @@ class SchedulerTransport implements TransportInterface
     ) {
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize Best-effort hint about how many messages can be received in one call
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
         foreach ($this->messageGenerator->getMessages() as $context => $message) {
             $stamp = new ScheduledStamp($context);
@@ -52,6 +55,11 @@ class SchedulerTransport implements TransportInterface
 
     public function send(Envelope $envelope): Envelope
     {
-        throw new LogicException(sprintf('"%s" cannot send messages.', __CLASS__));
+        throw new LogicException(\sprintf('"%s" cannot send messages.', __CLASS__));
+    }
+
+    public function getMessageGenerator(): MessageGeneratorInterface
+    {
+        return $this->messageGenerator;
     }
 }

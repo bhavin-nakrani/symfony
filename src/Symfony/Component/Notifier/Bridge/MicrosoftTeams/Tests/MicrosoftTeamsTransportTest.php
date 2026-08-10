@@ -26,7 +26,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final class MicrosoftTeamsTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): MicrosoftTeamsTransport
+    public static function createTransport(?HttpClientInterface $client = null): MicrosoftTeamsTransport
     {
         return (new MicrosoftTeamsTransport('/testPath', $client ?? new MockHttpClient()))->setHost('host.test');
     }
@@ -49,7 +49,7 @@ final class MicrosoftTeamsTransportTest extends TransportTestCase
 
     public function testSendWithErrorResponseThrows()
     {
-        $client = new MockHttpClient(fn (string $method, string $url, array $options = []): ResponseInterface => new MockResponse('testErrorMessage', ['response_headers' => ['request-id' => ['testRequestId']], 'http_code' => 400]));
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options = []): ResponseInterface => new MockResponse('testErrorMessage', ['response_headers' => ['request-id' => ['testRequestId']], 'http_code' => 400]));
 
         $transport = self::createTransport($client);
 
@@ -69,6 +69,29 @@ final class MicrosoftTeamsTransportTest extends TransportTestCase
         $this->expectExceptionMessageMatches('/request-id not found/');
 
         $transport->send(new ChatMessage('testMessage'));
+    }
+
+    public function testSendWithErrorResponseWithoutRequestIdThrowsActualError()
+    {
+        $client = new MockHttpClient(new MockResponse('actualErrorBody', ['http_code' => 400]));
+
+        $transport = self::createTransport($client);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessageMatches('/actualErrorBody/');
+
+        $transport->send(new ChatMessage('testMessage'));
+    }
+
+    public function testSendViaWorkflowAcceptsAcceptedStatusAndServiceRequestIdHeader()
+    {
+        $client = new MockHttpClient(new MockResponse('', ['response_headers' => ['x-ms-service-request-id' => ['testServiceRequestId']], 'http_code' => 202]));
+
+        $transport = self::createTransport($client);
+
+        $sentMessage = $transport->send(new ChatMessage('testMessage'));
+
+        $this->assertSame('testServiceRequestId', $sentMessage->getMessageId());
     }
 
     public function testSend()

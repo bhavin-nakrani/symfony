@@ -528,7 +528,7 @@ return [
         ],
         'LSL' => [
             'LSL',
-            'loti lesotyjskie',
+            'loti sotyjskie',
         ],
         'LTL' => [
             'LTL',
@@ -802,9 +802,13 @@ return [
             'SKK',
             'korona słowacka',
         ],
+        'SLE' => [
+            'SLE',
+            'leone sierraleoński',
+        ],
         'SLL' => [
             'SLL',
-            'leone sierraleoński',
+            'leone sierraleoński (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -962,6 +966,10 @@ return [
             'EC$',
             'dolar wschodniokaraibski',
         ],
+        'XCG' => [
+            'XCG',
+            'gulden karaibski',
+        ],
         'XEU' => [
             'XEU',
             'ECU',
@@ -1025,6 +1033,10 @@ return [
         'ZWD' => [
             'ZWD',
             'dolar Zimbabwe (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'złoto Zimbabwe',
         ],
         'ZWL' => [
             'ZWL',

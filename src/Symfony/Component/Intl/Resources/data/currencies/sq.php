@@ -514,9 +514,13 @@ return [
             'SHP',
             'Sterlina e Ishullit të Shën-Helenës',
         ],
+        'SLE' => [
+            'SLE',
+            'Leoni i Siera-Leones',
+        ],
         'SLL' => [
             'SLL',
-            'Leoni i Sierra-Leones',
+            'Leoni i Siera-Leones (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -630,6 +634,10 @@ return [
             'EC$',
             'Dollari i Karaibeve Lindore',
         ],
+        'XCG' => [
+            'ANG',
+            'gilder karaibian',
+        ],
         'XOF' => [
             'F CFA',
             'Franga e Bregut të Fildishtë',
@@ -648,7 +656,11 @@ return [
         ],
         'ZMW' => [
             'ZMW',
-            'Kuaça e Zambikut',
+            'Kuaça e Zambisë',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Ari i Zimbabves',
         ],
     ],
 ];

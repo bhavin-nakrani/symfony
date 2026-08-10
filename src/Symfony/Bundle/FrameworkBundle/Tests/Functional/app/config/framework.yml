@@ -1,9 +1,7 @@
 framework:
-    annotations: false
-    http_method_override: false
     secret:        test
-    router:        { resource: "%kernel.project_dir%/%kernel.test_case%/routing.yml", utf8: true }
-    validation:    { enabled: true, enable_annotations: true }
+    router:        { resource: "%kernel.project_dir%/%kernel.test_case%/routing.yml" }
+    validation:    { enabled: true, enable_attributes: true }
     csrf_protection: true
     form:
         enabled: true
@@ -11,7 +9,10 @@ framework:
     default_locale: en
     enabled_locales: ['en', 'fr']
     session:
+        handler_id: null
         storage_factory_id: session.storage.factory.mock_file
+        cookie_secure: auto
+        cookie_samesite: lax
 
 services:
     logger: { class: Psr\Log\NullLogger }

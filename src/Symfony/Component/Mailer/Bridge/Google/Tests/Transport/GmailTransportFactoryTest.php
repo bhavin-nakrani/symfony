@@ -13,14 +13,28 @@ namespace Symfony\Component\Mailer\Bridge\Google\Tests\Transport;
 
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\Mailer\Bridge\Google\Transport\GmailApiTransport;
 use Symfony\Component\Mailer\Bridge\Google\Transport\GmailSmtpTransport;
 use Symfony\Component\Mailer\Bridge\Google\Transport\GmailTransportFactory;
-use Symfony\Component\Mailer\Test\TransportFactoryTestCase;
+use Symfony\Component\Mailer\Test\AbstractTransportFactoryTestCase;
+use Symfony\Component\Mailer\Test\IncompleteDsnTestTrait;
 use Symfony\Component\Mailer\Transport\Dsn;
 use Symfony\Component\Mailer\Transport\TransportFactoryInterface;
 
-class GmailTransportFactoryTest extends TransportFactoryTestCase
+class GmailTransportFactoryTest extends AbstractTransportFactoryTestCase
 {
+    use IncompleteDsnTestTrait;
+
+    private static string $testPrivateKey = '';
+    private static string $testPrivateKeyBase64 = '';
+
+    public static function setUpBeforeClass(): void
+    {
+        // Generate a test RSA private key
+        self::$testPrivateKey = file_get_contents(__DIR__.'/../Fixtures/private_key.pem');
+        self::$testPrivateKeyBase64 = base64_encode(self::$testPrivateKey);
+    }
+
     public function getFactory(): TransportFactoryInterface
     {
         return new GmailTransportFactory(null, new MockHttpClient(), new NullLogger());
@@ -47,6 +61,11 @@ class GmailTransportFactoryTest extends TransportFactoryTestCase
             new Dsn('gmail+smtp', 'example.com'),
             true,
         ];
+
+        yield [
+            new Dsn('gmail+api', 'default'),
+            true,
+        ];
     }
 
     public static function createProvider(): iterable
@@ -67,11 +86,22 @@ class GmailTransportFactoryTest extends TransportFactoryTestCase
         ];
     }
 
+    public function testCreateGmailApiTransport()
+    {
+        $factory = $this->getFactory();
+        $dsn = new Dsn('gmail+api', 'default', 'service@example.iam.gserviceaccount.com', self::$testPrivateKeyBase64, null, ['user' => 'sender@example.com']);
+
+        $transport = $factory->create($dsn);
+
+        $this->assertInstanceOf(GmailApiTransport::class, $transport);
+        $this->assertSame('gmail+api://sender@example.com', (string) $transport);
+    }
+
     public static function unsupportedSchemeProvider(): iterable
     {
         yield [
             new Dsn('gmail+foo', 'default', self::USER, self::PASSWORD),
-            'The "gmail+foo" scheme is not supported; supported schemes for mailer "gmail" are: "gmail", "gmail+smtp", "gmail+smtps".',
+            'The "gmail+foo" scheme is not supported; supported schemes for mailer "gmail" are: "gmail", "gmail+smtp", "gmail+smtps", "gmail+api".',
         ];
     }
 
@@ -80,5 +110,8 @@ class GmailTransportFactoryTest extends TransportFactoryTestCase
         yield [new Dsn('gmail+smtp', 'default', self::USER)];
 
         yield [new Dsn('gmail+smtp', 'default', null, self::PASSWORD)];
+
+        // gmail+api requires 'user' option
+        yield [new Dsn('gmail+api', 'default', 'service@example.com', 'key')];
     }
 }

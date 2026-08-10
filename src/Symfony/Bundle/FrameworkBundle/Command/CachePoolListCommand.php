@@ -25,24 +25,21 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'cache:pool:list', description: 'List available cache pools')]
 final class CachePoolListCommand extends Command
 {
-    private array $poolNames;
-
     /**
      * @param string[] $poolNames
      */
-    public function __construct(array $poolNames)
-    {
+    public function __construct(
+        private array $poolNames,
+    ) {
         parent::__construct();
-
-        $this->poolNames = $poolNames;
     }
 
     protected function configure(): void
     {
         $this
             ->setHelp(<<<'EOF'
-The <info>%command.name%</info> command lists all available cache pools.
-EOF
+                The <info>%command.name%</info> command lists all available cache pools.
+                EOF
             )
         ;
     }
@@ -51,7 +48,7 @@ EOF
     {
         $io = new SymfonyStyle($input, $output);
 
-        $io->table(['Pool name'], array_map(fn ($pool) => [$pool], $this->poolNames));
+        $io->table(['Pool name'], array_map(static fn ($pool) => [$pool], $this->poolNames));
 
         return 0;
     }

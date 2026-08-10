@@ -25,14 +25,15 @@ final class TokenBucketLimiter implements LimiterInterface
 {
     use ResetLimiterTrait;
 
-    private int $maxBurst;
-    private Rate $rate;
-
-    public function __construct(string $id, int $maxBurst, Rate $rate, StorageInterface $storage, LockInterface $lock = null)
-    {
+    public function __construct(
+        string $id,
+        private int $maxBurst,
+        private Rate $rate,
+        StorageInterface $storage,
+        ?LockInterface $lock = null,
+    ) {
         $this->id = $id;
-        $this->maxBurst = $maxBurst;
-        $this->rate = $rate;
+        $this->maxBurst = min($maxBurst, TokenBucket::MAX_BURST_SIZE);
         $this->storage = $storage;
         $this->lock = $lock;
     }
@@ -50,10 +51,10 @@ final class TokenBucketLimiter implements LimiterInterface
      * @throws MaxWaitDurationExceededException if $maxTime is set and the process needs to wait longer than its value (in seconds)
      * @throws \InvalidArgumentException        if $tokens is larger than the maximum burst size
      */
-    public function reserve(int $tokens = 1, float $maxTime = null): Reservation
+    public function reserve(int $tokens = 1, ?float $maxTime = null): Reservation
     {
         if ($tokens > $this->maxBurst) {
-            throw new \InvalidArgumentException(sprintf('Cannot reserve more tokens (%d) than the burst size of the rate limiter (%d).', $tokens, $this->maxBurst));
+            throw new \InvalidArgumentException(\sprintf('Cannot reserve more tokens (%d) than the burst size of the rate limiter (%d).', $tokens, $this->maxBurst));
         }
 
         $this->lock?->acquire(true);
@@ -67,12 +68,20 @@ final class TokenBucketLimiter implements LimiterInterface
             $now = microtime(true);
             $availableTokens = $bucket->getAvailableTokens($now);
 
-            if ($availableTokens >= max(1, $tokens)) {
+            if ($availableTokens > $this->maxBurst) {
+                $availableTokens = $this->maxBurst;
+            }
+
+            if ($availableTokens >= $tokens) {
                 // tokens are now available, update bucket
                 $bucket->setTokens($availableTokens - $tokens);
-                $bucket->setTimer($now);
 
-                $reservation = new Reservation($now, new RateLimit($bucket->getAvailableTokens($now), \DateTimeImmutable::createFromFormat('U', floor($now)), true, $this->maxBurst));
+                $retryAfter = $now;
+                if ($availableTokens === $tokens) {
+                    $retryAfter += $this->rate->calculateTimeForTokens(1);
+                }
+
+                $reservation = new Reservation($now, new RateLimit($bucket->getAvailableTokens($now), \DateTimeImmutable::createFromFormat('U', floor($retryAfter)), true, $this->maxBurst));
             } else {
                 $remainingTokens = $tokens - $availableTokens;
                 $waitDuration = $this->rate->calculateTimeForTokens($remainingTokens);
@@ -81,18 +90,17 @@ final class TokenBucketLimiter implements LimiterInterface
                     // process needs to wait longer than set interval
                     $rateLimit = new RateLimit($availableTokens, \DateTimeImmutable::createFromFormat('U', floor($now + $waitDuration)), false, $this->maxBurst);
 
-                    throw new MaxWaitDurationExceededException(sprintf('The rate limiter wait time ("%d" seconds) is longer than the provided maximum time ("%d" seconds).', $waitDuration, $maxTime), $rateLimit);
+                    throw new MaxWaitDurationExceededException(\sprintf('The rate limiter wait time ("%d" seconds) is longer than the provided maximum time ("%d" seconds).', $waitDuration, $maxTime), $rateLimit);
                 }
 
                 // at $now + $waitDuration all tokens will be reserved for this process,
                 // so no tokens are left for other processes.
                 $bucket->setTokens($availableTokens - $tokens);
-                $bucket->setTimer($now);
 
                 $reservation = new Reservation($now + $waitDuration, new RateLimit(0, \DateTimeImmutable::createFromFormat('U', floor($now + $waitDuration)), false, $this->maxBurst));
             }
 
-            if (0 < $tokens) {
+            if (0 !== $tokens) {
                 $this->storage->save($bucket);
             }
         } finally {

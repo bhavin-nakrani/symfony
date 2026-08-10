@@ -17,6 +17,10 @@ use Psr\Link\LinkInterface;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\DependencyInjection\ParameterBag\ContainerBagInterface;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Flow\FormFlowBuilderInterface;
+use Symfony\Component\Form\Flow\FormFlowInterface;
+use Symfony\Component\Form\Flow\FormFlowTypeInterface;
+use Symfony\Component\Form\Flow\Type\FormFlowType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
@@ -35,6 +39,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authorization\AccessDecision;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -55,10 +60,7 @@ use Twig\Environment;
  */
 abstract class AbstractController implements ServiceSubscriberInterface
 {
-    /**
-     * @var ContainerInterface
-     */
-    protected $container;
+    protected ContainerInterface $container;
 
     #[Required]
     public function setContainer(ContainerInterface $container): ?ContainerInterface
@@ -67,18 +69,6 @@ abstract class AbstractController implements ServiceSubscriberInterface
         $this->container = $container;
 
         return $previous;
-    }
-
-    /**
-     * Gets a container parameter by its name.
-     */
-    protected function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
-    {
-        if (!$this->container->has('parameter_bag')) {
-            throw new ServiceNotFoundException('parameter_bag.', null, null, [], sprintf('The "%s::getParameter()" method is missing a parameter bag to work properly. Did you forget to register your controller as a service subscriber? This can be fixed either by using autoconfiguration or by manually wiring a "parameter_bag" in the service locator passed to the controller.', static::class));
-        }
-
-        return $this->container->get('parameter_bag')->get($name);
     }
 
     public static function getSubscribedServices(): array
@@ -99,6 +89,18 @@ abstract class AbstractController implements ServiceSubscriberInterface
     }
 
     /**
+     * Gets a container parameter by its name.
+     */
+    protected function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
+    {
+        if (!$this->container->has('parameter_bag')) {
+            throw new ServiceNotFoundException('parameter_bag.', null, null, [], \sprintf('The "%s::getParameter()" method is missing a parameter bag to work properly. Did you forget to register your controller as a service subscriber? This can be fixed either by using autoconfiguration or by manually wiring a "parameter_bag" in the service locator passed to the controller.', static::class));
+        }
+
+        return $this->container->get('parameter_bag')->get($name);
+    }
+
+    /**
      * Generates a URL from the given parameters.
      *
      * @see UrlGeneratorInterface
@@ -111,7 +113,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
     /**
      * Forwards the request to another controller.
      *
-     * @param string $controller The controller name (a string like Bundle\BlogBundle\Controller\PostController::indexAction)
+     * @param string $controller The controller name (a string like "App\Controller\PostController::index" or "App\Controller\PostController" if it is invokable)
      */
     protected function forward(string $controller, array $path = [], array $query = []): Response
     {
@@ -157,13 +159,17 @@ abstract class AbstractController implements ServiceSubscriberInterface
             return new JsonResponse($json, $status, $headers, true);
         }
 
+        if (null === $data) {
+            return new JsonResponse('null', $status, $headers, true);
+        }
+
         return new JsonResponse($data, $status, $headers);
     }
 
     /**
      * Returns a BinaryFileResponse object with original or customized file name and disposition header.
      */
-    protected function file(\SplFileInfo|string $file, string $fileName = null, string $disposition = ResponseHeaderBag::DISPOSITION_ATTACHMENT): BinaryFileResponse
+    protected function file(\SplFileInfo|string $file, ?string $fileName = null, string $disposition = ResponseHeaderBag::DISPOSITION_ATTACHMENT): BinaryFileResponse
     {
         $response = new BinaryFileResponse($file);
         $response->setContentDisposition($disposition, $fileName ?? $response->getFile()->getFilename());
@@ -185,7 +191,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
         }
 
         if (!$session instanceof FlashBagAwareSessionInterface) {
-            trigger_deprecation('symfony/framework-bundle', '6.2', 'Calling "addFlash()" method when the session does not implement %s is deprecated.', FlashBagAwareSessionInterface::class);
+            throw new \LogicException(\sprintf('You cannot use the addFlash method because class "%s" doesn\'t implement "%s".', get_debug_type($session), FlashBagAwareSessionInterface::class));
         }
 
         $session->getFlashBag()->add($type, $message);
@@ -206,6 +212,21 @@ abstract class AbstractController implements ServiceSubscriberInterface
     }
 
     /**
+     * Checks if the attribute is granted against the current authentication token and optionally supplied subject.
+     */
+    protected function getAccessDecision(mixed $attribute, mixed $subject = null): AccessDecision
+    {
+        if (!$this->container->has('security.authorization_checker')) {
+            throw new \LogicException('The SecurityBundle is not registered in your application. Try running "composer require symfony/security-bundle".');
+        }
+
+        $accessDecision = new AccessDecision();
+        $accessDecision->isGranted = $this->container->get('security.authorization_checker')->isGranted($attribute, $subject, $accessDecision);
+
+        return $accessDecision;
+    }
+
+    /**
      * Throws an exception unless the attribute is granted against the current authentication token and optionally
      * supplied subject.
      *
@@ -213,12 +234,19 @@ abstract class AbstractController implements ServiceSubscriberInterface
      */
     protected function denyAccessUnlessGranted(mixed $attribute, mixed $subject = null, string $message = 'Access Denied.'): void
     {
-        if (!$this->isGranted($attribute, $subject)) {
-            $exception = $this->createAccessDeniedException($message);
-            $exception->setAttributes([$attribute]);
-            $exception->setSubject($subject);
+        $accessDecision = $this->getAccessDecision($attribute, $subject);
+        $isGranted = $accessDecision->isGranted;
 
-            throw $exception;
+        if (!$isGranted) {
+            $e = $this->createAccessDeniedException(3 > \func_num_args() && $accessDecision ? $accessDecision->getMessage() : $message);
+            $e->setAttributes([$attribute]);
+            $e->setSubject($subject);
+
+            if ($accessDecision) {
+                $e->setAccessDecision($accessDecision);
+            }
+
+            throw $e;
         }
     }
 
@@ -229,17 +257,17 @@ abstract class AbstractController implements ServiceSubscriberInterface
      */
     protected function renderView(string $view, array $parameters = []): string
     {
-        if (!$this->container->has('twig')) {
-            throw new \LogicException('You cannot use the "renderView" method if the Twig Bundle is not available. Try running "composer require symfony/twig-bundle".');
-        }
+        return $this->doRenderView($view, null, $parameters, __FUNCTION__);
+    }
 
-        foreach ($parameters as $k => $v) {
-            if ($v instanceof FormInterface) {
-                $parameters[$k] = $v->createView();
-            }
-        }
-
-        return $this->container->get('twig')->render($view, $parameters);
+    /**
+     * Returns a rendered block from a view.
+     *
+     * Forms found in parameters are auto-cast to form views.
+     */
+    protected function renderBlockView(string $view, string $block, array $parameters = []): string
+    {
+        return $this->doRenderView($view, $block, $parameters, __FUNCTION__);
     }
 
     /**
@@ -248,43 +276,26 @@ abstract class AbstractController implements ServiceSubscriberInterface
      * If an invalid form is found in the list of parameters, a 422 status code is returned.
      * Forms found in parameters are auto-cast to form views.
      */
-    protected function render(string $view, array $parameters = [], Response $response = null): Response
+    protected function render(string $view, array $parameters = [], ?Response $response = null): Response
     {
-        $content = $this->renderView($view, $parameters);
-        $response ??= new Response();
-
-        if (200 === $response->getStatusCode()) {
-            foreach ($parameters as $v) {
-                if ($v instanceof FormInterface && $v->isSubmitted() && !$v->isValid()) {
-                    $response->setStatusCode(422);
-                    break;
-                }
-            }
-        }
-
-        $response->setContent($content);
-
-        return $response;
+        return $this->doRender($view, null, $parameters, $response, __FUNCTION__);
     }
 
     /**
-     * Renders a view and sets the appropriate status code when a form is listed in parameters.
+     * Renders a block in a view.
      *
      * If an invalid form is found in the list of parameters, a 422 status code is returned.
-     *
-     * @deprecated since Symfony 6.2, use render() instead
+     * Forms found in parameters are auto-cast to form views.
      */
-    protected function renderForm(string $view, array $parameters = [], Response $response = null): Response
+    protected function renderBlock(string $view, string $block, array $parameters = [], ?Response $response = null): Response
     {
-        trigger_deprecation('symfony/framework-bundle', '6.2', 'The "%s::renderForm()" method is deprecated, use "render()" instead.', get_debug_type($this));
-
-        return $this->render($view, $parameters, $response);
+        return $this->doRender($view, $block, $parameters, $response, __FUNCTION__);
     }
 
     /**
      * Streams a view.
      */
-    protected function stream(string $view, array $parameters = [], StreamedResponse $response = null): StreamedResponse
+    protected function stream(string $view, array $parameters = [], ?StreamedResponse $response = null): StreamedResponse
     {
         if (!$this->container->has('twig')) {
             throw new \LogicException('You cannot use the "stream" method if the Twig Bundle is not available. Try running "composer require symfony/twig-bundle".');
@@ -292,7 +303,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
 
         $twig = $this->container->get('twig');
 
-        $callback = function () use ($twig, $view, $parameters) {
+        $callback = static function () use ($twig, $view, $parameters) {
             $twig->display($view, $parameters);
         };
 
@@ -312,7 +323,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
      *
      *     throw $this->createNotFoundException('Page not found!');
      */
-    protected function createNotFoundException(string $message = 'Not Found', \Throwable $previous = null): NotFoundHttpException
+    protected function createNotFoundException(string $message = 'Not Found', ?\Throwable $previous = null): NotFoundHttpException
     {
         return new NotFoundHttpException($message, $previous);
     }
@@ -326,7 +337,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
      *
      * @throws \LogicException If the Security component is not available
      */
-    protected function createAccessDeniedException(string $message = 'Access Denied.', \Throwable $previous = null): AccessDeniedException
+    protected function createAccessDeniedException(string $message = 'Access Denied.', ?\Throwable $previous = null): AccessDeniedException
     {
         if (!class_exists(AccessDeniedException::class)) {
             throw new \LogicException('You cannot use the "createAccessDeniedException" method if the Security component is not available. Try running "composer require symfony/security-bundle".');
@@ -337,6 +348,8 @@ abstract class AbstractController implements ServiceSubscriberInterface
 
     /**
      * Creates and returns a Form instance from the type of the form.
+     *
+     * @return ($type is class-string<FormFlowTypeInterface> ? FormFlowInterface : FormInterface)
      */
     protected function createForm(string $type, mixed $data = null, array $options = []): FormInterface
     {
@@ -349,6 +362,14 @@ abstract class AbstractController implements ServiceSubscriberInterface
     protected function createFormBuilder(mixed $data = null, array $options = []): FormBuilderInterface
     {
         return $this->container->get('form.factory')->createBuilder(FormType::class, $data, $options);
+    }
+
+    /**
+     * Creates and returns a form flow builder instance.
+     */
+    protected function createFormFlowBuilder(mixed $data = null, array $options = []): FormFlowBuilderInterface
+    {
+        return $this->container->get('form.factory')->createBuilder(FormFlowType::class, $data, $options);
     }
 
     /**
@@ -409,7 +430,7 @@ abstract class AbstractController implements ServiceSubscriberInterface
     /**
      * @param LinkInterface[] $links
      */
-    protected function sendEarlyHints(iterable $links = [], Response $response = null): Response
+    protected function sendEarlyHints(iterable $links = [], ?Response $response = null): Response
     {
         if (!$this->container->has('web_link.http_header_serializer')) {
             throw new \LogicException('You cannot use the "sendEarlyHints" method if the WebLink component is not available. Try running "composer require symfony/web-link".');
@@ -428,6 +449,44 @@ abstract class AbstractController implements ServiceSubscriberInterface
 
         $response->headers->set('Link', $this->container->get('web_link.http_header_serializer')->serialize($populatedLinks), false);
         $response->sendHeaders(103);
+
+        return $response;
+    }
+
+    private function doRenderView(string $view, ?string $block, array $parameters, string $method): string
+    {
+        if (!$this->container->has('twig')) {
+            throw new \LogicException(\sprintf('You cannot use the "%s" method if the Twig Bundle is not available. Try running "composer require symfony/twig-bundle".', $method));
+        }
+
+        foreach ($parameters as $k => $v) {
+            if ($v instanceof FormInterface) {
+                $parameters[$k] = $v->createView();
+            }
+        }
+
+        if (null !== $block) {
+            return $this->container->get('twig')->load($view)->renderBlock($block, $parameters);
+        }
+
+        return $this->container->get('twig')->render($view, $parameters);
+    }
+
+    private function doRender(string $view, ?string $block, array $parameters, ?Response $response, string $method): Response
+    {
+        $content = $this->doRenderView($view, $block, $parameters, $method);
+        $response ??= new Response();
+
+        if (200 === $response->getStatusCode()) {
+            foreach ($parameters as $v) {
+                if ($v instanceof FormInterface && $v->isSubmitted() && !$v->isValid()) {
+                    $response->setStatusCode(422);
+                    break;
+                }
+            }
+        }
+
+        $response->setContent($content);
 
         return $response;
     }

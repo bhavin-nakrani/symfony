@@ -11,12 +11,13 @@
 
 namespace Symfony\Component\Intl\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Intl\Exception\MissingResourceException;
 use Symfony\Component\Intl\Scripts;
+use Symfony\Component\Intl\Util\IntlTestHelper;
 
-/**
- * @group intl-data
- */
+#[Group('intl-data')]
 class ScriptsTest extends ResourceBundleTestCase
 {
     // The below arrays document the state of the ICU data bundled with this package.
@@ -36,6 +37,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Bass',
         'Batk',
         'Beng',
+        'Berf',
         'Bhks',
         'Blis',
         'Bopo',
@@ -66,6 +68,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Elba',
         'Elym',
         'Ethi',
+        'Gara',
         'Geok',
         'Geor',
         'Glag',
@@ -75,6 +78,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Gran',
         'Grek',
         'Gujr',
+        'Gukh',
         'Guru',
         'Hanb',
         'Hang',
@@ -106,6 +110,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Knda',
         'Kore',
         'Kpel',
+        'Krai',
         'Kthi',
         'Lana',
         'Laoo',
@@ -148,6 +153,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Nshu',
         'Ogam',
         'Olck',
+        'Onao',
         'Orkh',
         'Orya',
         'Osge',
@@ -176,6 +182,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Shaw',
         'Shrd',
         'Sidd',
+        'Sidt',
         'Sind',
         'Sinh',
         'Sogd',
@@ -183,6 +190,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Sora',
         'Soyo',
         'Sund',
+        'Sunu',
         'Sylo',
         'Syrc',
         'Syre',
@@ -195,6 +203,7 @@ class ScriptsTest extends ResourceBundleTestCase
         'Taml',
         'Tang',
         'Tavt',
+        'Tayo',
         'Telu',
         'Teng',
         'Tfng',
@@ -204,7 +213,10 @@ class ScriptsTest extends ResourceBundleTestCase
         'Tibt',
         'Tirh',
         'Tnsa',
+        'Todr',
+        'Tols',
         'Toto',
+        'Tutg',
         'Ugar',
         'Vaii',
         'Visp',
@@ -230,11 +242,13 @@ class ScriptsTest extends ResourceBundleTestCase
         $this->assertSame(self::$scripts, Scripts::getScriptCodes());
     }
 
-    /**
-     * @dataProvider provideLocales
-     */
+    #[DataProvider('provideLocales')]
     public function testGetNames($displayLocale)
     {
+        if ('en' !== $displayLocale) {
+            IntlTestHelper::requireFullIntl($this);
+        }
+
         $scripts = array_keys(Scripts::getNames($displayLocale));
 
         sort($scripts);
@@ -242,32 +256,38 @@ class ScriptsTest extends ResourceBundleTestCase
         // We can't assert on exact list of scripts, as there's too many variations between locales.
         // The best we can do is to make sure getNames() returns a subset of what getScripts() returns.
         $this->assertNotEmpty($scripts);
-        $this->assertEmpty(array_diff($scripts, self::$scripts));
+        $this->assertSame([], array_diff($scripts, self::$scripts));
     }
 
     public function testGetNamesDefaultLocale()
     {
+        IntlTestHelper::requireFullIntl($this);
+
         \Locale::setDefault('de_AT');
 
         $this->assertSame(Scripts::getNames('de_AT'), Scripts::getNames());
     }
 
-    /**
-     * @dataProvider provideLocaleAliases
-     */
+    #[DataProvider('provideLocaleAliases')]
     public function testGetNamesSupportsAliases($alias, $ofLocale)
     {
+        if ('en' !== $ofLocale) {
+            IntlTestHelper::requireFullIntl($this);
+        }
+
         // Can't use assertSame(), because some aliases contain scripts with
         // different collation (=order of output) than their aliased locale
         // e.g. sr_Latn_ME => sr_ME
         $this->assertEquals(Scripts::getNames($ofLocale), Scripts::getNames($alias));
     }
 
-    /**
-     * @dataProvider provideLocales
-     */
+    #[DataProvider('provideLocales')]
     public function testGetName($displayLocale)
     {
+        if ('en' !== $displayLocale) {
+            IntlTestHelper::requireFullIntl($this);
+        }
+
         $names = Scripts::getNames($displayLocale);
 
         foreach ($names as $script => $name) {
@@ -277,6 +297,8 @@ class ScriptsTest extends ResourceBundleTestCase
 
     public function testGetNameDefaultLocale()
     {
+        IntlTestHelper::requireFullIntl($this);
+
         \Locale::setDefault('de_AT');
 
         $names = Scripts::getNames('de_AT');

@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Console\Tests\Descriptor;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -18,34 +19,42 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputDefinition;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Tests\Fixtures\DescriptorCommand5;
 
 abstract class AbstractDescriptorTestCase extends TestCase
 {
-    /** @dataProvider getDescribeInputArgumentTestData */
+    #[DataProvider('getDescribeInputArgumentTestData')]
     public function testDescribeInputArgument(InputArgument $argument, $expectedDescription)
     {
         $this->assertDescription($expectedDescription, $argument);
     }
 
-    /** @dataProvider getDescribeInputOptionTestData */
+    #[DataProvider('getDescribeInputOptionTestData')]
     public function testDescribeInputOption(InputOption $option, $expectedDescription)
     {
         $this->assertDescription($expectedDescription, $option);
     }
 
-    /** @dataProvider getDescribeInputDefinitionTestData */
+    #[DataProvider('getDescribeInputDefinitionTestData')]
     public function testDescribeInputDefinition(InputDefinition $definition, $expectedDescription)
     {
         $this->assertDescription($expectedDescription, $definition);
     }
 
-    /** @dataProvider getDescribeCommandTestData */
+    #[DataProvider('getDescribeCommandTestData')]
     public function testDescribeCommand(Command $command, $expectedDescription)
     {
         $this->assertDescription($expectedDescription, $command);
     }
 
-    /** @dataProvider getDescribeApplicationTestData */
+    public function testDescribeCommandWithHiddenOptions()
+    {
+        [$command, $expectedDescription] = static::getDescriptionTestData(['command_5_with_hidden_options' => new DescriptorCommand5()])[0];
+
+        $this->assertDescription($expectedDescription, $command, ['show-hidden-options' => true]);
+    }
+
+    #[DataProvider('getDescribeApplicationTestData')]
     public function testDescribeApplication(Application $application, $expectedDescription)
     {
         // the "completion" command has dynamic help information depending on the shell
@@ -87,7 +96,7 @@ abstract class AbstractDescriptorTestCase extends TestCase
     {
         $data = [];
         foreach ($objects as $name => $object) {
-            $description = file_get_contents(sprintf('%s/../Fixtures/%s.%s', __DIR__, $name, static::getFormat()));
+            $description = file_get_contents(\sprintf('%s/../Fixtures/%s.%s', __DIR__, $name, static::getFormat()));
             $data[] = [$object, $description];
         }
 

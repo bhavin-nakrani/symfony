@@ -138,11 +138,11 @@ class MessageCatalogueTest extends TestCase
 
     public function testAddCatalogue()
     {
-        $r = $this->createMock(ResourceInterface::class);
-        $r->expects($this->any())->method('__toString')->willReturn('r');
+        $r = $this->createStub(ResourceInterface::class);
+        $r->method('__toString')->willReturn('r');
 
-        $r1 = $this->createMock(ResourceInterface::class);
-        $r1->expects($this->any())->method('__toString')->willReturn('r1');
+        $r1 = $this->createStub(ResourceInterface::class);
+        $r1->method('__toString')->willReturn('r1');
 
         $catalogue = new MessageCatalogue('en', ['domain1' => ['foo' => 'foo']]);
         $catalogue->addResource($r);
@@ -162,14 +162,14 @@ class MessageCatalogueTest extends TestCase
 
     public function testAddFallbackCatalogue()
     {
-        $r = $this->createMock(ResourceInterface::class);
-        $r->expects($this->any())->method('__toString')->willReturn('r');
+        $r = $this->createStub(ResourceInterface::class);
+        $r->method('__toString')->willReturn('r');
 
-        $r1 = $this->createMock(ResourceInterface::class);
-        $r1->expects($this->any())->method('__toString')->willReturn('r1');
+        $r1 = $this->createStub(ResourceInterface::class);
+        $r1->method('__toString')->willReturn('r1');
 
-        $r2 = $this->createMock(ResourceInterface::class);
-        $r2->expects($this->any())->method('__toString')->willReturn('r2');
+        $r2 = $this->createStub(ResourceInterface::class);
+        $r2->method('__toString')->willReturn('r2');
 
         $catalogue = new MessageCatalogue('fr_FR', ['domain1' => ['foo' => 'foo'], 'domain2' => ['bar' => 'bar']]);
         $catalogue->addResource($r);
@@ -191,42 +191,48 @@ class MessageCatalogueTest extends TestCase
 
     public function testAddFallbackCatalogueWithParentCircularReference()
     {
-        $this->expectException(LogicException::class);
         $main = new MessageCatalogue('en_US');
         $fallback = new MessageCatalogue('fr_FR');
 
         $fallback->addFallbackCatalogue($main);
+
+        $this->expectException(LogicException::class);
+
         $main->addFallbackCatalogue($fallback);
     }
 
     public function testAddFallbackCatalogueWithFallbackCircularReference()
     {
-        $this->expectException(LogicException::class);
         $fr = new MessageCatalogue('fr');
         $en = new MessageCatalogue('en');
         $es = new MessageCatalogue('es');
 
         $fr->addFallbackCatalogue($en);
         $es->addFallbackCatalogue($en);
+
+        $this->expectException(LogicException::class);
+
         $en->addFallbackCatalogue($fr);
     }
 
     public function testAddCatalogueWhenLocaleIsNotTheSameAsTheCurrentOne()
     {
-        $this->expectException(LogicException::class);
         $catalogue = new MessageCatalogue('en');
+
+        $this->expectException(LogicException::class);
+
         $catalogue->addCatalogue(new MessageCatalogue('fr', []));
     }
 
     public function testGetAddResource()
     {
         $catalogue = new MessageCatalogue('en');
-        $r = $this->createMock(ResourceInterface::class);
-        $r->expects($this->any())->method('__toString')->willReturn('r');
+        $r = $this->createStub(ResourceInterface::class);
+        $r->method('__toString')->willReturn('r');
         $catalogue->addResource($r);
         $catalogue->addResource($r);
-        $r1 = $this->createMock(ResourceInterface::class);
-        $r1->expects($this->any())->method('__toString')->willReturn('r1');
+        $r1 = $this->createStub(ResourceInterface::class);
+        $r1->method('__toString')->willReturn('r1');
         $catalogue->addResource($r1);
 
         $this->assertEquals([$r, $r1], $catalogue->getResources());

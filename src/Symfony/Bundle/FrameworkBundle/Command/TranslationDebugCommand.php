@@ -50,27 +50,18 @@ class TranslationDebugCommand extends Command
     public const MESSAGE_UNUSED = 1;
     public const MESSAGE_EQUALS_FALLBACK = 2;
 
-    private TranslatorInterface $translator;
-    private TranslationReaderInterface $reader;
-    private ExtractorInterface $extractor;
-    private ?string $defaultTransPath;
-    private ?string $defaultViewsPath;
-    private array $transPaths;
-    private array $codePaths;
-    private array $enabledLocales;
-
-    public function __construct(TranslatorInterface $translator, TranslationReaderInterface $reader, ExtractorInterface $extractor, string $defaultTransPath = null, string $defaultViewsPath = null, array $transPaths = [], array $codePaths = [], array $enabledLocales = [])
-    {
+    public function __construct(
+        private TranslatorInterface $translator,
+        private TranslationReaderInterface $reader,
+        private ExtractorInterface $extractor,
+        private ?string $defaultTransPath = null,
+        private ?string $defaultViewsPath = null,
+        private array $transPaths = [],
+        private array $codePaths = [],
+        private array $enabledLocales = [],
+    ) {
+        $this->enabledLocales = array_filter($enabledLocales);
         parent::__construct();
-
-        $this->translator = $translator;
-        $this->reader = $reader;
-        $this->extractor = $extractor;
-        $this->defaultTransPath = $defaultTransPath;
-        $this->defaultViewsPath = $defaultViewsPath;
-        $this->transPaths = $transPaths;
-        $this->codePaths = $codePaths;
-        $this->enabledLocales = $enabledLocales;
     }
 
     protected function configure(): void
@@ -79,41 +70,41 @@ class TranslationDebugCommand extends Command
             ->setDefinition([
                 new InputArgument('locale', InputArgument::REQUIRED, 'The locale'),
                 new InputArgument('bundle', InputArgument::OPTIONAL, 'The bundle name or directory where to load the messages'),
-                new InputOption('domain', null, InputOption::VALUE_OPTIONAL, 'The messages domain'),
+                new InputOption('domain', null, InputOption::VALUE_REQUIRED, 'The messages domain'),
                 new InputOption('only-missing', null, InputOption::VALUE_NONE, 'Display only missing messages'),
                 new InputOption('only-unused', null, InputOption::VALUE_NONE, 'Display only unused messages'),
                 new InputOption('all', null, InputOption::VALUE_NONE, 'Load messages from all registered bundles'),
             ])
             ->setHelp(<<<'EOF'
-The <info>%command.name%</info> command helps finding unused or missing translation
-messages and comparing them with the fallback ones by inspecting the
-templates and translation files of a given bundle or the default translations directory.
+                The <info>%command.name%</info> command helps finding unused or missing translation
+                messages and comparing them with the fallback ones by inspecting the
+                templates and translation files of a given bundle or the default translations directory.
 
-You can display information about bundle translations in a specific locale:
+                You can display information about bundle translations in a specific locale:
 
-  <info>php %command.full_name% en AcmeDemoBundle</info>
+                  <info>php %command.full_name% en AcmeDemoBundle</info>
 
-You can also specify a translation domain for the search:
+                You can also specify a translation domain for the search:
 
-  <info>php %command.full_name% --domain=messages en AcmeDemoBundle</info>
+                  <info>php %command.full_name% --domain=messages en AcmeDemoBundle</info>
 
-You can only display missing messages:
+                You can only display missing messages:
 
-  <info>php %command.full_name% --only-missing en AcmeDemoBundle</info>
+                  <info>php %command.full_name% --only-missing en AcmeDemoBundle</info>
 
-You can only display unused messages:
+                You can only display unused messages:
 
-  <info>php %command.full_name% --only-unused en AcmeDemoBundle</info>
+                  <info>php %command.full_name% --only-unused en AcmeDemoBundle</info>
 
-You can display information about application translations in a specific locale:
+                You can display information about application translations in a specific locale:
 
-  <info>php %command.full_name% en</info>
+                  <info>php %command.full_name% en</info>
 
-You can display information about translations in all registered bundles in a specific locale:
+                You can display information about translations in all registered bundles in a specific locale:
 
-  <info>php %command.full_name% --all en</info>
+                  <info>php %command.full_name% --all en</info>
 
-EOF
+                EOF
             )
         ;
     }
@@ -155,7 +146,7 @@ EOF
                 $codePaths = [$path.'/templates'];
 
                 if (!is_dir($transPaths[0])) {
-                    throw new InvalidArgumentException(sprintf('"%s" is neither an enabled bundle nor a directory.', $transPaths[0]));
+                    throw new InvalidArgumentException(\sprintf('"%s" is neither an enabled bundle nor a directory.', $transPaths[0]));
                 }
             }
         } elseif ($input->getOption('all')) {
@@ -181,10 +172,10 @@ EOF
 
         // No defined or extracted messages
         if (!$allMessages || null !== $domain && empty($allMessages[$domain])) {
-            $outputMessage = sprintf('No defined or extracted messages for locale "%s"', $locale);
+            $outputMessage = \sprintf('No defined or extracted messages for locale "%s"', $locale);
 
             if (null !== $domain) {
-                $outputMessage .= sprintf(' and domain "%s"', $domain);
+                $outputMessage .= \sprintf(' and domain "%s"', $domain);
             }
 
             $io->getErrorStyle()->warning($outputMessage);
@@ -196,9 +187,9 @@ EOF
         $fallbackCatalogues = $this->loadFallbackCatalogues($locale, $transPaths);
 
         // Display header line
-        $headers = ['State', 'Domain', 'Id', sprintf('Message Preview (%s)', $locale)];
+        $headers = ['State', 'Domain', 'Id', \sprintf('Message Preview (%s)', $locale)];
         foreach ($fallbackCatalogues as $fallbackCatalogue) {
-            $headers[] = sprintf('Fallback Message Preview (%s)', $fallbackCatalogue->getLocale());
+            $headers[] = \sprintf('Fallback Message Preview (%s)', $fallbackCatalogue->getLocale());
         }
         $rows = [];
         // Iterate all message ids and determine their state
@@ -212,19 +203,19 @@ EOF
                         $states[] = self::MESSAGE_MISSING;
 
                         if (!$input->getOption('only-unused')) {
-                            $exitCode = $exitCode | self::EXIT_CODE_MISSING;
+                            $exitCode |= self::EXIT_CODE_MISSING;
                         }
                     }
                 } elseif ($currentCatalogue->defines($messageId, $domain)) {
                     $states[] = self::MESSAGE_UNUSED;
 
                     if (!$input->getOption('only-missing')) {
-                        $exitCode = $exitCode | self::EXIT_CODE_UNUSED;
+                        $exitCode |= self::EXIT_CODE_UNUSED;
                     }
                 }
 
-                if (!\in_array(self::MESSAGE_UNUSED, $states) && $input->getOption('only-unused')
-                    || !\in_array(self::MESSAGE_MISSING, $states) && $input->getOption('only-missing')
+                if (!\in_array(self::MESSAGE_UNUSED, $states, true) && $input->getOption('only-unused')
+                    || !\in_array(self::MESSAGE_MISSING, $states, true) && $input->getOption('only-missing')
                 ) {
                     continue;
                 }
@@ -233,7 +224,7 @@ EOF
                     if ($fallbackCatalogue->defines($messageId, $domain) && $value === $fallbackCatalogue->get($messageId, $domain)) {
                         $states[] = self::MESSAGE_EQUALS_FALLBACK;
 
-                        $exitCode = $exitCode | self::EXIT_CODE_FALLBACK;
+                        $exitCode |= self::EXIT_CODE_FALLBACK;
 
                         break;
                     }
@@ -320,7 +311,7 @@ EOF
 
     private function formatId(string $id): string
     {
-        return sprintf('<fg=cyan;options=bold>%s</>', $id);
+        return \sprintf('<fg=cyan;options=bold>%s</>', $id);
     }
 
     private function sanitizeString(string $string, int $length = 40): string

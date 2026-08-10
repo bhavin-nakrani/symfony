@@ -20,12 +20,23 @@ use Symfony\Component\Workflow\WorkflowInterface;
 /**
  * @author Fabien Potencier <fabien@symfony.com>
  * @author Grégoire Pineau <lyrixx@lyrixx.info>
+ *
+ * @template T of object
+ *
+ * @extends Event<T>
  */
 final class GuardEvent extends Event
 {
+    use EventNameTrait {
+        getNameForTransition as public getName;
+    }
+
     private TransitionBlockerList $transitionBlockerList;
 
-    public function __construct(object $subject, Marking $marking, Transition $transition, WorkflowInterface $workflow = null)
+    /**
+     * @param T $subject
+     */
+    public function __construct(object $subject, Marking $marking, Transition $transition, ?WorkflowInterface $workflow = null)
     {
         parent::__construct($subject, $marking, $transition, $workflow);
 
@@ -42,7 +53,7 @@ final class GuardEvent extends Event
         return !$this->transitionBlockerList->isEmpty();
     }
 
-    public function setBlocked(bool $blocked, string $message = null): void
+    public function setBlocked(bool $blocked, ?string $message = null): void
     {
         if (!$blocked) {
             $this->transitionBlockerList->clear();

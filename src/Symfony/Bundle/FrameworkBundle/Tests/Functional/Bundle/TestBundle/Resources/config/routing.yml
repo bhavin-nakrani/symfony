@@ -61,9 +61,17 @@ send_email:
     path:     /send_email
     defaults: { _controller: Symfony\Bundle\FrameworkBundle\Tests\Functional\Bundle\TestBundle\Controller\EmailController::indexAction }
 
+http_client_call:
+    path:     /http_client_call
+    defaults: { _controller: Symfony\Bundle\FrameworkBundle\Tests\Functional\Bundle\TestBundle\Controller\HttpClientController::index }
+
+http_client_mock:
+    path:     /http_client_mock
+    defaults: { _controller: Symfony\Bundle\FrameworkBundle\Tests\Functional\Bundle\TestBundle\Controller\HttpClientMockingController }
+
 uid:
     resource: "../../Controller/UidController.php"
-    type: "annotation"
+    type: "attribute"
 
 send_notification:
     path:     /send_notification

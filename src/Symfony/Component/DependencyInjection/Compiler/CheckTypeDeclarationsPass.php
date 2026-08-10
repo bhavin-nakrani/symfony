@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\DependencyInjection\Compiler;
 
+use Symfony\Component\DependencyInjection\Argument\EnvClosure;
+use Symfony\Component\DependencyInjection\Argument\EnvClosureArgument;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\RewindableGenerator;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
@@ -61,9 +63,6 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         'string' => true,
     ];
 
-    private bool $autoload;
-    private array $skippedIds;
-
     private ExpressionLanguage $expressionLanguage;
 
     /**
@@ -71,15 +70,15 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
      *                          Defaults to false to save loading code during compilation.
      * @param array $skippedIds An array indexed by the service ids to skip
      */
-    public function __construct(bool $autoload = false, array $skippedIds = [])
-    {
-        $this->autoload = $autoload;
-        $this->skippedIds = $skippedIds;
+    public function __construct(
+        private bool $autoload = false,
+        private array $skippedIds = [],
+    ) {
     }
 
     protected function processValue(mixed $value, bool $isRoot = false): mixed
     {
-        if (isset($this->skippedIds[$this->currentId])) {
+        if (isset($this->skippedIds[$this->currentId ?? ''])) {
             return $value;
         }
 
@@ -129,7 +128,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         $numberOfRequiredParameters = $reflectionFunction->getNumberOfRequiredParameters();
 
         if (\count($values) < $numberOfRequiredParameters) {
-            throw new InvalidArgumentException(sprintf('Invalid definition for service "%s": "%s::%s()" requires %d arguments, %d passed.', $this->currentId, $reflectionFunction->class, $reflectionFunction->name, $numberOfRequiredParameters, \count($values)));
+            throw new InvalidArgumentException(\sprintf('Invalid definition for service "%s": "%s::%s()" requires %d arguments, %d passed.', $this->currentId, $reflectionFunction->class, $reflectionFunction->name, $numberOfRequiredParameters, \count($values)));
         }
 
         $reflectionParameters = $reflectionFunction->getParameters();
@@ -142,13 +141,14 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
             if (!$p->hasType() || $p->isVariadic()) {
                 continue;
             }
+            $key = $i;
             if (\array_key_exists($p->name, $values)) {
-                $i = $p->name;
+                $key = $p->name;
             } elseif (!\array_key_exists($i, $values)) {
                 continue;
             }
 
-            $this->checkType($checkedDefinition, $values[$i], $p, $envPlaceholderUniquePrefix);
+            $this->checkType($checkedDefinition, $values[$key], $p, $envPlaceholderUniquePrefix);
         }
 
         if ($reflectionFunction->isVariadic() && ($lastParameter = end($reflectionParameters))->hasType()) {
@@ -163,7 +163,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
     /**
      * @throws InvalidParameterTypeException When a parameter is not compatible with the declared type
      */
-    private function checkType(Definition $checkedDefinition, mixed $value, \ReflectionParameter $parameter, ?string $envPlaceholderUniquePrefix, \ReflectionType $reflectionType = null): void
+    private function checkType(Definition $checkedDefinition, mixed $value, \ReflectionParameter $parameter, ?string $envPlaceholderUniquePrefix, ?\ReflectionType $reflectionType = null): void
     {
         $reflectionType ??= $parameter->getType();
 
@@ -205,7 +205,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
         }
 
         if ('self' === $type) {
-            $type = $parameter->getDeclaringClass()->getName();
+            $type = $parameter->getDeclaringClass()->name;
         }
 
         if ('static' === $type) {
@@ -263,6 +263,8 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
                 $class = RewindableGenerator::class;
             } elseif ($value instanceof ServiceClosureArgument) {
                 $class = \Closure::class;
+            } elseif ($value instanceof EnvClosureArgument) {
+                $class = $value->isStringable() ? EnvClosure::class : \Closure::class;
             } elseif ($value instanceof ServiceLocatorArgument) {
                 $class = ServiceLocator::class;
             } elseif (\is_object($value)) {
@@ -277,7 +279,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
             return;
         }
 
-        if ('string' === $type && method_exists($class, '__toString')) {
+        if ('string' === $type && is_a($class, \Stringable::class, true)) {
             return;
         }
 
@@ -318,7 +320,7 @@ final class CheckTypeDeclarationsPass extends AbstractRecursivePass
                 return;
             }
         } elseif ($reflectionType->isBuiltin()) {
-            $checkFunction = sprintf('is_%s', $type);
+            $checkFunction = \sprintf('is_%s', $type);
             if ($checkFunction($value)) {
                 return;
             }

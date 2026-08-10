@@ -11,11 +11,12 @@
 
 namespace Symfony\Component\Serializer\Tests\Normalizer\Features;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\PropertyInfo\Extractor\PhpDocExtractor;
-use Symfony\Component\Serializer\Annotation\Context;
-use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Attribute\Context;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactory;
-use Symfony\Component\Serializer\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Serializer\Mapping\Loader\AttributeLoader;
 use Symfony\Component\Serializer\NameConverter\CamelCaseToSnakeCaseNameConverter;
 use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
@@ -28,12 +29,10 @@ use Symfony\Component\Serializer\Serializer;
  */
 trait ContextMetadataTestTrait
 {
-    /**
-     * @dataProvider contextMetadataDummyProvider
-     */
+    #[DataProvider('contextMetadataDummyProvider')]
     public function testContextMetadataNormalize(string $contextMetadataDummyClass)
     {
-        $classMetadataFactory = new ClassMetadataFactory(new AnnotationLoader());
+        $classMetadataFactory = new ClassMetadataFactory(new AttributeLoader());
         $normalizer = new ObjectNormalizer($classMetadataFactory, null, null, new PhpDocExtractor());
         new Serializer([new DateTimeNormalizer(), $normalizer]);
 
@@ -51,12 +50,10 @@ trait ContextMetadataTestTrait
         ]), 'base denormalization context is unchanged for this group');
     }
 
-    /**
-     * @dataProvider contextMetadataDummyProvider
-     */
+    #[DataProvider('contextMetadataDummyProvider')]
     public function testContextMetadataContextDenormalize(string $contextMetadataDummyClass)
     {
-        $classMetadataFactory = new ClassMetadataFactory(new AnnotationLoader());
+        $classMetadataFactory = new ClassMetadataFactory(new AttributeLoader());
         $normalizer = new ObjectNormalizer($classMetadataFactory, null, null, new PhpDocExtractor());
         new Serializer([new DateTimeNormalizer(), $normalizer]);
 
@@ -77,17 +74,18 @@ trait ContextMetadataTestTrait
         self::assertEquals('2011-07-28', $dummy->date->format('Y-m-d'), 'a specific denormalization context is used for this group');
     }
 
-    public function contextMetadataDummyProvider(): array
+    public static function contextMetadataDummyProvider(): array
     {
         return [
             [ContextMetadataDummy::class],
             [ContextChildMetadataDummy::class],
+            [ClassAndPropertyContextMetadataDummy::class],
         ];
     }
 
     public function testContextDenormalizeWithNameConverter()
     {
-        $classMetadataFactory = new ClassMetadataFactory(new AnnotationLoader());
+        $classMetadataFactory = new ClassMetadataFactory(new AttributeLoader());
         $normalizer = new ObjectNormalizer($classMetadataFactory, new CamelCaseToSnakeCaseNameConverter(), null, new PhpDocExtractor());
         new Serializer([new DateTimeNormalizer(), $normalizer]);
 
@@ -100,7 +98,7 @@ trait ContextMetadataTestTrait
 class ContextMetadataDummy
 {
     /**
-     * @var \DateTime
+     * @var \DateTimeImmutable
      */
     #[Groups(['extended', 'simple'])]
     #[Context([DateTimeNormalizer::FORMAT_KEY => \DateTimeInterface::RFC3339])]
@@ -118,7 +116,7 @@ class ContextMetadataDummy
 class ContextChildMetadataDummy
 {
     /**
-     * @var \DateTime
+     * @var \DateTimeImmutable
      */
     #[Groups(['extended', 'simple'])]
     #[DummyContextChild([DateTimeNormalizer::FORMAT_KEY => \DateTimeInterface::RFC3339])]
@@ -133,10 +131,28 @@ class ContextChildMetadataDummy
     public $date;
 }
 
+#[Context(context: [DateTimeNormalizer::FORMAT_KEY => \DateTimeInterface::RFC3339])]
+#[Context(
+    context: [DateTimeNormalizer::FORMAT_KEY => \DateTimeInterface::RFC3339_EXTENDED],
+    groups: ['extended'],
+)]
+class ClassAndPropertyContextMetadataDummy
+{
+    /**
+     * @var \DateTimeImmutable
+     */
+    #[Groups(['extended', 'simple'])]
+    #[Context(
+        denormalizationContext: [DateTimeNormalizer::FORMAT_KEY => 'd/m/Y'],
+        groups: ['simple'],
+    )]
+    public $date;
+}
+
 class ContextMetadataNamingDummy
 {
     /**
-     * @var \DateTime
+     * @var \DateTimeImmutable
      */
     #[Context([DateTimeNormalizer::FORMAT_KEY => 'd/m/Y'])]
     public $createdAt;

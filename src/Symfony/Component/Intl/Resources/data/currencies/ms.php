@@ -372,7 +372,7 @@ return [
         ],
         'MMK' => [
             'MMK',
-            'Kyat Myanma',
+            'Kyat Myanmar',
         ],
         'MNT' => [
             'MNT',
@@ -530,9 +530,13 @@ return [
             'SHP',
             'Paun Saint Helena',
         ],
+        'SLE' => [
+            'SLE',
+            'Leone Sierra Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Leone Sierra Leone',
+            'Leone Sierra Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -650,6 +654,10 @@ return [
             'EC$',
             'Dolar Caribbean Timur',
         ],
+        'XCG' => [
+            'Cg.',
+            'Guilder Caribbean',
+        ],
         'XOF' => [
             'F CFA',
             'Franc CFA BCEAO',
@@ -677,6 +685,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Dolar Zimbabwe (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Emas Zimbabwe',
         ],
         'ZWL' => [
             'ZWL',

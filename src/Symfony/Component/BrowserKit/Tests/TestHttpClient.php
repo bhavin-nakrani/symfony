@@ -23,7 +23,7 @@ class TestHttpClient extends HttpBrowser
     protected ?Response $nextResponse = null;
     protected string $nextScript;
 
-    public function __construct(array $server = [], History $history = null, CookieJar $cookieJar = null)
+    public function __construct(array $server = [], ?History $history = null, ?CookieJar $cookieJar = null)
     {
         $client = new MockHttpClient(function (string $method, string $url, array $options) {
             if (null === $this->nextResponse) {
@@ -70,11 +70,11 @@ class TestHttpClient extends HttpBrowser
         $path = $r->getFileName();
 
         return <<<EOF
-<?php
+            <?php
 
-require_once('$path');
+            require_once('$path');
 
-echo serialize($this->nextScript);
-EOF;
+            echo serialize($this->nextScript);
+            EOF;
     }
 }

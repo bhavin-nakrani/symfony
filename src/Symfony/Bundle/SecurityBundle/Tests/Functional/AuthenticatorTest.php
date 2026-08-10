@@ -11,26 +11,11 @@
 
 namespace Symfony\Bundle\SecurityBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+
 class AuthenticatorTest extends AbstractWebTestCase
 {
-    /**
-     * @group legacy
-     *
-     * @dataProvider provideEmails
-     */
-    public function testLegacyGlobalUserProvider($email)
-    {
-        $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'implicit_user_provider.yml']);
-
-        $client->request('GET', '/profile', [], [], [
-            'HTTP_X-USER-EMAIL' => $email,
-        ]);
-        $this->assertJsonStringEqualsJsonString('{"email":"'.$email.'"}', $client->getResponse()->getContent());
-    }
-
-    /**
-     * @dataProvider provideEmails
-     */
+    #[DataProvider('provideEmails')]
     public function testFirewallUserProvider($email, $withinFirewall)
     {
         $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'firewall_user_provider.yml']);
@@ -46,10 +31,8 @@ class AuthenticatorTest extends AbstractWebTestCase
         }
     }
 
-    /**
-     * @dataProvider provideEmails
-     */
-    public function testWithoutUserProvider($email)
+    #[DataProvider('provideEmails')]
+    public function testWithoutUserProvider($email, $withinFirewall)
     {
         $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'no_user_provider.yml']);
 
@@ -60,15 +43,13 @@ class AuthenticatorTest extends AbstractWebTestCase
         $this->assertJsonStringEqualsJsonString('{"email":"'.$email.'"}', $client->getResponse()->getContent());
     }
 
-    public static function provideEmails()
+    public static function provideEmails(): iterable
     {
         yield ['jane@example.org', true];
         yield ['john@example.org', false];
     }
 
-    /**
-     * @dataProvider provideEmailsWithFirewalls
-     */
+    #[DataProvider('provideEmailsWithFirewalls')]
     public function testLoginUsersWithMultipleFirewalls(string $username, string $firewallContext)
     {
         $client = $this->createClient(['test_case' => 'Authenticator', 'root_config' => 'multiple_firewall_user_provider.yml']);
@@ -84,7 +65,7 @@ class AuthenticatorTest extends AbstractWebTestCase
         $this->assertEquals('Welcome '.$username.'!', $client->getResponse()->getContent());
     }
 
-    public static function provideEmailsWithFirewalls()
+    public static function provideEmailsWithFirewalls(): iterable
     {
         yield ['jane@example.org', 'main'];
         yield ['john@example.org', 'custom'];
@@ -126,13 +107,13 @@ class AuthenticatorTest extends AbstractWebTestCase
 
         $client->request('POST', '/firewall1/login', [
             '_username' => 'jane@example.org',
-            '_password' => '',
+            '_password' => 'wrong',
         ]);
         $this->assertResponseRedirects('http://localhost/firewall1/login');
 
         $client->request('POST', '/firewall1/dummy_login', [
             '_username' => 'jane@example.org',
-            '_password' => '',
+            '_password' => 'wrong',
         ]);
         $this->assertResponseRedirects('http://localhost/firewall1/dummy_login');
     }

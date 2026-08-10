@@ -11,8 +11,9 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Console\Descriptor;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Console\Descriptor\TextDescriptor;
-use Symfony\Component\HttpKernel\Debug\FileLinkFormatter;
+use Symfony\Component\ErrorHandler\ErrorRenderer\FileLinkFormatter;
 use Symfony\Component\Routing\Route;
 
 class TextDescriptorTest extends AbstractDescriptorTestCase
@@ -35,7 +36,7 @@ class TextDescriptorTest extends AbstractDescriptorTestCase
 
         foreach ($getDescribeData as $key => &$data) {
             $routeStub = $data[0];
-            $routeStub->setDefault('_controller', sprintf('%s::%s', MyController::class, '__invoke'));
+            $routeStub->setDefault('_controller', \sprintf('%s::%s', MyController::class, '__invoke'));
             $file = $data[2];
             $file = preg_replace('#(\..*?)$#', '_link$1', $file);
             $data = file_get_contents(__DIR__.'/../../Fixtures/Descriptor/'.$file);
@@ -45,11 +46,20 @@ class TextDescriptorTest extends AbstractDescriptorTestCase
         return $getDescribeData;
     }
 
-    /** @dataProvider getDescribeRouteWithControllerLinkTestData */
-    public function testDescribeRouteWithControllerLink(Route $route, $expectedDescription)
+    #[DataProvider('getDescribeRouteWithControllerLinkTestData')]
+    public function testDescribeRouteWithControllerLink(Route $route, $expectedDescription, $file)
     {
         static::$fileLinkFormatter = new FileLinkFormatter('myeditor://open?file=%f&line=%l');
-        parent::testDescribeRoute($route, str_replace('[:file:]', __FILE__, $expectedDescription));
+        $expectedDescription = str_replace('[:file:]', __FILE__, $expectedDescription);
+        $expectedDescription = str_replace('[:line:]', (new \ReflectionMethod(MyController::class, '__invoke'))->getStartLine(), $expectedDescription);
+        parent::testDescribeRoute($route, $expectedDescription, $file);
+    }
+
+    protected function normalizeOutput(string $output): string
+    {
+        $output = str_replace(\PHP_EOL, "\n", $output);
+
+        return preg_replace_callback("/\e\[([0-9]+)X\e\[([0-9]+)C/", static fn ($m) => str_repeat(' ', $m[1]), $output);
     }
 }
 

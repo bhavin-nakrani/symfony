@@ -34,7 +34,7 @@ class DefinitionFileLoader extends FileLoader
         parent::__construct($locator);
     }
 
-    public function load(mixed $resource, string $type = null): mixed
+    public function load(mixed $resource, ?string $type = null): mixed
     {
         // the loader variable is exposed to the included file below
         $loader = $this;
@@ -46,18 +46,18 @@ class DefinitionFileLoader extends FileLoader
         // the closure forbids access to the private scope in the included file
         $load = \Closure::bind(static function ($file) use ($loader) {
             return include $file;
-        }, null, ProtectedDefinitionFileLoader::class);
+        }, null, null);
 
         $callback = $load($path);
 
         if (\is_object($callback) && \is_callable($callback)) {
-            $this->executeCallback($callback, new DefinitionConfigurator($this->treeBuilder, $this, $path, $resource), $path);
+            $this->callConfigurator($callback, new DefinitionConfigurator($this->treeBuilder, $this, $path, $resource), $path);
         }
 
         return null;
     }
 
-    public function supports(mixed $resource, string $type = null): bool
+    public function supports(mixed $resource, ?string $type = null): bool
     {
         if (!\is_string($resource)) {
             return false;
@@ -70,7 +70,10 @@ class DefinitionFileLoader extends FileLoader
         return 'php' === $type;
     }
 
-    private function executeCallback(callable $callback, DefinitionConfigurator $configurator, string $path): void
+    /**
+     * @param-immediately-invoked-callable $callback
+     */
+    private function callConfigurator(callable $callback, DefinitionConfigurator $configurator, string $path): void
     {
         $callback = $callback(...);
 
@@ -81,7 +84,7 @@ class DefinitionFileLoader extends FileLoader
             $reflectionType = $parameter->getType();
 
             if (!$reflectionType instanceof \ReflectionNamedType) {
-                throw new \InvalidArgumentException(sprintf('Could not resolve argument "$%s" for "%s". You must typehint it (for example with "%s").', $parameter->getName(), $path, DefinitionConfigurator::class));
+                throw new \InvalidArgumentException(\sprintf('Could not resolve argument "$%s" for "%s". You must typehint it (for example with "%s").', $parameter->getName(), $path, DefinitionConfigurator::class));
             }
 
             $arguments[] = match ($reflectionType->getName()) {

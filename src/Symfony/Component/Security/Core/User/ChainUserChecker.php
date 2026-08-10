@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\Security\Core\User;
 
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+
 final class ChainUserChecker implements UserCheckerInterface
 {
     /**
@@ -27,10 +29,10 @@ final class ChainUserChecker implements UserCheckerInterface
         }
     }
 
-    public function checkPostAuth(UserInterface $user): void
+    public function checkPostAuth(UserInterface $user, ?TokenInterface $token = null): void
     {
         foreach ($this->checkers as $checker) {
-            $checker->checkPostAuth($user);
+            $checker->checkPostAuth($user, $token);
         }
     }
 }

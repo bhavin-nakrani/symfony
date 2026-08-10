@@ -11,8 +11,11 @@
 
 namespace Symfony\Bundle\SecurityBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Bundle\SecurityBundle\Security\FirewallConfig;
+use Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\AuthenticatorBundle\ApiAuthenticator;
 use Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\SecuredPageBundle\Security\Core\User\ArrayUserProvider;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -47,9 +50,25 @@ class SecurityTest extends AbstractWebTestCase
         $this->assertSame('main', $firewallConfig->getName());
     }
 
-    /**
-     * @dataProvider userWillBeMarkedAsChangedIfRolesHasChangedProvider
-     */
+    public function testUserAuthorizationChecker()
+    {
+        $kernel = self::createKernel(['test_case' => 'SecurityHelper', 'root_config' => 'config.yml']);
+        $kernel->boot();
+        $container = $kernel->getContainer();
+
+        $loggedInUser = new InMemoryUser('foo', 'pass', ['ROLE_USER', 'ROLE_FOO']);
+        $offlineUser = new InMemoryUser('bar', 'pass', ['ROLE_USER', 'ROLE_BAR']);
+        $token = new UsernamePasswordToken($loggedInUser, 'provider', $loggedInUser->getRoles());
+        $container->get('functional.test.security.token_storage')->setToken($token);
+
+        $security = $container->get('functional_test.security.helper');
+        $this->assertTrue($security->isGranted('ROLE_FOO'));
+        $this->assertFalse($security->isGranted('ROLE_BAR'));
+        $this->assertTrue($security->isGrantedForUser($offlineUser, 'ROLE_BAR'));
+        $this->assertFalse($security->isGrantedForUser($offlineUser, 'ROLE_FOO'));
+    }
+
+    #[DataProvider('userWillBeMarkedAsChangedIfRolesHasChangedProvider')]
     public function testUserWillBeMarkedAsChangedIfRolesHasChanged(UserInterface $userWithAdminRole, UserInterface $userWithoutAdminRole)
     {
         $client = $this->createClient(['test_case' => 'AbstractTokenCompareRoles', 'root_config' => 'config.yml']);
@@ -76,7 +95,7 @@ class SecurityTest extends AbstractWebTestCase
         $this->assertEquals(302, $client->getResponse()->getStatusCode());
     }
 
-    public static function userWillBeMarkedAsChangedIfRolesHasChangedProvider()
+    public static function userWillBeMarkedAsChangedIfRolesHasChangedProvider(): array
     {
         return [
             [
@@ -90,10 +109,8 @@ class SecurityTest extends AbstractWebTestCase
         ];
     }
 
-    /**
-     * @testWith    ["form_login"]
-     *              ["Symfony\\Bundle\\SecurityBundle\\Tests\\Functional\\Bundle\\AuthenticatorBundle\\ApiAuthenticator"]
-     */
+    #[TestWith(['form_login'])]
+    #[TestWith([ApiAuthenticator::class])]
     public function testLogin(string $authenticator)
     {
         $client = $this->createClient(['test_case' => 'SecurityHelper', 'root_config' => 'config.yml', 'debug' > true]);
@@ -105,6 +122,21 @@ class SecurityTest extends AbstractWebTestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(['message' => 'Welcome @chalasr!'], json_decode($response->getContent(), true));
         $this->assertSame('chalasr', static::getContainer()->get('security.helper')->getUser()->getUserIdentifier());
+    }
+
+    public function testLoginBetweenStatefulFirewalls()
+    {
+        $client = $this->createClient(['test_case' => 'SecurityHelper', 'root_config' => 'config.yml']);
+        $client->loginUser(new InMemoryUser('no-role-username', 'the-password'), 'main');
+
+        static::getContainer()->get(ForceLoginController::class)->firewallName = 'second';
+        $client->request('GET', '/main/force-login');
+
+        $client->request('GET', '/second/logged-in');
+        $this->assertSame(['message' => 'Welcome back @chalasr'], json_decode($client->getResponse()->getContent(), true));
+
+        $client->request('GET', '/main/logged-in');
+        $this->assertSame(['message' => 'Welcome back @no-role-username'], json_decode($client->getResponse()->getContent(), true));
     }
 
     public function testLogout()
@@ -128,13 +160,13 @@ class SecurityTest extends AbstractWebTestCase
         // put a csrf token in the storage
         /** @var EventDispatcherInterface $eventDispatcher */
         $eventDispatcher = static::getContainer()->get(EventDispatcherInterface::class);
-        $setCsrfToken = function (RequestEvent $event) {
+        $setCsrfToken = static function (RequestEvent $event) {
             static::getContainer()->get('security.csrf.token_storage')->setToken('logout', 'bar');
             $event->setResponse(new Response(''));
         };
         $eventDispatcher->addListener(KernelEvents::REQUEST, $setCsrfToken);
         try {
-            $client->request('GET', '/'.uniqid('', true));
+            $client->request('GET', '/not-existent');
         } finally {
             $eventDispatcher->removeListener(KernelEvents::REQUEST, $setCsrfToken);
         }
@@ -207,11 +239,6 @@ final class UserWithoutEquatable implements UserInterface, PasswordAuthenticated
         return '';
     }
 
-    public function getUsername(): string
-    {
-        return $this->username;
-    }
-
     public function getUserIdentifier(): string
     {
         return $this->username;
@@ -237,6 +264,7 @@ final class UserWithoutEquatable implements UserInterface, PasswordAuthenticated
         return $this->enabled;
     }
 
+    #[\Deprecated]
     public function eraseCredentials(): void
     {
     }
@@ -245,6 +273,7 @@ final class UserWithoutEquatable implements UserInterface, PasswordAuthenticated
 class ForceLoginController
 {
     public string $authenticator = 'form_login';
+    public ?string $firewallName = null;
 
     public function __construct(private Security $security)
     {
@@ -253,9 +282,9 @@ class ForceLoginController
     public function welcome()
     {
         $user = new InMemoryUser('chalasr', 'the-password', ['ROLE_FOO']);
-        $this->security->login($user, $this->authenticator);
+        $this->security->login($user, $this->authenticator, $this->firewallName);
 
-        return new JsonResponse(['message' => sprintf('Welcome @%s!', $this->security->getUser()->getUserIdentifier())]);
+        return new JsonResponse(['message' => \sprintf('Welcome @%s!', $this->security->getUser()->getUserIdentifier())]);
     }
 }
 
@@ -279,6 +308,6 @@ class LoggedInController
 {
     public function __invoke(UserInterface $user)
     {
-        return new JsonResponse(['message' => sprintf('Welcome back @%s', $user->getUserIdentifier())]);
+        return new JsonResponse(['message' => \sprintf('Welcome back @%s', $user->getUserIdentifier())]);
     }
 }

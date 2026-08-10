@@ -11,8 +11,11 @@
 
 namespace Symfony\Component\Mime\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Exception\InvalidArgumentException;
+use Symfony\Component\Mime\Exception\RfcComplianceException;
 
 class AddressTest extends TestCase
 {
@@ -32,8 +35,26 @@ class AddressTest extends TestCase
 
     public function testConstructorWithInvalidAddress()
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(RfcComplianceException::class);
         new Address('fab   pot@symfony.com');
+    }
+
+    #[DataProvider('provideAddressesWithControlCharacters')]
+    public function testConstructorRejectsControlCharactersInAddress(string $address)
+    {
+        $this->expectException(InvalidArgumentException::class);
+        new Address($address);
+    }
+
+    public static function provideAddressesWithControlCharacters(): iterable
+    {
+        yield 'CRLF in quoted-string' => ["\"x\r\nBcc: attacker@evil\"@example.com"];
+        yield 'CR only' => ["foo\r@example.com"];
+        yield 'LF only' => ["foo\n@example.com"];
+        yield 'NUL byte' => ["foo\x00@example.com"];
+        yield 'HTAB' => ["foo\t@example.com"];
+        yield 'DEL (0x7F)' => ["foo\x7F@example.com"];
+        yield 'control char in domain' => ["foo@example\x01.com"];
     }
 
     public function testCreate()
@@ -43,9 +64,15 @@ class AddressTest extends TestCase
         $this->assertEquals($a, Address::create('fabien@symfony.com'));
     }
 
-    /**
-     * @dataProvider fromStringProvider
-     */
+    public function testCreateWithInvalidFormat()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Could not parse "<fabien@symfony" to a "Symfony\Component\Mime\Address" instance.');
+
+        Address::create('<fabien@symfony');
+    }
+
+    #[DataProvider('fromStringProvider')]
     public function testCreateWithString($string, $displayName, $addrSpec)
     {
         $address = Address::create($string);
@@ -71,15 +98,20 @@ class AddressTest extends TestCase
         $this->assertEquals([$fabien], Address::createArray(['fabien@symfony.com']));
     }
 
+    public function testUnicodeLocalpart()
+    {
+        /* dømi means example and is reserved by the .fo registry */
+        $this->assertFalse((new Address('info@dømi.fo'))->hasUnicodeLocalpart());
+        $this->assertTrue((new Address('dømi@dømi.fo'))->hasUnicodeLocalpart());
+    }
+
     public function testCreateArrayWrongArg()
     {
         $this->expectException(\TypeError::class);
         Address::createArray([new \stdClass()]);
     }
 
-    /**
-     * @dataProvider nameEmptyDataProvider
-     */
+    #[DataProvider('nameEmptyDataProvider')]
     public function testNameEmpty(string $name)
     {
         $mail = 'mail@example.org';
@@ -151,5 +183,20 @@ class AddressTest extends TestCase
     {
         $address = new Address('fabien@symfony.com', 'Fabien, "Potencier');
         $this->assertSame('"Fabien, \"Potencier" <fabien@symfony.com>', $address->toString());
+    }
+
+    public function testEncodeNameIfNameContainsBackslashes()
+    {
+        $address = new Address('fabien@symfony.com', 'Fabien \ "Potencier');
+        $this->assertSame('"Fabien \\\\ \"Potencier" <fabien@symfony.com>', $address->toString());
+
+        $address = new Address('fabien@symfony.com', 'Fabien\\');
+        $this->assertSame('"Fabien\\\\" <fabien@symfony.com>', $address->toString());
+    }
+
+    public function testEncodeNameIfNameIsNotValidUtf8()
+    {
+        $address = new Address('fabien@symfony.com', "Fabien \xB1 \\ Potencier");
+        $this->assertSame("\"Fabien \xB1 \\\\ Potencier\" <fabien@symfony.com>", $address->toString());
     }
 }

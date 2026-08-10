@@ -12,6 +12,8 @@
 namespace Symfony\Component\Messenger\Bridge\Amqp\Transport;
 
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Transport\CloseableTransportInterface;
+use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
 use Symfony\Component\Messenger\Transport\Receiver\QueueReceiverInterface;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
@@ -22,27 +24,37 @@ use Symfony\Component\Messenger\Transport\TransportInterface;
 /**
  * @author Nicolas Grekas <p@tchwork.com>
  */
-class AmqpTransport implements QueueReceiverInterface, TransportInterface, SetupableTransportInterface, MessageCountAwareInterface
+class AmqpTransport implements QueueReceiverInterface, TransportInterface, SetupableTransportInterface, CloseableTransportInterface, KeepaliveReceiverInterface, MessageCountAwareInterface
 {
     private SerializerInterface $serializer;
-    private Connection $connection;
     private AmqpReceiver $receiver;
     private AmqpSender $sender;
 
-    public function __construct(Connection $connection, SerializerInterface $serializer = null)
-    {
-        $this->connection = $connection;
+    public function __construct(
+        private Connection $connection,
+        ?SerializerInterface $serializer = null,
+    ) {
         $this->serializer = $serializer ?? new PhpSerializer();
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
-        return $this->getReceiver()->get();
+        $fetchSize = \func_num_args() > 0 ? func_get_arg(0) : 1;
+
+        return $this->getReceiver()->get($fetchSize);
     }
 
-    public function getFromQueues(array $queueNames): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function getFromQueues(array $queueNames/* , int $fetchSize = 1 */): iterable
     {
-        return $this->getReceiver()->getFromQueues($queueNames);
+        $fetchSize = \func_num_args() > 1 ? func_get_arg(1) : 1;
+
+        return $this->getReceiver()->getFromQueues($queueNames, $fetchSize);
     }
 
     public function ack(Envelope $envelope): void
@@ -53,6 +65,11 @@ class AmqpTransport implements QueueReceiverInterface, TransportInterface, Setup
     public function reject(Envelope $envelope): void
     {
         $this->getReceiver()->reject($envelope);
+    }
+
+    public function keepalive(Envelope $envelope, ?int $seconds = null): void
+    {
+        $this->getReceiver()->keepalive($envelope, $seconds);
     }
 
     public function send(Envelope $envelope): Envelope
@@ -68,6 +85,11 @@ class AmqpTransport implements QueueReceiverInterface, TransportInterface, Setup
     public function getMessageCount(): int
     {
         return $this->getReceiver()->getMessageCount();
+    }
+
+    public function close(): void
+    {
+        $this->connection->clear();
     }
 
     private function getReceiver(): AmqpReceiver

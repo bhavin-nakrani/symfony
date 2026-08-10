@@ -31,6 +31,7 @@ class NovuNotification extends Notification implements PushNotificationInterface
                 $recipient->getPhone(),
                 $recipient->getAvatar(),
                 $recipient->getLocale(),
+                $recipient->getOverrides(),
                 [],
             ),
         );
@@ -60,9 +61,22 @@ $this->notifier->send(
         null,
         null,
         null,
+        [
+            'email' => [
+                'from' => 'no-reply@toppy.nl',
+                'senderName' => 'No-Reply',
+            ],
+        ],
     ),
 );
 ```
+
+Sponsor
+-------
+
+This package is looking for a [backer][1].
+
+Help Symfony by [sponsoring][3] its development!
 
 Resources
 ---------
@@ -71,3 +85,6 @@ Resources
  * [Report issues](https://github.com/symfony/symfony/issues) and
    [send Pull Requests](https://github.com/symfony/symfony/pulls)
    in the [main Symfony repository](https://github.com/symfony/symfony)
+
+[1]: https://symfony.com/backers
+[3]: https://symfony.com/sponsor

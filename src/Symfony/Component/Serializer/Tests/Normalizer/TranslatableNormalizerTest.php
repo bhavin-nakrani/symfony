@@ -15,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Serializer\Normalizer\TranslatableNormalizer;
 use Symfony\Contracts\Translation\TranslatableInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Symfony\Contracts\Translation\TranslatorTrait;
 
 class TranslatableNormalizerTest extends TestCase
 {
@@ -22,7 +23,7 @@ class TranslatableNormalizerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->normalizer = new TranslatableNormalizer($this->createMock(TranslatorInterface::class));
+        $this->normalizer = new TranslatableNormalizer(new IdentityTranslator());
     }
 
     public function testSupportsNormalization()
@@ -43,7 +44,7 @@ class TranslatableNormalizerTest extends TestCase
     public function testNormalizeWithNormalizationLocalePassedInConstructor()
     {
         $normalizer = new TranslatableNormalizer(
-            $this->createMock(TranslatorInterface::class),
+            new IdentityTranslator(),
             ['translatable_normalization_locale' => 'es'],
         );
         $message = new TestMessage();
@@ -56,8 +57,13 @@ class TranslatableNormalizerTest extends TestCase
 
 class TestMessage implements TranslatableInterface
 {
-    public function trans(TranslatorInterface $translator, string $locale = null): string
+    public function trans(TranslatorInterface $translator, ?string $locale = null): string
     {
         return 'key_'.($locale ?? 'null');
     }
+}
+
+class IdentityTranslator implements TranslatorInterface
+{
+    use TranslatorTrait;
 }

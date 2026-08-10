@@ -43,6 +43,7 @@ return static function (ContainerConfigurator $container) {
                     ->args([
                         param('session.metadata.storage_key'),
                         param('session.metadata.update_threshold'),
+                        param('session.metadata.cookie_lifetime'),
                     ]),
                 false,
             ])
@@ -53,6 +54,7 @@ return static function (ContainerConfigurator $container) {
                     ->args([
                         param('session.metadata.storage_key'),
                         param('session.metadata.update_threshold'),
+                        param('session.metadata.cookie_lifetime'),
                     ]),
                 false,
             ])
@@ -64,6 +66,7 @@ return static function (ContainerConfigurator $container) {
                     ->args([
                         param('session.metadata.storage_key'),
                         param('session.metadata.update_threshold'),
+                        param('session.metadata.cookie_lifetime'),
                     ]),
             ])
 
@@ -90,6 +93,7 @@ return static function (ContainerConfigurator $container) {
                     'session_factory' => service('session.factory')->ignoreOnInvalid(),
                     'logger' => service('logger')->ignoreOnInvalid(),
                     'session_collector' => service('data_collector.request.session_collector')->ignoreOnInvalid(),
+                    'request_stack' => service('request_stack')->ignoreOnInvalid(),
                 ]),
                 param('kernel.debug'),
                 param('session.storage.options'),

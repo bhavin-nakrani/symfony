@@ -3,13 +3,14 @@
 use Symfony\Bundle\FrameworkBundle\Tests\DependencyInjection\FrameworkExtensionTestCase;
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'workflows' => [
         'article' => [
             'type' => 'workflow',
             'supports' => [
                 FrameworkExtensionTestCase::class,
+            ],
+            'definition_validators' => [
+                Symfony\Bundle\FrameworkBundle\Tests\DependencyInjection\Fixtures\Workflow\Validator\DefinitionValidator::class,
             ],
             'initial_marking' => ['draft'],
             'metadata' => [

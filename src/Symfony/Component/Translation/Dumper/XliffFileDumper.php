@@ -46,7 +46,7 @@ class XliffFileDumper extends FileDumper
             return $this->dumpXliff2($defaultLocale, $messages, $domain);
         }
 
-        throw new InvalidArgumentException(sprintf('No support implemented for dumping XLIFF version "%s".', $xliffVersion));
+        throw new InvalidArgumentException(\sprintf('No support implemented for dumping XLIFF version "%s".', $xliffVersion));
     }
 
     protected function getExtension(): string
@@ -93,11 +93,14 @@ class XliffFileDumper extends FileDumper
         foreach ($messages->all($domain) as $source => $target) {
             $translation = $dom->createElement('trans-unit');
 
-            $translation->setAttribute('id', strtr(substr(base64_encode(hash('sha256', $source, true)), 0, 7), '/+', '._'));
+            $translation->setAttribute('id', strtr(substr(base64_encode(hash('xxh128', $source, true)), 0, 7), '/+', '._'));
             $translation->setAttribute('resname', $source);
 
+            $metadata = $messages->getMetadata($source, $domain);
+            $sourceText = $this->getSourceText($metadata, $source);
+
             $s = $translation->appendChild($dom->createElement('source'));
-            $s->appendChild($dom->createTextNode($source));
+            $s->appendChild($dom->createTextNode($sourceText));
 
             // Does the target contain characters requiring a CDATA section?
             $text = 1 === preg_match('/[&<>]/', $target) ? $dom->createCDATASection($target) : $dom->createTextNode($target);
@@ -156,10 +159,11 @@ class XliffFileDumper extends FileDumper
         }
 
         if ($catalogueMetadata = $messages->getCatalogueMetadata('', $domain) ?? []) {
-            $xliff->setAttribute('xmlns:m', 'urn:oasis:names:tc:xliff:metadata:2.0');
-            $xliffMetadata = $xliffFile->appendChild($dom->createElement('m:metadata'));
+            $xliff->setAttribute('xmlns:mda', 'urn:oasis:names:tc:xliff:metadata:2.0');
+            $xliffMetadata = $xliffFile->appendChild($dom->createElement('mda:metadata'));
+            $xliffMetaGroup = $xliffMetadata->appendChild($dom->createElement('mda:metaGroup'));
             foreach ($catalogueMetadata as $key => $value) {
-                $xliffMeta = $xliffMetadata->appendChild($dom->createElement('prop'));
+                $xliffMeta = $xliffMetaGroup->appendChild($dom->createElement('mda:meta'));
                 $xliffMeta->setAttribute('type', $key);
                 $xliffMeta->appendChild($dom->createTextNode($value));
             }
@@ -167,16 +171,20 @@ class XliffFileDumper extends FileDumper
 
         foreach ($messages->all($domain) as $source => $target) {
             $translation = $dom->createElement('unit');
-            $translation->setAttribute('id', strtr(substr(base64_encode(hash('sha256', $source, true)), 0, 7), '/+', '._'));
+            $translation->setAttribute('id', strtr(substr(base64_encode(hash('xxh128', $source, true)), 0, 7), '/+', '._'));
 
-            if (\strlen($source) <= 80) {
+            // the loader falls back to <source> for the key when there is no name attribute,
+            // so the key must stay in <source> for units that cannot carry one
+            $hasName = \strlen($source) <= 80;
+            if ($hasName) {
                 $translation->setAttribute('name', $source);
             }
 
             $metadata = $messages->getMetadata($source, $domain);
+            $sourceText = $hasName ? $this->getSourceText($metadata, $source) : $source;
 
             // Add notes section
-            if ($this->hasMetadataArrayInfo('notes', $metadata)) {
+            if ($this->hasMetadataArrayInfo('notes', $metadata) && $metadata['notes']) {
                 $notesElement = $dom->createElement('notes');
                 foreach ($metadata['notes'] as $note) {
                     $n = $dom->createElement('note');
@@ -193,8 +201,14 @@ class XliffFileDumper extends FileDumper
 
             $segment = $translation->appendChild($dom->createElement('segment'));
 
+            if ($this->hasMetadataArrayInfo('segment-attributes', $metadata)) {
+                foreach ($metadata['segment-attributes'] as $name => $value) {
+                    $segment->setAttribute($name, $value);
+                }
+            }
+
             $s = $segment->appendChild($dom->createElement('source'));
-            $s->appendChild($dom->createTextNode($source));
+            $s->appendChild($dom->createTextNode($sourceText));
 
             // Does the target contain characters requiring a CDATA section?
             $text = 1 === preg_match('/[&<>]/', $target) ? $dom->createCDATASection($target) : $dom->createTextNode($target);
@@ -214,7 +228,12 @@ class XliffFileDumper extends FileDumper
         return $dom->saveXML();
     }
 
-    private function hasMetadataArrayInfo(string $key, array $metadata = null): bool
+    private function getSourceText(?array $metadata, string $source): string
+    {
+        return \is_string($metadata['source'] ?? null) ? $metadata['source'] : $source;
+    }
+
+    private function hasMetadataArrayInfo(string $key, ?array $metadata = null): bool
     {
         return is_iterable($metadata[$key] ?? null);
     }

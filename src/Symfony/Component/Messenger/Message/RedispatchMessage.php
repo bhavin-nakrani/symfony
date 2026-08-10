@@ -13,15 +13,23 @@ namespace Symfony\Component\Messenger\Message;
 
 use Symfony\Component\Messenger\Envelope;
 
-final class RedispatchMessage
+final class RedispatchMessage implements \Stringable
 {
     /**
-     * @param object|Envelope $message        The message or the message pre-wrapped in an envelope
-     * @param string[]|string $transportNames Transport names to be used for the message
+     * @param object|Envelope $envelope       The message or the message pre-wrapped in an envelope
+     * @param string[]|string $transportNames Transport names to be used for the message, or an empty
+     *                                        array/string to use the senders configured for the message
      */
     public function __construct(
         public readonly object $envelope,
         public readonly array|string $transportNames = [],
     ) {
+    }
+
+    public function __toString(): string
+    {
+        $message = $this->envelope instanceof Envelope ? $this->envelope->getMessage() : $this->envelope;
+
+        return \sprintf('%s via %s', $message instanceof \Stringable ? (string) $message : $message::class, implode(', ', (array) $this->transportNames));
     }
 }

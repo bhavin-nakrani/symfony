@@ -57,11 +57,9 @@ use Symfony\Component\Validator\Mapping\Factory\MetadataFactoryInterface;
 
 class ValidatorTypeGuesser implements FormTypeGuesserInterface
 {
-    private MetadataFactoryInterface $metadataFactory;
-
-    public function __construct(MetadataFactoryInterface $metadataFactory)
-    {
-        $this->metadataFactory = $metadataFactory;
+    public function __construct(
+        private MetadataFactoryInterface $metadataFactory,
+    ) {
     }
 
     public function guessType(string $class, string $property): ?TypeGuess
@@ -209,7 +207,7 @@ class ValidatorTypeGuesser implements FormTypeGuesserInterface
                 break;
 
             case Type::class:
-                if (\in_array($constraint->type, ['double', 'float', 'numeric', 'real'])) {
+                if (\in_array($constraint->type, ['double', 'float', 'numeric', 'real'], true)) {
                     return new ValueGuess(null, Guess::MEDIUM_CONFIDENCE);
                 }
                 break;
@@ -232,7 +230,7 @@ class ValidatorTypeGuesser implements FormTypeGuesserInterface
         switch ($constraint::class) {
             case Length::class:
                 if (is_numeric($constraint->min)) {
-                    return new ValueGuess(sprintf('.{%s,}', (string) $constraint->min), Guess::LOW_CONFIDENCE);
+                    return new ValueGuess(\sprintf('.{%s,}', (string) $constraint->min), Guess::LOW_CONFIDENCE);
                 }
                 break;
 
@@ -246,12 +244,12 @@ class ValidatorTypeGuesser implements FormTypeGuesserInterface
 
             case Range::class:
                 if (is_numeric($constraint->min)) {
-                    return new ValueGuess(sprintf('.{%s,}', \strlen((string) $constraint->min)), Guess::LOW_CONFIDENCE);
+                    return new ValueGuess(\sprintf('.{%s,}', \strlen((string) $constraint->min)), Guess::LOW_CONFIDENCE);
                 }
                 break;
 
             case Type::class:
-                if (\in_array($constraint->type, ['double', 'float', 'numeric', 'real'])) {
+                if (\in_array($constraint->type, ['double', 'float', 'numeric', 'real'], true)) {
                     return new ValueGuess(null, Guess::MEDIUM_CONFIDENCE);
                 }
                 break;
@@ -263,6 +261,8 @@ class ValidatorTypeGuesser implements FormTypeGuesserInterface
     /**
      * Iterates over the constraints of a property, executes a constraints on
      * them and returns the best guess.
+     *
+     * @param-immediately-invoked-callable $closure
      *
      * @param \Closure $closure      The closure that returns a guess
      *                               for a given constraint

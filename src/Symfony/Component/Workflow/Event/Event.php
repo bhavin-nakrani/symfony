@@ -20,71 +20,47 @@ use Symfony\Contracts\EventDispatcher\Event as BaseEvent;
  * @author Fabien Potencier <fabien@symfony.com>
  * @author Grégoire Pineau <lyrixx@lyrixx.info>
  * @author Carlos Pereira De Amorim <carlos@shauri.fr>
+ *
+ * @template T of object
  */
 class Event extends BaseEvent
 {
-    protected $context;
-    private object $subject;
-    private Marking $marking;
-    private ?Transition $transition;
-    private ?WorkflowInterface $workflow;
-
-    public function __construct(object $subject, Marking $marking, Transition $transition = null, WorkflowInterface $workflow = null, array $context = [])
-    {
-        $this->subject = $subject;
-        $this->marking = $marking;
-        $this->transition = $transition;
-        $this->workflow = $workflow;
-        $this->context = $context;
+    /**
+     * @param T $subject
+     */
+    public function __construct(
+        private object $subject,
+        private Marking $marking,
+        private ?Transition $transition = null,
+        private ?WorkflowInterface $workflow = null,
+    ) {
     }
 
-    /**
-     * @return Marking
-     */
-    public function getMarking()
+    public function getMarking(): Marking
     {
         return $this->marking;
     }
 
     /**
-     * @return object
+     * @return T
      */
-    public function getSubject()
+    public function getSubject(): object
     {
         return $this->subject;
     }
 
-    /**
-     * @return Transition|null
-     */
-    public function getTransition()
+    public function getTransition(): ?Transition
     {
         return $this->transition;
     }
 
-    public function getWorkflow(): WorkflowInterface
-    {
-        return $this->workflow;
-    }
-
-    /**
-     * @return string
-     */
-    public function getWorkflowName()
+    public function getWorkflowName(): string
     {
         return $this->workflow->getName();
     }
 
-    /**
-     * @return mixed
-     */
-    public function getMetadata(string $key, string|Transition|null $subject)
+    public function getMetadata(string $key, string|Transition|null $subject): mixed
     {
         return $this->workflow->getMetadataStore()->getMetadata($key, $subject);
-    }
-
-    public function getContext(): array
-    {
-        return $this->context;
     }
 }

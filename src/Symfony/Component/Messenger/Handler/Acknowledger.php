@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\Messenger\Handler;
 
+use Symfony\Component\Clock\Clock;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Messenger\Exception\LogicException;
 
 /**
@@ -18,17 +20,21 @@ use Symfony\Component\Messenger\Exception\LogicException;
  */
 class Acknowledger
 {
-    private string $handlerClass;
+    public readonly ClockInterface $clock;
+
     private ?\Closure $ack;
-    private ?\Throwable $error = null;
+    private \Throwable|false|null $error = null;
     private mixed $result = null;
 
     /**
      * @param \Closure(\Throwable|null, mixed):void|null $ack
      */
-    public function __construct(string $handlerClass, \Closure $ack = null)
-    {
-        $this->handlerClass = $handlerClass;
+    public function __construct(
+        private string $handlerClass,
+        ?\Closure $ack = null,
+        ?ClockInterface $clock = null,
+    ) {
+        $this->clock = $clock ?? Clock::get();
         $this->ack = $ack ?? static function () {};
     }
 
@@ -47,7 +53,7 @@ class Acknowledger
 
     public function getError(): ?\Throwable
     {
-        return $this->error;
+        return $this->error ?: null;
     }
 
     public function getResult(): mixed
@@ -63,18 +69,18 @@ class Acknowledger
     public function __destruct()
     {
         if (null !== $this->ack) {
-            throw new LogicException(sprintf('The acknowledger was not called by the "%s" batch handler.', $this->handlerClass));
+            throw new LogicException(\sprintf('The acknowledger was not called by the "%s" batch handler.', $this->handlerClass));
         }
     }
 
-    private function doAck(\Throwable $e = null, mixed $result = null): void
+    private function doAck(?\Throwable $e = null, mixed $result = null): void
     {
-        if (!$ack = $this->ack) {
-            throw new LogicException(sprintf('The acknowledger cannot be called twice by the "%s" batch handler.', $this->handlerClass));
+        if (!($ack = $this->ack) || (null !== $this->error && (false !== $this->error || null === $e))) {
+            throw new LogicException(\sprintf('The acknowledger cannot be called twice by the "%s" batch handler.', $this->handlerClass));
         }
-        $this->ack = null;
-        $this->error = $e;
+        $this->error = $e ?: false;
         $this->result = $result;
         $ack($e, $result);
+        $this->ack = null;
     }
 }

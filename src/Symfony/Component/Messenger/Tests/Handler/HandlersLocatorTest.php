@@ -22,26 +22,29 @@ class HandlersLocatorTest extends TestCase
 {
     public function testItYieldsHandlerDescriptors()
     {
-        $handler = $this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']);
+        $handler = new HandlersLocatorTestCallable();
         $locator = new HandlersLocator([
             DummyMessage::class => [$handler],
         ]);
 
         $descriptor = new HandlerDescriptor($handler);
-        $descriptor->getName();
 
-        $this->assertEquals([$descriptor], iterator_to_array($locator->getHandlers(new Envelope(new DummyMessage('a')))));
+        $handlers = iterator_to_array($locator->getHandlers(new Envelope(new DummyMessage('a'))));
+
+        $this->assertCount(1, $handlers);
+        $this->assertSame($descriptor->getName(), $handlers[0]->getName());
+        $this->assertSame($handler, (new \ReflectionFunction($handlers[0]->getHandler()))->getClosureThis());
     }
 
     public function testItReturnsOnlyHandlersMatchingTransport()
     {
-        $firstHandler = $this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']);
-        $secondHandler = $this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']);
+        $firstHandler = new HandlersLocatorTestCallable();
+        $secondHandler = new HandlersLocatorTestCallable();
 
         $locator = new HandlersLocator([
             DummyMessage::class => [
                 $first = new HandlerDescriptor($firstHandler, ['alias' => 'one']),
-                new HandlerDescriptor($this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']), ['from_transport' => 'ignored', 'alias' => 'two']),
+                new HandlerDescriptor(new HandlersLocatorTestCallable(), ['from_transport' => 'ignored', 'alias' => 'two']),
                 $second = new HandlerDescriptor($secondHandler, ['from_transport' => 'transportName', 'alias' => 'three']),
             ],
         ]);
@@ -59,8 +62,8 @@ class HandlersLocatorTest extends TestCase
 
     public function testItReturnsOnlyHandlersMatchingMessageNamespace()
     {
-        $firstHandler = $this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']);
-        $secondHandler = $this->createPartialMock(HandlersLocatorTestCallable::class, ['__invoke']);
+        $firstHandler = new HandlersLocatorTestCallable();
+        $secondHandler = new HandlersLocatorTestCallable();
 
         $locator = new HandlersLocator([
             str_replace('DummyMessage', '*', DummyMessage::class) => [

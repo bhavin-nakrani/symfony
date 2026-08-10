@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Yaml\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Dumper;
 use Symfony\Component\Yaml\Exception\DumpException;
@@ -59,26 +60,25 @@ class DumperTest extends TestCase
     {
         $dumper = new Dumper(7);
         $expected = <<<'EOF'
-'': bar
-foo: '#bar'
-"foo'bar": {  }
-bar:
-       - 1
-       - foo
-       -
-              a: A
-foobar:
-       foo: bar
-       bar:
-              - 1
-              - foo
-       foobar:
-              foo: bar
-              bar:
-                     - 1
-                     - foo
+            '': bar
+            foo: '#bar'
+            "foo'bar": {}
+            bar:
+                   - 1
+                   - foo
+                   - a: A
+            foobar:
+                   foo: bar
+                   bar:
+                          - 1
+                          - foo
+                   foobar:
+                          foo: bar
+                          bar:
+                                 - 1
+                                 - foo
 
-EOF;
+            EOF;
         $this->assertSame($expected, $dumper->dump($this->array, 4, 0));
         $this->assertSameData($this->array, $this->parser->parse($expected));
     }
@@ -111,86 +111,97 @@ EOF;
         }
     }
 
+    public function testDumpSimpleHashesInSequencesCompactly()
+    {
+        $data = ['servers' => [['url' => 'http://example.com']]];
+        $expected = "servers:\n    - url: 'http://example.com'\n";
+        $this->assertSame($expected, $this->dumper->dump($data, 3));
+        $this->assertSameData($data, $this->parser->parse($expected));
+
+        $data = ['servers' => [['url' => 'http://example.com', 'port' => 80]]];
+        $expected = "servers:\n    - url: 'http://example.com'\n      port: 80\n";
+        $this->assertSame($expected, $this->dumper->dump($data, 3));
+        $this->assertSameData($data, $this->parser->parse($expected));
+    }
+
     public function testInlineLevel()
     {
         $expected = <<<'EOF'
-{ '': bar, foo: '#bar', "foo'bar": {  }, bar: [1, foo, { a: A }], foobar: { foo: bar, bar: [1, foo], foobar: { foo: bar, bar: [1, foo] } } }
-EOF;
+            { '': bar, foo: '#bar', "foo'bar": {}, bar: [1, foo, { a: A }], foobar: { foo: bar, bar: [1, foo], foobar: { foo: bar, bar: [1, foo] } } }
+            EOF;
         $this->assertSame($expected, $this->dumper->dump($this->array, -10), '->dump() takes an inline level argument');
         $this->assertSame($expected, $this->dumper->dump($this->array, 0), '->dump() takes an inline level argument');
         $this->assertSameData($this->array, $this->parser->parse($expected));
 
         $expected = <<<'EOF'
-'': bar
-foo: '#bar'
-"foo'bar": {  }
-bar: [1, foo, { a: A }]
-foobar: { foo: bar, bar: [1, foo], foobar: { foo: bar, bar: [1, foo] } }
+            '': bar
+            foo: '#bar'
+            "foo'bar": {}
+            bar: [1, foo, { a: A }]
+            foobar: { foo: bar, bar: [1, foo], foobar: { foo: bar, bar: [1, foo] } }
 
-EOF;
+            EOF;
         $this->assertSame($expected, $this->dumper->dump($this->array, 1), '->dump() takes an inline level argument');
         $this->assertSameData($this->array, $this->parser->parse($expected));
 
         $expected = <<<'EOF'
-'': bar
-foo: '#bar'
-"foo'bar": {  }
-bar:
-    - 1
-    - foo
-    - { a: A }
-foobar:
-    foo: bar
-    bar: [1, foo]
-    foobar: { foo: bar, bar: [1, foo] }
+            '': bar
+            foo: '#bar'
+            "foo'bar": {}
+            bar:
+                - 1
+                - foo
+                - { a: A }
+            foobar:
+                foo: bar
+                bar: [1, foo]
+                foobar: { foo: bar, bar: [1, foo] }
 
-EOF;
+            EOF;
         $this->assertSame($expected, $this->dumper->dump($this->array, 2), '->dump() takes an inline level argument');
         $this->assertSameData($this->array, $this->parser->parse($expected));
 
         $expected = <<<'EOF'
-'': bar
-foo: '#bar'
-"foo'bar": {  }
-bar:
-    - 1
-    - foo
-    -
-        a: A
-foobar:
-    foo: bar
-    bar:
-        - 1
-        - foo
-    foobar:
-        foo: bar
-        bar: [1, foo]
+            '': bar
+            foo: '#bar'
+            "foo'bar": {}
+            bar:
+                - 1
+                - foo
+                - a: A
+            foobar:
+                foo: bar
+                bar:
+                    - 1
+                    - foo
+                foobar:
+                    foo: bar
+                    bar: [1, foo]
 
-EOF;
+            EOF;
         $this->assertSame($expected, $this->dumper->dump($this->array, 3), '->dump() takes an inline level argument');
         $this->assertSameData($this->array, $this->parser->parse($expected));
 
         $expected = <<<'EOF'
-'': bar
-foo: '#bar'
-"foo'bar": {  }
-bar:
-    - 1
-    - foo
-    -
-        a: A
-foobar:
-    foo: bar
-    bar:
-        - 1
-        - foo
-    foobar:
-        foo: bar
-        bar:
-            - 1
-            - foo
+            '': bar
+            foo: '#bar'
+            "foo'bar": {}
+            bar:
+                - 1
+                - foo
+                - a: A
+            foobar:
+                foo: bar
+                bar:
+                    - 1
+                    - foo
+                foobar:
+                    foo: bar
+                    bar:
+                        - 1
+                        - foo
 
-EOF;
+            EOF;
         $this->assertSame($expected, $this->dumper->dump($this->array, 4), '->dump() takes an inline level argument');
         $this->assertSame($expected, $this->dumper->dump($this->array, 10), '->dump() takes an inline level argument');
         $this->assertSameData($this->array, $this->parser->parse($expected));
@@ -216,9 +227,64 @@ EOF;
         $this->dumper->dump(['foo' => new A(), 'bar' => 1], 0, 0, Yaml::DUMP_EXCEPTION_ON_INVALID_TYPE);
     }
 
-    /**
-     * @dataProvider getEscapeSequences
-     */
+    public function testDumpWithMultipleNullFlagsFormatsThrows()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The Yaml::DUMP_NULL_AS_EMPTY and Yaml::DUMP_NULL_AS_TILDE flags cannot be used together.');
+
+        $this->dumper->dump(['foo' => 'bar'], 0, 0, Yaml::DUMP_NULL_AS_EMPTY | Yaml::DUMP_NULL_AS_TILDE);
+    }
+
+    public function testDumpNullAsEmptyInExpandedMapping()
+    {
+        $expected = "qux:\n    foo: bar\n    baz: \n";
+
+        $this->assertSame($expected, $this->dumper->dump(['qux' => ['foo' => 'bar', 'baz' => null]], 2, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    public function testDumpNullAsEmptyWithObject()
+    {
+        $class = new \stdClass();
+        $class->foo = 'bar';
+        $class->baz = null;
+
+        $this->assertSame("foo: bar\nbaz: \n", $this->dumper->dump($class, 2, flags: Yaml::DUMP_NULL_AS_EMPTY | Yaml::DUMP_OBJECT_AS_MAP));
+    }
+
+    public function testDumpNullAsEmptyDumpsWhenInInlineMapping()
+    {
+        $expected = "foo: \nqux: { foo: bar, baz:  }\n";
+
+        $this->assertSame($expected, $this->dumper->dump(['foo' => null, 'qux' => ['foo' => 'bar', 'baz' => null]], 1, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    public function testDumpNullAsEmptyDumpsNestedMaps()
+    {
+        $expected = "foo: \nqux:\n    foo: bar\n    baz: \n";
+
+        $this->assertSame($expected, $this->dumper->dump(['foo' => null, 'qux' => ['foo' => 'bar', 'baz' => null]], 10, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    public function testDumpNullAsEmptyInExpandedSequence()
+    {
+        $expected = "qux:\n    - foo\n    - \n    - bar\n";
+
+        $this->assertSame($expected, $this->dumper->dump(['qux' => ['foo', null, 'bar']], 2, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    public function testDumpNullAsEmptyWhenInInlineSequence()
+    {
+        $expected = "foo: \nqux: [foo, , bar]\n";
+
+        $this->assertSame($expected, $this->dumper->dump(['foo' => null, 'qux' => ['foo', null, 'bar']], 1, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    public function testDumpNullAsEmptyAtRoot()
+    {
+        $this->assertSame('null', $this->dumper->dump(null, 2, flags: Yaml::DUMP_NULL_AS_EMPTY));
+    }
+
+    #[DataProvider('getEscapeSequences')]
     public function testEscapedEscapeSequencesInQuotedScalar($input, $expected)
     {
         $this->assertSame($expected, $this->dumper->dump($input));
@@ -265,9 +331,7 @@ EOF;
         $this->assertSame('!!binary ZsM/cg==', $this->dumper->dump("f\xc3\x3fr"));
     }
 
-    /**
-     * @dataProvider objectAsMapProvider
-     */
+    #[DataProvider('objectAsMapProvider')]
     public function testDumpObjectAsMap($object, $expected)
     {
         $yaml = $this->dumper->dump($object, 0, 0, Yaml::DUMP_OBJECT_AS_MAP);
@@ -313,13 +377,13 @@ EOF;
         $yaml = $this->dumper->dump($outer, 2, 0, Yaml::DUMP_OBJECT_AS_MAP);
 
         $expected = <<<YAML
-outer1: a
-outer2:
-    inner1: b
-    inner2: c
-    inner3: { deep1: d, deep2: e }
+            outer1: a
+            outer2:
+                inner1: b
+                inner2: c
+                inner3: { deep1: d, deep2: e }
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
     }
 
@@ -331,8 +395,8 @@ YAML;
 
         $yaml = $this->dumper->dump($outer, 0, 0, Yaml::DUMP_OBJECT_AS_MAP);
         $expected = <<<YAML
-{ 0: a, 1: { 0: b, 1: c, 2: { 0: d, 1: e } } }
-YAML;
+            { 0: a, 1: { 0: b, 1: c, 2: { 0: d, 1: e } } }
+            YAML;
         $this->assertSame($expected, $yaml);
     }
 
@@ -343,24 +407,24 @@ YAML;
         $outer = new \ArrayObject(['a', $inner]);
         $yaml = $this->dumper->dump($outer, 2, 0, Yaml::DUMP_OBJECT_AS_MAP);
         $expected = <<<YAML
-0: a
-1:
-    0: b
-    1: c
-    2: { 0: d, 1: e }
+            0: a
+            1:
+                0: b
+                1: c
+                2: { 0: d, 1: e }
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
     }
 
     public function testDumpEmptyArrayObjectInstanceAsMap()
     {
-        $this->assertSame('{  }', $this->dumper->dump(new \ArrayObject(), 2, 0, Yaml::DUMP_OBJECT_AS_MAP));
+        $this->assertSame('{}', $this->dumper->dump(new \ArrayObject(), 2, 0, Yaml::DUMP_OBJECT_AS_MAP));
     }
 
     public function testDumpEmptyStdClassInstanceAsMap()
     {
-        $this->assertSame('{  }', $this->dumper->dump(new \stdClass(), 2, 0, Yaml::DUMP_OBJECT_AS_MAP));
+        $this->assertSame('{}', $this->dumper->dump(new \stdClass(), 2, 0, Yaml::DUMP_OBJECT_AS_MAP));
     }
 
     public function testDumpingStdClassInstancesRespectsInlineLevel()
@@ -381,13 +445,13 @@ YAML;
         $yaml = $this->dumper->dump($outer, 2, 0, Yaml::DUMP_OBJECT_AS_MAP);
 
         $expected = <<<YAML
-outer1: a
-outer2:
-    inner1: b
-    inner2: c
-    inner3: { deep1: d, deep2: e }
+            outer1: a
+            outer2:
+                inner1: b
+                inner2: c
+                inner3: { deep1: d, deep2: e }
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
         $this->assertSameData($outer, $this->parser->parse($yaml, Yaml::PARSE_OBJECT_FOR_MAP));
     }
@@ -407,13 +471,13 @@ YAML;
         $yaml = $this->dumper->dump($data, 2);
 
         $expected = <<<YAML
-- !user
-  username: jane
-- !names
-  - john
-  - claire
+            - !user
+              username: jane
+            - !names
+              - john
+              - claire
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
     }
@@ -445,10 +509,10 @@ YAML;
         $data = new TaggedValue('user', ['name' => 'jane']);
 
         $expected = <<<'YAML'
-!user
-name: jane
+            !user
+            name: jane
 
-YAML;
+            YAML;
         $yaml = $this->dumper->dump($data, 2);
         $this->assertSame($expected, $yaml);
     }
@@ -457,7 +521,7 @@ YAML;
     {
         $data = new TaggedValue('text', "a\nb\n");
 
-        $this->assertSame("!text |\n    a\n    b\n    ", $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
+        $this->assertSame("!text |\n    a\n    b\n", $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
     }
 
     public function testDumpingTaggedValueSpecialCharsInTag()
@@ -487,11 +551,11 @@ YAML;
         $yaml = $this->dumper->dump($data, 1);
 
         $expected = <<<YAML
-- !user { username: jane }
-- !names [john, claire]
-- !number 5
+            - !user { username: jane }
+            - !names [john, claire]
+            - !number 5
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
     }
@@ -512,14 +576,14 @@ YAML;
         $yaml = $this->dumper->dump($data, 2);
 
         $expected = <<<YAML
-user1: !user
-    username: jane
-names1: !names
-    - john
-    - claire
-count: !number 5
+            user1: !user
+                username: jane
+            names1: !names
+                - john
+                - claire
+            count: !number 5
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
     }
@@ -539,10 +603,10 @@ YAML;
         $yaml = $this->dumper->dump($data, 1);
 
         $expected = <<<YAML
-user1: !user { username: jane }
-names1: !names [john, claire]
+            user1: !user { username: jane }
+            names1: !names [john, claire]
 
-YAML;
+            YAML;
         $this->assertSame($expected, $yaml);
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
     }
@@ -554,10 +618,10 @@ YAML;
             'user2' => new TaggedValue('user', 'john'),
         ];
         $expected = <<<YAML
-user1: !user jane
-user2: !user john
+            user1: !user jane
+            user2: !user john
 
-YAML;
+            YAML;
 
         $this->assertSame($expected, $this->dumper->dump($data, 2));
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
@@ -569,9 +633,9 @@ YAML;
             'foo' => new TaggedValue('bar', null),
         ];
         $expected = <<<YAML
-foo: !bar null
+            foo: !bar null
 
-YAML;
+            YAML;
 
         $this->assertSame($expected, $this->dumper->dump($data, 2));
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS | Yaml::PARSE_CONSTANT));
@@ -582,7 +646,7 @@ YAML;
         $data = [
             'foo' => new TaggedValue('bar', "foo\nline with trailing spaces:\n  \nbar\ninteger like line:\n123456789\nempty line:\n\nbaz"),
         ];
-        $expected = "foo: !bar |\n".
+        $expected = "foo: !bar |-\n".
             "    foo\n".
             "    line with trailing spaces:\n".
             "      \n".
@@ -590,7 +654,7 @@ YAML;
             "    integer like line:\n".
             "    123456789\n".
             "    empty line:\n".
-            "    \n".
+            "\n".
             '    baz';
 
         $this->assertSame($expected, $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
@@ -602,12 +666,12 @@ YAML;
         $data = [
             new TaggedValue('bar', "a\nb"),
         ];
-        $expected = "- !bar |\n    a\n    b";
+        $expected = "- !bar |-\n    a\n    b";
         $this->assertSame($expected, $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
 
         // @todo Fix the parser, eliminate these exceptions.
         $this->expectException(ParseException::class);
-        $this->expectExceptionMessage('Unable to parse at line 3 (near "!bar |").');
+        $this->expectExceptionMessage('Unable to parse at line 3 (near "!bar |-").');
 
         $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS);
     }
@@ -617,13 +681,13 @@ YAML;
         $data = [
             'foo' => new TaggedValue('bar', "a\nb\n\n\n"),
         ];
-        $expected = "foo: !bar |\n    a\n    b\n    \n    \n    ";
+        $expected = "foo: !bar |+\n    a\n    b\n\n\n";
         $this->assertSame($expected, $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
 
         // @todo Fix the parser, the result should be identical to $data.
         $this->assertSameData(
             [
-                'foo' => new TaggedValue('bar', "a\nb\n"),
+                'foo' => new TaggedValue('bar', "a\nb\n\n\n"),
             ],
             $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
     }
@@ -633,12 +697,12 @@ YAML;
         $data = [
             new TaggedValue('bar', "a\nb\n\n\n"),
         ];
-        $expected = "- !bar |\n    a\n    b\n    \n    \n    ";
+        $expected = "- !bar |+\n    a\n    b\n\n\n";
         $this->assertSame($expected, $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
 
         // @todo Fix the parser, eliminate these exceptions.
         $this->expectException(ParseException::class);
-        $this->expectExceptionMessage('Unable to parse at line 6 (near "!bar |").');
+        $this->expectExceptionMessage('Unable to parse at line 6 (near "!bar |+").');
 
         $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS);
     }
@@ -651,10 +715,10 @@ YAML;
             ],
         ];
         $expected = <<<'YAML'
-data:
-    foo: !bar "foo\r\nline with trailing spaces:\n  \nbar\ninteger like line:\n123456789\nempty line:\n\nbaz"
+            data:
+                foo: !bar "foo\r\nline with trailing spaces:\n  \nbar\ninteger like line:\n123456789\nempty line:\n\nbaz"
 
-YAML;
+            YAML;
         $yml = $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
         $this->assertSame($expected, $yml);
         $this->assertSameData($data, $this->parser->parse($expected, Yaml::PARSE_CUSTOM_TAGS));
@@ -674,22 +738,22 @@ YAML;
         ];
         $yml = $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
         $expected = str_replace("@\n", "\n", <<<'YAML'
-data:
-    single_line: 'foo bar baz'
-    multi_line: |-
-        foo
-        line with trailing spaces:
-          @
-        bar
-        integer like line:
-        123456789
-        empty line:
+            data:
+                single_line: 'foo bar baz'
+                multi_line: |-
+                    foo
+                    line with trailing spaces:
+                      @
+                    bar
+                    integer like line:
+                    123456789
+                    empty line:
 
-        baz
-    multi_line_with_carriage_return: "foo\nbar\r\nbaz"
-    nested_inlined_multi_line_string: { inlined_multi_line: "foo\nbar\r\nempty line:\n\nbaz" }
+                    baz
+                multi_line_with_carriage_return: "foo\nbar\r\nbaz"
+                nested_inlined_multi_line_string: { inlined_multi_line: "foo\nbar\r\nempty line:\n\nbaz" }
 
-YAML
+            YAML
         );
         $this->assertSame($expected, $yml);
         $this->assertSame($data, $this->parser->parse($yml));
@@ -762,10 +826,10 @@ YAML
             ],
         ];
         $expected = <<<'YAML'
-parent:
-    foo: "bar\n\rbaz: qux"
+            parent:
+                foo: "bar\n\rbaz: qux"
 
-YAML;
+            YAML;
         $this->assertSame($expected, $this->dumper->dump($data, 4, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
         $this->assertSame($data, $this->parser->parse($expected));
     }
@@ -790,6 +854,69 @@ YAML;
         $this->assertSame($data, $this->parser->parse($yaml));
     }
 
+    #[DataProvider('getTopLevelTaggedMultiLineLiteralBlockData')]
+    public function testTopLevelTaggedMultiLineLiteralBlock(TaggedValue $data, string $expected)
+    {
+        $yaml = $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
+
+        $this->assertSame($expected, $yaml);
+    }
+
+    public static function getTopLevelTaggedMultiLineLiteralBlockData(): iterable
+    {
+        yield 'clip' => [
+            new TaggedValue('my-tag', "one\ntwo\n"),
+            "!my-tag |\n    one\n    two\n",
+        ];
+
+        yield 'keep' => [
+            new TaggedValue('my-tag', "one\ntwo\n\n"),
+            "!my-tag |+\n    one\n    two\n\n",
+        ];
+
+        yield 'keep with 3 trailing newlines' => [
+            new TaggedValue('my-tag', "one\ntwo\n\n\n"),
+            "!my-tag |+\n    one\n    two\n\n\n",
+        ];
+
+        yield 'strip' => [
+            new TaggedValue('my-tag', "one\ntwo"),
+            "!my-tag |-\n    one\n    two",
+        ];
+    }
+
+    public function testDumpTrailingNewlineInMultiLineLiteralBlocksForTaggedValues()
+    {
+        $data = [
+            'clip 1' => new TaggedValue('my-tag', "one\ntwo\n"),
+            'keep 1' => new TaggedValue('my-tag', "one\ntwo\n\n"),
+            'keep 2' => new TaggedValue('my-tag', "one\ntwo\n\n\n"),
+            'strip 1' => new TaggedValue('my-tag', "one\ntwo"),
+        ];
+        $yaml = $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
+
+        $expected = <<<YAML
+            'clip 1': !my-tag |
+                one
+                two
+            'keep 1': !my-tag |+
+                one
+                two
+
+            'keep 2': !my-tag |+
+                one
+                two
+
+
+            'strip 1': !my-tag |-
+                one
+                two
+            YAML;
+
+        $this->assertSame($expected, $yaml);
+        $this->assertSameData($data, $this->parser->parse($yaml, Yaml::PARSE_CUSTOM_TAGS));
+    }
+
     public function testDumpTrailingNewlineInMultiLineLiteralBlocks()
     {
         $data = [
@@ -804,31 +931,31 @@ YAML;
         $yaml = $this->dumper->dump($data, 2, 0, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
 
         $expected = <<<YAML
-'clip 1': |
-    one
-    two
-'clip 2': |
-    one
-    two
-'keep 1': |
-    one
-    two
-'keep 2': |+
-    one
-    two
+            'clip 1': |
+                one
+                two
+            'clip 2': |
+                one
+                two
+            'keep 1': |
+                one
+                two
+            'keep 2': |+
+                one
+                two
 
-'keep 3': |+
-    one
-    two
+            'keep 3': |+
+                one
+                two
 
 
-'strip 1': |-
-    one
-    two
-'strip 2': |-
-    one
-    two
-YAML;
+            'strip 1': |-
+                one
+                two
+            'strip 2': |-
+                one
+                two
+            YAML;
 
         $this->assertSame($expected, $yaml);
         $this->assertSame($data, $this->parser->parse($yaml));
@@ -853,9 +980,86 @@ YAML;
         $this->assertSame('{ foo: ~ }', $this->dumper->dump(['foo' => null], 0, 0, Yaml::DUMP_NULL_AS_TILDE));
     }
 
-    /**
-     * @dataProvider getNumericKeyData
-     */
+    #[DataProvider('getForceQuotesOnValuesData')]
+    public function testCanForceQuotesOnValues(array $input, string $expected)
+    {
+        $this->assertSame($expected, $this->dumper->dump($input, 0, 0, Yaml::DUMP_FORCE_DOUBLE_QUOTES_ON_VALUES));
+    }
+
+    public static function getForceQuotesOnValuesData(): iterable
+    {
+        yield 'empty string' => [
+            ['foo' => ''],
+            '{ foo: \'\' }',
+        ];
+
+        yield 'double quote' => [
+            ['foo' => '"'],
+            '{ foo: "\"" }',
+        ];
+
+        yield 'single quote' => [
+            ['foo' => "'"],
+            '{ foo: "\'" }',
+        ];
+
+        yield 'line break' => [
+            ['foo' => "line\nbreak"],
+            '{ foo: "line\nbreak" }',
+        ];
+
+        yield 'tab character' => [
+            ['foo' => "tab\tcharacter"],
+            '{ foo: "tab\tcharacter" }',
+        ];
+
+        yield 'backslash' => [
+            ['foo' => 'back\\slash'],
+            '{ foo: "back\\\\slash" }',
+        ];
+
+        yield 'colon' => [
+            ['foo' => 'colon: value'],
+            '{ foo: "colon: value" }',
+        ];
+
+        yield 'dash' => [
+            ['foo' => '- dash'],
+            '{ foo: "- dash" }',
+        ];
+
+        yield 'numeric' => [
+            ['foo' => 23],
+            '{ foo: 23 }',
+        ];
+
+        yield 'boolean' => [
+            ['foo' => true],
+            '{ foo: true }',
+        ];
+
+        yield 'null' => [
+            ['foo' => null],
+            '{ foo: null }',
+        ];
+
+        yield 'nested' => [
+            ['foo' => ['bar' => 'bat', 'baz' => 23]],
+            '{ foo: { bar: "bat", baz: 23 } }',
+        ];
+
+        yield 'mix of values' => [
+            ['foo' => 'bat', 'bar' => 23, 'baz' => true, 'qux' => "line\nbreak"],
+            '{ foo: "bat", bar: 23, baz: true, qux: "line\nbreak" }',
+        ];
+
+        yield 'special YAML characters' => [
+            ['foo' => 'colon: value', 'bar' => '- dash', 'baz' => '? question', 'qux' => '# hash'],
+            '{ foo: "colon: value", bar: "- dash", baz: "? question", qux: "# hash" }',
+        ];
+    }
+
+    #[DataProvider('getNumericKeyData')]
     public function testDumpInlineNumericKeyAsString(array $input, bool $inline, int $flags, string $expected)
     {
         $this->assertSame($expected, $this->dumper->dump($input, $inline ? 0 : 4, 0, $flags));
@@ -878,9 +1082,9 @@ YAML;
         ];
 
         $expected = <<<'YAML'
-        '200': foo
+            '200': foo
 
-        YAML;
+            YAML;
 
         yield 'Int key with flag' => [
             [200 => 'foo'],
@@ -890,9 +1094,9 @@ YAML;
         ];
 
         $expected = <<<'YAML'
-        200: foo
+            200: foo
 
-        YAML;
+            YAML;
 
         yield 'Int key without flag' => [
             [200 => 'foo'],
@@ -902,10 +1106,10 @@ YAML;
         ];
 
         $expected = <<<'YAML'
-        - 200
-        - foo
+            - 200
+            - foo
 
-        YAML;
+            YAML;
 
         yield 'List array with flag' => [
             [200, 'foo'],
@@ -915,9 +1119,9 @@ YAML;
         ];
 
         $expected = <<<'YAML'
-        '200': !number 5
+            '200': !number 5
 
-        YAML;
+            YAML;
 
         yield 'Int tagged value with flag' => [
             [
@@ -929,9 +1133,9 @@ YAML;
         ];
 
         $expected = <<<'YAML'
-        200: !number 5
+            200: !number 5
 
-        YAML;
+            YAML;
 
         yield 'Int tagged value without flag' => [
             [
@@ -946,11 +1150,11 @@ YAML;
     public function testDumpIdeographicSpaces()
     {
         $expected = <<<YAML
-alone: '　'
-within_string: 'a　b'
-regular_space: 'a b'
+            alone: '　'
+            within_string: 'a　b'
+            regular_space: 'a b'
 
-YAML;
+            YAML;
         $this->assertSame($expected, $this->dumper->dump([
             'alone' => '　',
             'within_string' => 'a　b',
@@ -958,9 +1162,7 @@ YAML;
         ], 2));
     }
 
-    /**
-     * @dataProvider getDateTimeData
-     */
+    #[DataProvider('getDateTimeData')]
     public function testDumpDateTime(array $input, string $expected)
     {
         $this->assertSame($expected, rtrim($this->dumper->dump($input, 1)));
@@ -1002,6 +1204,175 @@ YAML;
             ['date' => new \DateTimeImmutable('2023-01-24T01:02:03.456789Z')],
             'date: 2023-01-24T01:02:03.456789+00:00',
         ];
+    }
+
+    public static function getDumpCompactNestedMapping()
+    {
+        $data = [
+            'planets' => [
+                [
+                    'name' => 'Mercury',
+                    'distance' => 57910000,
+                    'properties' => [
+                        ['name' => 'size', 'value' => 4879],
+                        ['name' => 'moons', 'value' => 0],
+                        [[[]]],
+                    ],
+                ],
+                [
+                    'name' => 'Jupiter',
+                    'distance' => 778500000,
+                    'properties' => [
+                        ['name' => 'size', 'value' => 139820],
+                        ['name' => 'moons', 'value' => 79],
+                        [[]],
+                    ],
+                ],
+            ],
+        ];
+
+        yield 'Compact nested mapping 1' => [
+            $data,
+            <<<YAML
+                planets:
+                 - name: Mercury
+                   distance: 57910000
+                   properties:
+                    - name: size
+                      value: 4879
+                    - name: moons
+                      value: 0
+                    -
+                     -
+                      - {}
+                 - name: Jupiter
+                   distance: 778500000
+                   properties:
+                    - name: size
+                      value: 139820
+                    - name: moons
+                      value: 79
+                    -
+                     - {}
+
+                YAML,
+            1,
+        ];
+
+        yield 'Compact nested mapping 2' => [
+            $data,
+            <<<YAML
+                planets:
+                  - name: Mercury
+                    distance: 57910000
+                    properties:
+                      - name: size
+                        value: 4879
+                      - name: moons
+                        value: 0
+                      -
+                        -
+                          - {}
+                  - name: Jupiter
+                    distance: 778500000
+                    properties:
+                      - name: size
+                        value: 139820
+                      - name: moons
+                        value: 79
+                      -
+                        - {}
+
+                YAML,
+            2,
+        ];
+
+        yield 'Compact nested mapping 3' => [
+            $data,
+            <<<YAML
+                planets:
+                   - name: Mercury
+                     distance: 57910000
+                     properties:
+                        - name: size
+                          value: 4879
+                        - name: moons
+                          value: 0
+                        -
+                           -
+                              - {}
+                   - name: Jupiter
+                     distance: 778500000
+                     properties:
+                        - name: size
+                          value: 139820
+                        - name: moons
+                          value: 79
+                        -
+                           - {}
+
+                YAML,
+            3,
+        ];
+
+        yield 'Compact nested mapping 4' => [
+            $data,
+            <<<YAML
+                planets:
+                    - name: Mercury
+                      distance: 57910000
+                      properties:
+                          - name: size
+                            value: 4879
+                          - name: moons
+                            value: 0
+                          -
+                              -
+                                  - {}
+                    - name: Jupiter
+                      distance: 778500000
+                      properties:
+                          - name: size
+                            value: 139820
+                          - name: moons
+                            value: 79
+                          -
+                              - {}
+
+                YAML,
+            4,
+        ];
+
+        yield 'Compact nested mapping 2 and inline 4' => [
+            $data,
+            <<<YAML
+                planets:
+                  - name: Mercury
+                    distance: 57910000
+                    properties:
+                      - { name: size, value: 4879 }
+                      - { name: moons, value: 0 }
+                      - [[{}]]
+                  - name: Jupiter
+                    distance: 778500000
+                    properties:
+                      - { name: size, value: 139820 }
+                      - { name: moons, value: 79 }
+                      - [{}]
+
+                YAML,
+            2,
+            4,
+        ];
+    }
+
+    #[DataProvider('getDumpCompactNestedMapping')]
+    public function testDumpCompactNestedMapping(array $data, string $expected, int $indentation, int $inline = 10)
+    {
+        $dumper = new Dumper($indentation);
+        $actual = $dumper->dump($data, $inline, 0, Yaml::DUMP_COMPACT_NESTED_MAPPING);
+        $this->assertSame($expected, $actual);
+        $this->assertSameData($data, $this->parser->parse($actual));
     }
 
     private function assertSameData($expected, $actual)

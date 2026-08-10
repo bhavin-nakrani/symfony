@@ -1,8 +1,6 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'http_client' => [
         'max_host_connections' => 4,
         'default_options' => [
@@ -14,6 +12,7 @@ $container->loadFromExtension('framework', [
                 'base_uri' => 'http://example.com',
                 'headers' => ['bar' => 'baz'],
                 'extra' => ['bar' => 'baz'],
+                'max_connect_duration' => 0.5,
             ],
         ],
     ],

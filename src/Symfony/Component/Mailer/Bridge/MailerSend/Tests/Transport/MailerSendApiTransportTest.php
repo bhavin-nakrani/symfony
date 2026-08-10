@@ -11,8 +11,10 @@
 
 namespace Symfony\Component\Mailer\Bridge\MailerSend\Tests\Transport;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Mailer\Bridge\MailerSend\Transport\MailerSendApiTransport;
 use Symfony\Component\Mailer\Exception\HttpTransportException;
@@ -23,9 +25,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class MailerSendApiTransportTest extends TestCase
 {
-    /**
-     * @dataProvider getTransportData
-     */
+    #[DataProvider('getTransportData')]
     public function testToString(MailerSendApiTransport $transport, string $expected)
     {
         $this->assertSame($expected, (string) $transport);
@@ -128,11 +128,9 @@ class MailerSendApiTransportTest extends TestCase
 
     public function testSendThrowsForErrorResponse()
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse(json_encode(['message' => 'i\'m a teapot']), [
-                'http_code' => 418,
-            ]);
-        });
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new JsonMockResponse(['message' => 'i\'m a teapot'], [
+            'http_code' => 418,
+        ]));
 
         $transport = new MailerSendApiTransport('ACCESS_KEY', $client);
 
@@ -149,18 +147,16 @@ class MailerSendApiTransportTest extends TestCase
 
     public function testSendThrowsForAllSuppressed()
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse(json_encode([
-                'message' => 'There are some warnings for your request.',
-                'warnings' => [
-                    [
-                        'type' => 'ALL_SUPPRESSED',
-                    ],
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new JsonMockResponse([
+            'message' => 'There are some warnings for your request.',
+            'warnings' => [
+                [
+                    'type' => 'ALL_SUPPRESSED',
                 ],
-            ], \JSON_THROW_ON_ERROR), [
-                'http_code' => 202,
-            ]);
-        });
+            ],
+        ], [
+            'http_code' => 202,
+        ]));
 
         $transport = new MailerSendApiTransport('ACCESS_KEY', $client);
 
@@ -177,11 +173,9 @@ class MailerSendApiTransportTest extends TestCase
 
     public function testSendThrowsForBadResponse()
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
-            return new MockResponse('test', [
-                'http_code' => 202,
-            ]);
-        });
+        $client = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => new MockResponse('test', [
+            'http_code' => 202,
+        ]));
 
         $transport = new MailerSendApiTransport('ACCESS_KEY', $client);
 

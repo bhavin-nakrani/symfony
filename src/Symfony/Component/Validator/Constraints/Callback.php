@@ -14,8 +14,7 @@ namespace Symfony\Component\Validator\Constraints;
 use Symfony\Component\Validator\Constraint;
 
 /**
- * @Annotation
- * @Target({"CLASS", "PROPERTY", "METHOD", "ANNOTATION"})
+ * Defines custom validation rules through arbitrary callback methods.
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
@@ -27,25 +26,15 @@ class Callback extends Constraint
      */
     public $callback;
 
-    public function __construct(array|string|callable $callback = null, array $groups = null, mixed $payload = null, array $options = [])
+    /**
+     * @param string|callable|null $callback The callback definition
+     * @param string[]|null        $groups
+     */
+    public function __construct(string|callable|null $callback = null, ?array $groups = null, mixed $payload = null)
     {
-        // Invocation through annotations with an array parameter only
-        if (\is_array($callback) && 1 === \count($callback) && isset($callback['value'])) {
-            $callback = $callback['value'];
-        }
+        parent::__construct(null, $groups, $payload);
 
-        if (!\is_array($callback) || (!isset($callback['callback']) && !isset($callback['groups']) && !isset($callback['payload']))) {
-            $options['callback'] = $callback;
-        } else {
-            $options = array_merge($callback, $options);
-        }
-
-        parent::__construct($options, $groups, $payload);
-    }
-
-    public function getDefaultOption(): ?string
-    {
-        return 'callback';
+        $this->callback = $callback;
     }
 
     public function getTargets(): string|array

@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'UserAssignedNames' => [
+        'XK' => 'Kosovo',
+    ],
     'Names' => [
         'AD' => 'Andorra',
         'AE' => 'Arabiemiirikunnat',
@@ -202,7 +205,7 @@ return [
         'SG' => 'Singapore',
         'SH' => 'Saint Helena',
         'SI' => 'Slovenia',
-        'SJ' => 'Svalbard ja Jan Mayen',
+        'SJ' => 'Huippuvuoret ja Jan Mayen',
         'SK' => 'Slovakia',
         'SL' => 'Sierra Leone',
         'SM' => 'San Marino',

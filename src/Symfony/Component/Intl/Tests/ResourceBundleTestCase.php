@@ -66,6 +66,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'az_Cyrl_AZ',
         'az_Latn',
         'az_Latn_AZ',
+        'ba',
+        'ba_RU',
         'be',
         'be_BY',
         'bg',
@@ -141,31 +143,41 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_CM',
         'en_CX',
         'en_CY',
+        'en_CZ',
         'en_DE',
         'en_DG',
         'en_DK',
         'en_DM',
+        'en_EE',
         'en_ER',
+        'en_ES',
         'en_FI',
         'en_FJ',
         'en_FK',
         'en_FM',
+        'en_FR',
         'en_GB',
         'en_GD',
+        'en_GE',
         'en_GG',
         'en_GH',
         'en_GI',
         'en_GM',
+        'en_GS',
         'en_GU',
         'en_GY',
         'en_HK',
+        'en_HU',
+        'en_ID',
         'en_IE',
         'en_IL',
         'en_IM',
         'en_IN',
         'en_IO',
+        'en_IT',
         'en_JE',
         'en_JM',
+        'en_JP',
         'en_KE',
         'en_KI',
         'en_KN',
@@ -173,6 +185,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_LC',
         'en_LR',
         'en_LS',
+        'en_LT',
+        'en_LV',
         'en_MG',
         'en_MH',
         'en_MO',
@@ -188,16 +202,20 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_NG',
         'en_NH',
         'en_NL',
+        'en_NO',
         'en_NR',
         'en_NU',
         'en_NZ',
         'en_PG',
         'en_PH',
         'en_PK',
+        'en_PL',
         'en_PN',
         'en_PR',
+        'en_PT',
         'en_PW',
         'en_RH',
+        'en_RO',
         'en_RW',
         'en_SB',
         'en_SC',
@@ -206,6 +224,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_SG',
         'en_SH',
         'en_SI',
+        'en_SK',
         'en_SL',
         'en_SS',
         'en_SX',
@@ -216,6 +235,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'en_TT',
         'en_TV',
         'en_TZ',
+        'en_UA',
         'en_UG',
         'en_UM',
         'en_US',
@@ -383,6 +403,8 @@ abstract class ResourceBundleTestCase extends TestCase
         'ia_001',
         'id',
         'id_ID',
+        'ie',
+        'ie_EE',
         'ig',
         'ig_NG',
         'ii',
@@ -408,6 +430,10 @@ abstract class ResourceBundleTestCase extends TestCase
         'ki',
         'ki_KE',
         'kk',
+        'kk_Arab',
+        'kk_Arab_CN',
+        'kk_Cyrl',
+        'kk_Cyrl_KZ',
         'kk_KZ',
         'kl',
         'kl_GL',
@@ -416,6 +442,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'kn',
         'kn_IN',
         'ko',
+        'ko_CN',
         'ko_KP',
         'ko_KR',
         'ks',
@@ -425,6 +452,11 @@ abstract class ResourceBundleTestCase extends TestCase
         'ks_Deva_IN',
         'ks_IN',
         'ku',
+        'ku_Latn',
+        'ku_Latn_IQ',
+        'ku_Latn_SY',
+        'ku_Latn_TR',
+        'ku_SY',
         'ku_TR',
         'kw',
         'kw_GB',
@@ -490,6 +522,9 @@ abstract class ResourceBundleTestCase extends TestCase
         'no',
         'no_NO',
         'no_NO_NY',
+        'oc',
+        'oc_ES',
+        'oc_FR',
         'om',
         'om_ET',
         'om_KE',
@@ -602,6 +637,9 @@ abstract class ResourceBundleTestCase extends TestCase
         'sr_RS',
         'sr_XK',
         'sr_YU',
+        'st',
+        'st_LS',
+        'st_ZA',
         'su',
         'su_ID',
         'su_Latn',
@@ -634,6 +672,9 @@ abstract class ResourceBundleTestCase extends TestCase
         'tk_TM',
         'tl',
         'tl_PH',
+        'tn',
+        'tn_BW',
+        'tn_ZA',
         'to',
         'to_TO',
         'tr',
@@ -664,10 +705,12 @@ abstract class ResourceBundleTestCase extends TestCase
         'xh',
         'xh_ZA',
         'yi',
-        'yi_001',
+        'yi_UA',
         'yo',
         'yo_BJ',
         'yo_NG',
+        'za',
+        'za_CN',
         'zh',
         'zh_CN',
         'zh_HK',
@@ -675,10 +718,12 @@ abstract class ResourceBundleTestCase extends TestCase
         'zh_Hans_CN',
         'zh_Hans_HK',
         'zh_Hans_MO',
+        'zh_Hans_MY',
         'zh_Hans_SG',
         'zh_Hant',
         'zh_Hant_HK',
         'zh_Hant_MO',
+        'zh_Hant_MY',
         'zh_Hant_TW',
         'zh_MO',
         'zh_SG',
@@ -701,6 +746,7 @@ abstract class ResourceBundleTestCase extends TestCase
         'iw' => 'he',
         'iw_IL' => 'he_IL',
         'ks_IN' => 'ks_Arab_IN',
+        'ku_SY' => 'ku_Latn_SY',
         'mo' => 'ro',
         'no_NO' => 'no',
         'no_NO_NY' => 'nn_NO',
@@ -749,46 +795,46 @@ abstract class ResourceBundleTestCase extends TestCase
         \Locale::setDefault($this->defaultLocale);
     }
 
-    public function provideLocales()
+    public static function provideLocales()
     {
         return array_map(
-            fn ($locale) => [$locale],
-            $this->getLocales()
+            static fn ($locale) => [$locale],
+            static::getLocales()
         );
     }
 
-    public function provideLocaleAliases()
+    public static function provideLocaleAliases()
     {
         return array_map(
-            fn ($alias, $ofLocale) => [$alias, $ofLocale],
-            array_keys($this->getLocaleAliases()),
-            $this->getLocaleAliases()
+            static fn ($alias, $ofLocale) => [$alias, $ofLocale],
+            array_keys(static::getLocaleAliases()),
+            static::getLocaleAliases()
         );
     }
 
-    public function provideRootLocales()
+    public static function provideRootLocales()
     {
         return array_map(
-            fn ($locale) => [$locale],
-            $this->getRootLocales()
+            static fn ($locale) => [$locale],
+            static::getRootLocales()
         );
     }
 
-    protected function getLocales()
+    protected static function getLocales()
     {
         return self::LOCALES;
     }
 
-    protected function getLocaleAliases()
+    protected static function getLocaleAliases()
     {
         return self::LOCALE_ALIASES;
     }
 
-    protected function getRootLocales()
+    protected static function getRootLocales()
     {
         if (null === self::$rootLocales) {
-            self::$rootLocales = array_filter($this->getLocales(), fn ($locale) => // no locales for which fallback is possible (e.g "en_GB")
-!str_contains($locale, '_'));
+            // no locales for which fallback is possible (e.g "en_GB")
+            self::$rootLocales = array_filter(static::getLocales(), static fn ($locale) => !str_contains($locale, '_'));
         }
 
         return self::$rootLocales;

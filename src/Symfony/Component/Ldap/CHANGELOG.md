@@ -1,6 +1,41 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add the `$ldapUsersOnly` argument to `CheckLdapCredentialsListener`, to bind only `LdapUser` instances against the LDAP server
+
+8.0
+---
+
+ * Remove the `sizeLimit` option of `AbstractQuery`
+ * Remove `LdapUser::eraseCredentials()` in favor of `__serialize()`
+ * Add methods for `saslBind()` and `whoami()` to `ConnectionInterface` and `LdapInterface`
+
+7.3
+---
+
+ * Deprecate `LdapUser::eraseCredentials()` in favor of `__serialize()`
+ * Add `RoleFetcherInterface` to allow roles fetching at user loading
+ * Add ability to fetch LDAP roles
+
+7.2
+---
+
+ * Add methods for `saslBind()` and `whoami()` to `ConnectionInterface` and `LdapInterface`
+ * Deprecate the `sizeLimit` option of `AbstractQuery`, the option is unused
+
+7.1
+---
+
+ * Improve error reporting during LDAP bind
+
+7.0
+---
+
+ * Remove `{username}` parameter, use `{user_identifier}` instead
+
 6.2
 ---
 
@@ -67,7 +102,7 @@ CHANGELOG
 3.3.0
 -----
 
- * The `RenameEntryInterface` inferface is deprecated, and will be merged with `EntryManagerInterface` in 4.0.
+ * The `RenameEntryInterface` interface is deprecated, and will be merged with `EntryManagerInterface` in 4.0.
 
 3.1.0
 -----

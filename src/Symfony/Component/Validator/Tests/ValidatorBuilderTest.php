@@ -11,22 +11,16 @@
 
 namespace Symfony\Component\Validator\Tests;
 
-use Doctrine\Common\Annotations\PsrCachedReader;
-use Doctrine\Common\Annotations\Reader;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemPoolInterface;
-use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
+use Symfony\Component\Translation\IdentityTranslator;
 use Symfony\Component\Validator\ConstraintValidatorFactoryInterface;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
 use Symfony\Component\Validator\ObjectInitializerInterface;
 use Symfony\Component\Validator\Validator\RecursiveValidator;
 use Symfony\Component\Validator\ValidatorBuilder;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 class ValidatorBuilderTest extends TestCase
 {
-    use ExpectDeprecationTrait;
-
     private ValidatorBuilder $builder;
 
     protected function setUp(): void
@@ -37,7 +31,7 @@ class ValidatorBuilderTest extends TestCase
     public function testAddObjectInitializer()
     {
         $this->assertSame($this->builder, $this->builder->addObjectInitializer(
-            $this->createMock(ObjectInitializerInterface::class)
+            $this->createStub(ObjectInitializerInterface::class)
         ));
     }
 
@@ -76,73 +70,41 @@ class ValidatorBuilderTest extends TestCase
         $this->assertSame($this->builder, $this->builder->addMethodMappings([]));
     }
 
-    /**
-     * @group legacy
-     */
-    public function testEnableAnnotationMappingWithDefaultDoctrineAnnotationReader()
+    public function testDisableAttributeMapping()
     {
-        $this->assertSame($this->builder, $this->builder->enableAnnotationMapping());
-
-        $this->expectDeprecation('Since symfony/validator 6.4: Method "Symfony\Component\Validator\ValidatorBuilder::addDefaultDoctrineAnnotationReader()" is deprecated without replacement.');
-        $this->assertSame($this->builder, $this->builder->addDefaultDoctrineAnnotationReader());
-
-        $loaders = $this->builder->getLoaders();
-        $this->assertCount(1, $loaders);
-        $this->assertInstanceOf(AnnotationLoader::class, $loaders[0]);
-
-        $r = new \ReflectionProperty(AnnotationLoader::class, 'reader');
-
-        $this->assertInstanceOf(PsrCachedReader::class, $r->getValue($loaders[0]));
-    }
-
-    /**
-     * @group legacy
-     */
-    public function testEnableAnnotationMappingWithCustomDoctrineAnnotationReader()
-    {
-        $reader = $this->createMock(Reader::class);
-
-        $this->assertSame($this->builder, $this->builder->enableAnnotationMapping());
-
-        $this->expectDeprecation('Since symfony/validator 6.4: Method "Symfony\Component\Validator\ValidatorBuilder::setDoctrineAnnotationReader()" is deprecated without replacement.');
-        $this->assertSame($this->builder, $this->builder->setDoctrineAnnotationReader($reader));
-
-        $loaders = $this->builder->getLoaders();
-        $this->assertCount(1, $loaders);
-        $this->assertInstanceOf(AnnotationLoader::class, $loaders[0]);
-
-        $r = new \ReflectionProperty(AnnotationLoader::class, 'reader');
-
-        $this->assertSame($reader, $r->getValue($loaders[0]));
-    }
-
-    public function testDisableAnnotationMapping()
-    {
-        $this->assertSame($this->builder, $this->builder->disableAnnotationMapping());
+        $this->assertSame($this->builder, $this->builder->disableAttributeMapping());
     }
 
     public function testSetMappingCache()
     {
-        $this->assertSame($this->builder, $this->builder->setMappingCache($this->createMock(CacheItemPoolInterface::class)));
+        $this->assertSame($this->builder, $this->builder->setMappingCache($this->createStub(CacheItemPoolInterface::class)));
     }
 
     public function testSetConstraintValidatorFactory()
     {
         $this->assertSame($this->builder, $this->builder->setConstraintValidatorFactory(
-            $this->createMock(ConstraintValidatorFactoryInterface::class))
+            $this->createStub(ConstraintValidatorFactoryInterface::class))
         );
     }
 
     public function testSetTranslator()
     {
-        $this->assertSame($this->builder, $this->builder->setTranslator(
-            $this->createMock(TranslatorInterface::class))
-        );
+        $this->assertSame($this->builder, $this->builder->setTranslator(new IdentityTranslator()));
     }
 
     public function testSetTranslationDomain()
     {
         $this->assertSame($this->builder, $this->builder->setTranslationDomain('TRANS_DOMAIN'));
+    }
+
+    public function testDisableTranslation()
+    {
+        $this->assertSame($this->builder, $this->builder->disableTranslation());
+    }
+
+    public function testEnablePropertyMetadataExistenceCheck()
+    {
+        $this->assertSame($this->builder, $this->builder->enablePropertyMetadataExistenceCheck());
     }
 
     public function testGetValidator()

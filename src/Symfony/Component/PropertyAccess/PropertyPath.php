@@ -72,7 +72,6 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
     {
         // Can be used as copy constructor
         if ($propertyPath instanceof self) {
-            /* @var PropertyPath $propertyPath */
             $this->elements = $propertyPath->elements;
             $this->length = $propertyPath->length;
             $this->isIndex = $propertyPath->isIndex;
@@ -122,7 +121,7 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
         }
 
         if ('' !== $remaining) {
-            throw new InvalidPropertyPathException(sprintf('Could not parse property path "%s". Unexpected token "%s" at position %d.', $propertyPath, $remaining[0], $position));
+            throw new InvalidPropertyPathException(\sprintf('Could not parse property path "%s". Unexpected token "%s" at position %d.', $propertyPath, $remaining[0], $position));
         }
 
         $this->length = \count($this->elements);
@@ -171,7 +170,7 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
     public function getElement(int $index): string
     {
         if (!isset($this->elements[$index])) {
-            throw new OutOfBoundsException(sprintf('The index "%s" is not within the property path.', $index));
+            throw new OutOfBoundsException(\sprintf('The index "%s" is not within the property path.', $index));
         }
 
         return $this->elements[$index];
@@ -180,7 +179,7 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
     public function isProperty(int $index): bool
     {
         if (!isset($this->isIndex[$index])) {
-            throw new OutOfBoundsException(sprintf('The index "%s" is not within the property path.', $index));
+            throw new OutOfBoundsException(\sprintf('The index "%s" is not within the property path.', $index));
         }
 
         return !$this->isIndex[$index];
@@ -189,7 +188,7 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
     public function isIndex(int $index): bool
     {
         if (!isset($this->isIndex[$index])) {
-            throw new OutOfBoundsException(sprintf('The index "%s" is not within the property path.', $index));
+            throw new OutOfBoundsException(\sprintf('The index "%s" is not within the property path.', $index));
         }
 
         return $this->isIndex[$index];
@@ -198,9 +197,44 @@ class PropertyPath implements \IteratorAggregate, PropertyPathInterface
     public function isNullSafe(int $index): bool
     {
         if (!isset($this->isNullSafe[$index])) {
-            throw new OutOfBoundsException(sprintf('The index "%s" is not within the property path.', $index));
+            throw new OutOfBoundsException(\sprintf('The index "%s" is not within the property path.', $index));
         }
 
         return $this->isNullSafe[$index];
+    }
+
+    /**
+     * Utility method for dealing with property paths.
+     * For more extensive functionality, use instances of this class.
+     *
+     * Appends a path to a given property path. The dispatch order matches the
+     * code below:
+     *
+     *  1. If the sub path is empty, the base path is returned unchanged.
+     *  2. If the sub path starts with an opening bracket ("["), the two paths
+     *     are concatenated as-is, regardless of whether the base path is empty.
+     *  3. If the base path is empty, the sub path is returned unchanged.
+     *  4. Otherwise, the two paths are joined with a dot (".").
+     *
+     * Both arguments are assumed to be syntactically valid property paths; the
+     * method performs only structural joining and does not validate them.
+     *
+     * @see \Symfony\Component\Validator\Util\PropertyPath::append()
+     */
+    public static function append(string $basePath, string $subPath): string
+    {
+        if ('' === $subPath) {
+            return $basePath;
+        }
+
+        if ('[' === $subPath[0]) {
+            return $basePath.$subPath;
+        }
+
+        if ('' === $basePath) {
+            return $subPath;
+        }
+
+        return $basePath.'.'.$subPath;
     }
 }

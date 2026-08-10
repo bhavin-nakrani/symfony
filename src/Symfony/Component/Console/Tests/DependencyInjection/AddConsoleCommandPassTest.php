@@ -11,12 +11,16 @@
 
 namespace Symfony\Component\Console\Tests\DependencyInjection;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\LazyCommand;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
 use Symfony\Component\Console\CommandLoader\ContainerCommandLoader;
 use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
+use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Console\Tests\Fixtures\MethodBasedTestCommand;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
 use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
@@ -27,9 +31,7 @@ use Symfony\Component\DependencyInjection\TypedReference;
 
 class AddConsoleCommandPassTest extends TestCase
 {
-    /**
-     * @dataProvider visibilityProvider
-     */
+    #[DataProvider('visibilityProvider')]
     public function testProcess($public)
     {
         $container = new ContainerBuilder();
@@ -64,7 +66,6 @@ class AddConsoleCommandPassTest extends TestCase
         $container = new ContainerBuilder();
         $command = $container
             ->register('my-command', MyCommand::class)
-            ->setPublic(false)
             ->addTag('console.command', ['command' => 'my:command'])
             ->addTag('console.command', ['command' => 'my:alias'])
         ;
@@ -86,7 +87,6 @@ class AddConsoleCommandPassTest extends TestCase
         $container = new ContainerBuilder();
         $container
             ->register('with-default-name', NamedCommand::class)
-            ->setPublic(false)
             ->addTag('console.command')
         ;
 
@@ -104,7 +104,6 @@ class AddConsoleCommandPassTest extends TestCase
         $container = new ContainerBuilder();
         $container
             ->register('with-default-name', NamedCommand::class)
-            ->setPublic(false)
             ->addTag('console.command', ['command' => 'new-name'])
         ;
 
@@ -179,12 +178,11 @@ class AddConsoleCommandPassTest extends TestCase
         $this->assertSame('%cmd%', $command->getName());
         $this->assertSame(['%cmdalias%'], $command->getAliases());
         $this->assertSame('Creates a 80% discount', $command->getDescription());
+        $this->assertSame('The %command.name% help content.', $command->getHelp());
     }
 
     public function testProcessThrowAnExceptionIfTheServiceIsAbstract()
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('The service "my-command" tagged "console.command" must not be abstract.');
         $container = new ContainerBuilder();
         $container->setResourceTracking(false);
         $container->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
@@ -194,13 +192,14 @@ class AddConsoleCommandPassTest extends TestCase
         $definition->setAbstract(true);
         $container->setDefinition('my-command', $definition);
 
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The service "my-command" tagged "console.command" must not be abstract.');
+
         $container->compile();
     }
 
     public function testProcessThrowAnExceptionIfTheServiceIsNotASubclassOfCommand()
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('The service "my-command" tagged "console.command" must be a subclass of "Symfony\Component\Console\Command\Command".');
         $container = new ContainerBuilder();
         $container->setResourceTracking(false);
         $container->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
@@ -208,6 +207,9 @@ class AddConsoleCommandPassTest extends TestCase
         $definition = new Definition('SplObjectStorage');
         $definition->addTag('console.command');
         $container->setDefinition('my-command', $definition);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The service "my-command" tagged "console.command" must either be a subclass of "Symfony\Component\Console\Command\Command" or have an "__invoke()" method');
 
         $container->compile();
     }
@@ -218,10 +220,10 @@ class AddConsoleCommandPassTest extends TestCase
         $className = 'Symfony\Component\Console\Tests\DependencyInjection\MyCommand';
 
         $definition1 = new Definition($className);
-        $definition1->addTag('console.command')->setPublic(false);
+        $definition1->addTag('console.command');
 
         $definition2 = new Definition($className);
-        $definition2->addTag('console.command')->setPublic(false);
+        $definition2->addTag('console.command');
 
         $container->setDefinition('my-command1', $definition1);
         $container->setDefinition('my-command2', $definition2);
@@ -231,6 +233,38 @@ class AddConsoleCommandPassTest extends TestCase
         $aliasPrefix = 'console.command.public_alias.';
         $this->assertTrue($container->hasAlias($aliasPrefix.'my-command1'));
         $this->assertTrue($container->hasAlias($aliasPrefix.'my-command2'));
+    }
+
+    public function testProcessMultiCommandSameClass()
+    {
+        $container = new ContainerBuilder();
+
+        $definition = new Definition(MethodBasedTestCommand::class);
+        $definition->addTag('console.command');
+        $definition->addTag('console.command', ['method' => 'cmd1']);
+        $definition->addTag('console.command', ['method' => 'cmd2']);
+
+        $container->setDefinition(MethodBasedTestCommand::class, $definition);
+
+        new AddConsoleCommandPass()->process($container);
+        $container->compile();
+
+        /** @var ContainerCommandLoader $loader */
+        $loader = $container->get('console.command_loader');
+
+        $this->assertSame(['app:cmd0', 'app:cmd1', 'app:cmd2'], $loader->getNames());
+
+        $commandTester = new CommandTester($loader->get('app:cmd0'));
+        $this->assertSame(Command::SUCCESS, $commandTester->execute([]));
+        $this->assertSame('cmd0', $commandTester->getDisplay());
+
+        $commandTester = new CommandTester($loader->get('app:cmd1'));
+        $this->assertSame(Command::SUCCESS, $commandTester->execute([]));
+        $this->assertSame('cmd1', $commandTester->getDisplay());
+
+        $commandTester = new CommandTester($loader->get('app:cmd2'));
+        $this->assertSame(Command::SUCCESS, $commandTester->execute([]));
+        $this->assertSame('cmd2', $commandTester->getDisplay());
     }
 
     public function testProcessOnChildDefinitionWithClass()
@@ -243,7 +277,7 @@ class AddConsoleCommandPassTest extends TestCase
         $childId = 'my-child-command';
 
         $parentDefinition = new Definition(/* no class */);
-        $parentDefinition->setAbstract(true)->setPublic(false);
+        $parentDefinition->setAbstract(true);
 
         $childDefinition = new ChildDefinition($parentId);
         $childDefinition->addTag('console.command')->setPublic(true);
@@ -268,7 +302,7 @@ class AddConsoleCommandPassTest extends TestCase
         $childId = 'my-child-command';
 
         $parentDefinition = new Definition($className);
-        $parentDefinition->setAbstract(true)->setPublic(false);
+        $parentDefinition->setAbstract(true);
 
         $childDefinition = new ChildDefinition($parentId);
         $childDefinition->addTag('console.command')->setPublic(true);
@@ -284,8 +318,6 @@ class AddConsoleCommandPassTest extends TestCase
 
     public function testProcessOnChildDefinitionWithoutClass()
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('The definition for "my-child-command" has no class.');
         $container = new ContainerBuilder();
         $container->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
 
@@ -293,7 +325,7 @@ class AddConsoleCommandPassTest extends TestCase
         $childId = 'my-child-command';
 
         $parentDefinition = new Definition();
-        $parentDefinition->setAbstract(true)->setPublic(false);
+        $parentDefinition->setAbstract(true);
 
         $childDefinition = new ChildDefinition($parentId);
         $childDefinition->addTag('console.command')->setPublic(true);
@@ -301,7 +333,74 @@ class AddConsoleCommandPassTest extends TestCase
         $container->setDefinition($parentId, $parentDefinition);
         $container->setDefinition($childId, $childDefinition);
 
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('The definition for "my-child-command" has no class.');
+
         $container->compile();
+    }
+
+    public function testProcessInvokableCommand()
+    {
+        $container = new ContainerBuilder();
+        $container->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
+
+        $definition = new Definition(InvokableCommand::class);
+        $definition->addTag('console.command', [
+            'command' => 'invokable',
+            'description' => 'The command description',
+            'usages' => ['usage1', 'usage2'],
+            'help' => 'The %command.name% command help content.',
+        ]);
+        $container->setDefinition('invokable_command', $definition);
+
+        $container->compile();
+        $command = $container->get('console.command_loader')->get('invokable');
+
+        self::assertTrue($container->has('invokable_command.command'));
+        self::assertSame('The command description', $command->getDescription());
+        self::assertSame('The %command.name% command help content.', $command->getHelp());
+        self::assertCount(2, $command->getUsages());
+        $this->assertStringContainsString('usage1', $command->getUsages()[0]);
+    }
+
+    public function testProcessCommandWithDescriptionWithpercentageSigns()
+    {
+        $container = new ContainerBuilder();
+        $container
+            ->register(
+                'description_with_percentage_signs_command',
+                DescriptionWithPercentageSignsCommand::class,
+            )
+            ->addTag('console.command')
+        ;
+        $pass = new AddConsoleCommandPass();
+        $pass->process($container);
+
+        $command = $container->get('console.command_loader')->get('description-percentage-signs');
+
+        self::assertTrue($container->has('description_with_percentage_signs_command.command'));
+        self::assertSame('Just testing %percentage-signs%', $command->getDescription());
+    }
+
+    public function testProcessInvokableSignalableCommand()
+    {
+        $container = new ContainerBuilder();
+        $container->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
+
+        $definition = new Definition(InvokableSignalableCommand::class);
+        $definition->addTag('console.command', [
+            'command' => 'invokable-signalable',
+            'description' => 'The command description',
+            'help' => 'The %command.name% command help content.',
+        ]);
+        $container->setDefinition('invokable_signalable_command', $definition);
+
+        $container->compile();
+        $command = $container->get('console.command_loader')->get('invokable-signalable');
+
+        self::assertTrue($container->has('invokable_signalable_command.command'));
+        self::assertSame('The command description', $command->getDescription());
+        self::assertSame('The %command.name% command help content.', $command->getHelp());
     }
 }
 
@@ -314,7 +413,7 @@ class NamedCommand extends Command
 {
 }
 
-#[AsCommand(name: '%cmd%|%cmdalias%', description: 'Creates a 80% discount')]
+#[AsCommand(name: '%cmd%|%cmdalias%', description: 'Creates a 80% discount', help: 'The %command.name% help content.')]
 class EscapedDefaultsFromPhpCommand extends Command
 {
 }
@@ -329,5 +428,39 @@ class DescribedCommand extends Command
         ++self::$initCounter;
 
         parent::__construct();
+    }
+}
+
+#[AsCommand(name: 'invokable', description: 'Just testing', help: 'The %command.name% help content.')]
+class InvokableCommand
+{
+    public function __invoke(): void
+    {
+    }
+}
+
+#[AsCommand(name: 'description-percentage-signs', description: 'Just testing %percentage-signs%')]
+class DescriptionWithPercentageSignsCommand
+{
+    public function __invoke(): void
+    {
+    }
+}
+
+#[AsCommand(name: 'invokable-signalable', description: 'Just testing', help: 'The %command.name% help content.')]
+class InvokableSignalableCommand implements SignalableCommandInterface
+{
+    public function __invoke(): void
+    {
+    }
+
+    public function getSubscribedSignals(): array
+    {
+        return [];
+    }
+
+    public function handleSignal(int $signal, false|int $previousExitCode = 0): int|false
+    {
+        return false;
     }
 }

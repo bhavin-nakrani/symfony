@@ -24,8 +24,8 @@ class PackagesTest extends TestCase
     public function testGetterSetters()
     {
         $packages = new Packages();
-        $packages->setDefaultPackage($default = $this->createMock(PackageInterface::class));
-        $packages->addPackage('a', $a = $this->createMock(PackageInterface::class));
+        $packages->setDefaultPackage($default = $this->createStub(PackageInterface::class));
+        $packages->addPackage('a', $a = $this->createStub(PackageInterface::class));
 
         $this->assertSame($default, $packages->getPackage());
         $this->assertSame($a, $packages->getPackage('a'));
@@ -61,14 +61,12 @@ class PackagesTest extends TestCase
     public function testNoDefaultPackage()
     {
         $this->expectException(LogicException::class);
-        $packages = new Packages();
-        $packages->getPackage();
+        (new Packages())->getPackage();
     }
 
     public function testUndefinedPackage()
     {
         $this->expectException(InvalidArgumentException::class);
-        $packages = new Packages();
-        $packages->getPackage('a');
+        (new Packages())->getPackage('a');
     }
 }

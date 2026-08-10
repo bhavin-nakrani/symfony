@@ -72,7 +72,7 @@ class AuthenticationTrustResolverTest extends TestCase
     {
         $user = new InMemoryUser('wouter', '', ['ROLE_USER']);
 
-        return new RememberMeToken($user, 'main', 'secret');
+        return new RememberMeToken($user, 'main');
     }
 }
 
@@ -115,15 +115,7 @@ class FakeCustomToken implements TokenInterface
     {
     }
 
-    public function getUsername(): string
-    {
-    }
-
     public function getUserIdentifier(): string
-    {
-    }
-
-    public function eraseCredentials(): void
     {
     }
 

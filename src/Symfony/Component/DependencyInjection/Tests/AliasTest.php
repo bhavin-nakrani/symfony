@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
@@ -69,24 +70,23 @@ class AliasTest extends TestCase
         $this->assertEquals('1.1', $deprecation['version']);
     }
 
-    /**
-     * @dataProvider invalidDeprecationMessageProvider
-     */
+    #[DataProvider('invalidDeprecationMessageProvider')]
     public function testCannotDeprecateWithAnInvalidTemplate($message)
     {
-        $this->expectException(InvalidArgumentException::class);
         $def = new Alias('foo');
+
+        $this->expectException(InvalidArgumentException::class);
+
         $def->setDeprecated('package', '1.1', $message);
     }
 
-    public static function invalidDeprecationMessageProvider()
+    public static function invalidDeprecationMessageProvider(): array
     {
         return [
             "With \rs" => ["invalid \r message %alias_id%"],
             "With \ns" => ["invalid \n message %alias_id%"],
             'With */s' => ['invalid */ message %alias_id%'],
             'message not containing required %alias_id% variable' => ['this is deprecated'],
-            'template not containing required %alias_id% variable' => [true],
         ];
     }
 }

@@ -11,7 +11,7 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Functional;
 
-use Symfony\Component\PropertyInfo\Type;
+use Symfony\Component\TypeInfo\Type;
 
 class PropertyInfoTest extends AbstractWebTestCase
 {
@@ -19,7 +19,9 @@ class PropertyInfoTest extends AbstractWebTestCase
     {
         static::bootKernel(['test_case' => 'Serializer']);
 
-        $this->assertEquals([new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_INT))], static::getContainer()->get('property_info')->getTypes('Symfony\Bundle\FrameworkBundle\Tests\Functional\Dummy', 'codes'));
+        $propertyInfo = static::getContainer()->get('property_info');
+
+        $this->assertEquals(Type::array(Type::int()), $propertyInfo->getType(Dummy::class, 'codes'));
     }
 }
 

@@ -40,13 +40,6 @@ class Symfony_DI_PhpDumper_Test_Rot13Parameters extends Container
         return true;
     }
 
-    public function getRemovedIds(): array
-    {
-        return [
-            '.service_locator.PWbaRiJ' => true,
-        ];
-    }
-
     /**
      * Gets the public 'Symfony\Component\DependencyInjection\Tests\Dumper\Rot13EnvVarProcessor' shared service.
      *
@@ -73,19 +66,20 @@ class Symfony_DI_PhpDumper_Test_Rot13Parameters extends Container
 
     public function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
     {
-        if (!(isset($this->parameters[$name]) || isset($this->loadedDynamicParameters[$name]) || \array_key_exists($name, $this->parameters))) {
+        if (isset($this->loadedDynamicParameters[$name])) {
+            $value = $this->loadedDynamicParameters[$name] ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
+        } elseif (\array_key_exists($name, $this->parameters) && '.' !== ($name[0] ?? '')) {
+            $value = $this->parameters[$name];
+        } else {
             throw new ParameterNotFoundException($name);
         }
-        if (isset($this->loadedDynamicParameters[$name])) {
-            return $this->loadedDynamicParameters[$name] ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
-        }
 
-        return $this->parameters[$name];
+        return $value;
     }
 
     public function hasParameter(string $name): bool
     {
-        return isset($this->parameters[$name]) || isset($this->loadedDynamicParameters[$name]) || \array_key_exists($name, $this->parameters);
+        return \array_key_exists($name, $this->parameters) || isset($this->loadedDynamicParameters[$name]);
     }
 
     public function setParameter(string $name, $value): void
@@ -100,7 +94,7 @@ class Symfony_DI_PhpDumper_Test_Rot13Parameters extends Container
             foreach ($this->loadedDynamicParameters as $name => $loaded) {
                 $parameters[$name] = $loaded ? $this->dynamicParameters[$name] : $this->getDynamicParameter($name);
             }
-            $this->parameterBag = new FrozenParameterBag($parameters);
+            $this->parameterBag = new FrozenParameterBag($parameters, []);
         }
 
         return $this->parameterBag;

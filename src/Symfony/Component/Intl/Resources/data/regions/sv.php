@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'UserAssignedNames' => [
+        'XK' => 'Kosovo',
+    ],
     'Names' => [
         'AD' => 'Andorra',
         'AE' => 'Förenade Arabemiraten',
@@ -37,7 +40,7 @@ return [
         'BT' => 'Bhutan',
         'BV' => 'Bouvetön',
         'BW' => 'Botswana',
-        'BY' => 'Vitryssland',
+        'BY' => 'Belarus',
         'BZ' => 'Belize',
         'CA' => 'Kanada',
         'CC' => 'Kokosöarna',
@@ -45,7 +48,7 @@ return [
         'CF' => 'Centralafrikanska republiken',
         'CG' => 'Kongo-Brazzaville',
         'CH' => 'Schweiz',
-        'CI' => 'Côte d’Ivoire',
+        'CI' => 'Elfenbenskusten',
         'CK' => 'Cooköarna',
         'CL' => 'Chile',
         'CM' => 'Kamerun',

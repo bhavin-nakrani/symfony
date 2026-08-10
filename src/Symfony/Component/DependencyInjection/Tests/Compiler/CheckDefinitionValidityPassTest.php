@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Tests\Compiler;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Compiler\CheckDefinitionValidityPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -21,18 +22,20 @@ class CheckDefinitionValidityPassTest extends TestCase
 {
     public function testProcessDetectsSyntheticNonPublicDefinitions()
     {
-        $this->expectException(RuntimeException::class);
         $container = new ContainerBuilder();
         $container->register('a')->setSynthetic(true)->setPublic(false);
+
+        $this->expectException(RuntimeException::class);
 
         $this->process($container);
     }
 
     public function testProcessDetectsNonSyntheticNonAbstractDefinitionWithoutClass()
     {
-        $this->expectException(RuntimeException::class);
         $container = new ContainerBuilder();
         $container->register('a')->setSynthetic(false)->setAbstract(false);
+
+        $this->expectException(RuntimeException::class);
 
         $this->process($container);
     }
@@ -64,9 +67,8 @@ class CheckDefinitionValidityPassTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->register('a', 'class');
-        $container->register('b', 'class')->setSynthetic(true)->setPublic(true);
+        $container->register('b', 'class')->setSynthetic(true);
         $container->register('c', 'class')->setAbstract(true);
-        $container->register('d', 'class')->setSynthetic(true);
 
         $this->process($container);
 
@@ -88,15 +90,15 @@ class CheckDefinitionValidityPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    /**
-     * @dataProvider provideInvalidTags
-     */
+    #[DataProvider('provideInvalidTags')]
     public function testInvalidTags(string $name, array $attributes, string $message)
     {
-        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage($message);
         $container = new ContainerBuilder();
         $container->register('a', 'class')->addTag($name, $attributes);
+
+        $this->expectException(RuntimeException::class);
+
         $this->process($container);
     }
 
@@ -105,37 +107,39 @@ class CheckDefinitionValidityPassTest extends TestCase
         $message = 'A "tags" attribute must be of a scalar-type for service "a", tag "%s", attribute "%s".';
         yield 'object attribute value' => [
             'foo',
-            ['bar' => new class() {}],
-            sprintf($message, 'foo', 'bar'),
+            ['bar' => new class {}],
+            \sprintf($message, 'foo', 'bar'),
         ];
         yield 'nested object attribute value' => [
             'foo',
-            ['bar' => ['baz' => new class() {}]],
-            sprintf($message, 'foo', 'bar.baz'),
+            ['bar' => ['baz' => new class {}]],
+            \sprintf($message, 'foo', 'bar.baz'),
         ];
         yield 'deeply nested object attribute value' => [
             'foo',
-            ['bar' => ['baz' => ['qux' => new class() {}]]],
-            sprintf($message, 'foo', 'bar.baz.qux'),
+            ['bar' => ['baz' => ['qux' => new class {}]]],
+            \sprintf($message, 'foo', 'bar.baz.qux'),
         ];
     }
 
     public function testDynamicPublicServiceName()
     {
-        $this->expectException(EnvParameterException::class);
         $container = new ContainerBuilder();
         $env = $container->getParameterBag()->get('env(BAR)');
         $container->register("foo.$env", 'class')->setPublic(true);
+
+        $this->expectException(EnvParameterException::class);
 
         $this->process($container);
     }
 
     public function testDynamicPublicAliasName()
     {
-        $this->expectException(EnvParameterException::class);
         $container = new ContainerBuilder();
         $env = $container->getParameterBag()->get('env(BAR)');
         $container->setAlias("foo.$env", 'class')->setPublic(true);
+
+        $this->expectException(EnvParameterException::class);
 
         $this->process($container);
     }
@@ -147,6 +151,18 @@ class CheckDefinitionValidityPassTest extends TestCase
         $container->register("foo.$env", 'class');
         $container->setAlias("bar.$env", 'class');
 
+        $this->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testProcessSkipsDefinitionsWithErrors()
+    {
+        $container = new ContainerBuilder();
+        $definition = $container->register('a')->setSynthetic(true)->setPublic(false);
+        $definition->addError('Some error message');
+
+        // This should not throw an exception because the definition has errors
         $this->process($container);
 
         $this->addToAssertionCount(1);

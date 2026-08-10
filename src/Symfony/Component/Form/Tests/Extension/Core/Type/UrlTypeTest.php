@@ -11,21 +11,12 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
+use Symfony\Component\Form\Extension\Core\Type\UrlType;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
 class UrlTypeTest extends TextTypeTest
 {
-    public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\UrlType';
-
-    public function testSubmitAddsDefaultProtocolIfNoneIsIncluded()
-    {
-        $form = $this->factory->create(static::TESTED_TYPE, 'name');
-
-        $form->submit('www.domain.com');
-
-        $this->assertSame('http://www.domain.com', $form->getData());
-        $this->assertSame('http://www.domain.com', $form->getViewData());
-    }
+    public const TESTED_TYPE = UrlType::class;
 
     public function testSubmitAddsNoDefaultProtocolIfAlreadyIncluded()
     {
@@ -86,6 +77,7 @@ class UrlTypeTest extends TextTypeTest
     public function testSubmitNullUsesDefaultEmptyData($emptyData = 'empty', $expectedData = 'http://empty')
     {
         $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'default_protocol' => 'http',
             'empty_data' => $emptyData,
         ]);
         $form->submit(null);
@@ -94,5 +86,10 @@ class UrlTypeTest extends TextTypeTest
         $this->assertSame($expectedData, $form->getViewData());
         $this->assertSame($expectedData, $form->getNormData());
         $this->assertSame($expectedData, $form->getData());
+    }
+
+    protected function getTestOptions(): array
+    {
+        return [];
     }
 }

@@ -2,10 +2,6 @@
 
 return [
     'Names' => [
-        'BDT' => [
-            'BDT',
-            'taka bangladesí',
-        ],
         'BTN' => [
             'BTN',
             'ngultrum butanés',
@@ -16,11 +12,7 @@ return [
         ],
         'JPY' => [
             '¥',
-            'yen',
-        ],
-        'LAK' => [
-            'LAK',
-            'kip laosiano',
+            'yen japonés',
         ],
         'THB' => [
             'THB',
@@ -34,10 +26,6 @@ return [
             'UZS',
             'sum',
         ],
-        'VND' => [
-            'VND',
-            'dong vietnamita',
-        ],
         'XAF' => [
             'XAF',
             'franco CFA de África central',
@@ -45,6 +33,10 @@ return [
         'ZMW' => [
             'ZMW',
             'kwacha zambiano',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'oro de Zimbabue',
         ],
     ],
 ];

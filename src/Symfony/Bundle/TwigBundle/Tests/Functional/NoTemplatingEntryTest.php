@@ -43,7 +43,7 @@ class NoTemplatingEntryTest extends TestCase
 
     protected function deleteTempDir()
     {
-        if (!file_exists($dir = sys_get_temp_dir().'/'.Kernel::VERSION.'/NoTemplatingEntryKernel')) {
+        if (!file_exists($dir = sys_get_temp_dir().'/NoTemplatingEntryKernel')) {
             return;
         }
 
@@ -61,14 +61,14 @@ class NoTemplatingEntryKernel extends Kernel
 
     public function registerContainerConfiguration(LoaderInterface $loader): void
     {
-        $loader->load(function (ContainerBuilder $container) {
+        $loader->load(static function (ContainerBuilder $container) {
+            $config = [
+                'secret' => '$ecret',
+                'form' => ['enabled' => false],
+            ];
+
             $container
-                ->loadFromExtension('framework', [
-                    'annotations' => false,
-                    'http_method_override' => false,
-                    'secret' => '$ecret',
-                    'form' => ['enabled' => false],
-                ])
+                ->loadFromExtension('framework', $config)
                 ->loadFromExtension('twig', [
                     'default_path' => __DIR__.'/templates',
                 ])
@@ -79,11 +79,11 @@ class NoTemplatingEntryKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir().'/'.Kernel::VERSION.'/NoTemplatingEntryKernel/cache/'.$this->environment;
+        return sys_get_temp_dir().'/NoTemplatingEntryKernel/cache/'.$this->environment;
     }
 
     public function getLogDir(): string
     {
-        return sys_get_temp_dir().'/'.Kernel::VERSION.'/NoTemplatingEntryKernel/logs';
+        return sys_get_temp_dir().'/NoTemplatingEntryKernel/logs';
     }
 }

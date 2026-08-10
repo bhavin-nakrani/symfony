@@ -31,18 +31,12 @@ class XmlReferenceDumper
 {
     private ?string $reference = null;
 
-    /**
-     * @return string
-     */
-    public function dump(ConfigurationInterface $configuration, string $namespace = null)
+    public function dump(ConfigurationInterface $configuration, ?string $namespace = null): string
     {
         return $this->dumpNode($configuration->getConfigTreeBuilder()->buildTree(), $namespace);
     }
 
-    /**
-     * @return string
-     */
-    public function dumpNode(NodeInterface $node, string $namespace = null)
+    public function dumpNode(NodeInterface $node, ?string $namespace = null): string
     {
         $this->reference = '';
         $this->writeNode($node, 0, true, $namespace);
@@ -52,14 +46,14 @@ class XmlReferenceDumper
         return $ref;
     }
 
-    private function writeNode(NodeInterface $node, int $depth = 0, bool $root = false, string $namespace = null): void
+    private function writeNode(NodeInterface $node, int $depth = 0, bool $root = false, ?string $namespace = null): void
     {
         $rootName = ($root ? 'config' : $node->getName());
         $rootNamespace = ($namespace ?: ($root ? 'http://example.org/schema/dic/'.$node->getName() : null));
 
         // xml remapping
         if ($node->getParent()) {
-            $remapping = array_filter($node->getParent()->getXmlRemappings(), fn (array $mapping) => $rootName === $mapping[1]);
+            $remapping = array_filter($node->getParent()->getXmlRemappings(), static fn (array $mapping) => $rootName === $mapping[1]);
 
             if (\count($remapping)) {
                 [$singular] = current($remapping);
@@ -150,8 +144,7 @@ class XmlReferenceDumper
                 }
 
                 if ($child instanceof BaseNode && $child->isDeprecated()) {
-                    $deprecation = $child->getDeprecation($child->getName(), $node->getPath());
-                    $comments[] = sprintf('Deprecated (%s)', ($deprecation['package'] || $deprecation['version'] ? "Since {$deprecation['package']} {$deprecation['version']}: " : '').$deprecation['message']);
+                    $comments[] = \sprintf('Deprecated (%s)', $child->getDeprecationMessage($node));
                 }
 
                 if ($child instanceof EnumNode) {
@@ -205,7 +198,7 @@ class XmlReferenceDumper
         $rootOpenTag = '<'.$rootName;
         if (1 >= ($attributesCount = \count($rootAttributes))) {
             if (1 === $attributesCount) {
-                $rootOpenTag .= sprintf(' %s="%s"', current(array_keys($rootAttributes)), $this->writeValue(current($rootAttributes)));
+                $rootOpenTag .= \sprintf(' %s="%s"', current(array_keys($rootAttributes)), $this->writeValue(current($rootAttributes)));
             }
 
             $rootOpenTag .= $rootIsEmptyTag ? ' />' : '>';
@@ -221,7 +214,7 @@ class XmlReferenceDumper
             $i = 1;
 
             foreach ($rootAttributes as $attrName => $attrValue) {
-                $attr = sprintf('%s="%s"', $attrName, $this->writeValue($attrValue));
+                $attr = \sprintf('%s="%s"', $attrName, $this->writeValue($attrValue));
 
                 $this->writeLine($attr, $depth + 4);
 
@@ -258,7 +251,7 @@ class XmlReferenceDumper
         $indent = \strlen($text) + $indent;
         $format = '%'.$indent.'s';
 
-        $this->reference .= sprintf($format, $text).\PHP_EOL;
+        $this->reference .= \sprintf($format, $text).\PHP_EOL;
     }
 
     /**
@@ -286,7 +279,7 @@ class XmlReferenceDumper
             return 'null';
         }
 
-        if (empty($value)) {
+        if (!$value) {
             return '';
         }
 

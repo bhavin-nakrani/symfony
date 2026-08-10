@@ -37,12 +37,6 @@ class Symfony_DI_PhpDumper_Test_Deep_Graph extends Container
         return true;
     }
 
-    public function getRemovedIds(): array
-    {
-        return [
-        ];
-    }
-
     /**
      * Gets the public 'bar' shared service.
      *
@@ -50,11 +44,23 @@ class Symfony_DI_PhpDumper_Test_Deep_Graph extends Container
      */
     protected static function getBarService($container)
     {
-        $container->services['bar'] = $instance = new \stdClass();
+        try {
+            $instance = new \stdClass();
 
-        $instance->p5 = new \stdClass(($container->services['foo'] ?? self::getFooService($container)));
+            if (isset($container->services['bar'])) {
+                return $container->services['bar'];
+            }
 
-        return $instance;
+            $container->services['bar'] = $instance;
+
+            $instance->p5 = new \stdClass(($container->services['foo'] ?? self::getFooService($container)));
+
+            return $instance;
+        } catch (\Throwable $e) {
+            unset($container->services['bar']);
+
+            throw $e;
+        }
     }
 
     /**
@@ -76,6 +82,12 @@ class Symfony_DI_PhpDumper_Test_Deep_Graph extends Container
 
         $b->p2 = $c;
 
-        return $container->services['foo'] = new \Symfony\Component\DependencyInjection\Tests\Dumper\FooForDeepGraph($a, $b);
+        $instance = new \Symfony\Component\DependencyInjection\Tests\Dumper\FooForDeepGraph($a, $b);
+
+        if (isset($container->services['foo'])) {
+            return $container->services['foo'];
+        }
+
+        return $container->services['foo'] = $instance;
     }
 }

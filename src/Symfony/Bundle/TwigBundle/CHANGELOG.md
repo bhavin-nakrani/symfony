@@ -1,6 +1,45 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Add `twig.safe_class` resource tag to register safe classes for Twig's escaper
+
+8.0
+---
+
+ * Make `TemplateCacheWarmer` class `final`
+ * Remove the `base_template_class` config option
+
+7.4
+---
+
+* Deprecate setting the `exception_controller` config to `null`. This was a legacy opt-out of a deprecation that is a no-op since Symfony 5.0. Remove that setting entirely instead.
+
+7.3
+---
+
+ * Enable `#[AsTwigFilter]`, `#[AsTwigFunction]` and `#[AsTwigTest]` attributes
+   to configure extensions on runtime classes
+ * Add support for a `twig` validator
+ * Use `ChainCache` to store warmed-up cache in `kernel.build_dir` and runtime cache in `kernel.cache_dir`
+ * Make `TemplateCacheWarmer` use `kernel.build_dir` instead of `kernel.cache_dir`
+
+7.1
+---
+
+ * Mark class `TemplateCacheWarmer` as `final`
+
+7.0
+---
+
+ * Remove the `Twig_Environment` autowiring alias, use `Twig\Environment` instead
+ * Remove option `twig.autoescape`; create a class that implements your escaping strategy
+   (check `FileExtensionEscapingStrategy::guess()` for inspiration) and reference it using
+   the `twig.autoescape_service` option instead
+ * Drop support for Twig 2
+
 6.4
 ---
 

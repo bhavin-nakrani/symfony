@@ -11,32 +11,31 @@
 
 namespace Symfony\Component\Cache\Tests\Adapter;
 
-use PHPUnit\Framework\SkippedTestSuiteError;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\AbstractAdapter;
 use Symfony\Component\Cache\Adapter\RedisAdapter;
 use Symfony\Component\Cache\Exception\InvalidArgumentException;
 use Symfony\Component\Cache\Traits\RedisClusterProxy;
 
-/**
- * @group integration
- */
+#[Group('integration')]
 class RedisClusterAdapterTest extends AbstractRedisAdapterTestCase
 {
     public static function setUpBeforeClass(): void
     {
         if (!class_exists(\RedisCluster::class)) {
-            throw new SkippedTestSuiteError('The RedisCluster class is required.');
+            self::markTestSkipped('The RedisCluster class is required.');
         }
         if (!$hosts = getenv('REDIS_CLUSTER_HOSTS')) {
-            throw new SkippedTestSuiteError('REDIS_CLUSTER_HOSTS env var is not defined.');
+            self::markTestSkipped('REDIS_CLUSTER_HOSTS env var is not defined.');
         }
 
         self::$redis = AbstractAdapter::createConnection('redis:?host['.str_replace(' ', ']&host[', $hosts).']', ['lazy' => true, 'redis_cluster' => true]);
         self::$redis->setOption(\Redis::OPT_PREFIX, 'prefix_');
     }
 
-    public function createCachePool(int $defaultLifetime = 0, string $testMethod = null): CacheItemPoolInterface
+    public function createCachePool(int $defaultLifetime = 0, ?string $testMethod = null): CacheItemPoolInterface
     {
         if ('testClearWithPrefix' === $testMethod && \defined('Redis::SCAN_PREFIX')) {
             self::$redis->setOption(\Redis::OPT_SCAN, \Redis::SCAN_PREFIX);
@@ -48,9 +47,7 @@ class RedisClusterAdapterTest extends AbstractRedisAdapterTestCase
         return $adapter;
     }
 
-    /**
-     * @dataProvider provideFailedCreateConnection
-     */
+    #[DataProvider('provideFailedCreateConnection')]
     public function testFailedCreateConnection(string $dsn)
     {
         $this->expectException(InvalidArgumentException::class);

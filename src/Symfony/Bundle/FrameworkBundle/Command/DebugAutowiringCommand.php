@@ -15,14 +15,12 @@ use Symfony\Bundle\FrameworkBundle\Console\Descriptor\Descriptor;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Completion\CompletionInput;
 use Symfony\Component\Console\Completion\CompletionSuggestions;
-use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\DependencyInjection\Attribute\Target;
-use Symfony\Component\HttpKernel\Debug\FileLinkFormatter;
+use Symfony\Component\ErrorHandler\ErrorRenderer\FileLinkFormatter;
 
 /**
  * A console command for autowiring information.
@@ -34,13 +32,10 @@ use Symfony\Component\HttpKernel\Debug\FileLinkFormatter;
 #[AsCommand(name: 'debug:autowiring', description: 'List classes/interfaces you can use for autowiring')]
 class DebugAutowiringCommand extends ContainerDebugCommand
 {
-    private bool $supportsHref;
-    private ?FileLinkFormatter $fileLinkFormatter;
-
-    public function __construct(string $name = null, FileLinkFormatter $fileLinkFormatter = null)
-    {
-        $this->supportsHref = method_exists(OutputFormatterStyle::class, 'setHref');
-        $this->fileLinkFormatter = $fileLinkFormatter;
+    public function __construct(
+        ?string $name = null,
+        private ?FileLinkFormatter $fileLinkFormatter = null,
+    ) {
         parent::__construct($name);
     }
 
@@ -52,16 +47,16 @@ class DebugAutowiringCommand extends ContainerDebugCommand
                 new InputOption('all', null, InputOption::VALUE_NONE, 'Show also services that are not aliased'),
             ])
             ->setHelp(<<<'EOF'
-The <info>%command.name%</info> command displays the classes and interfaces that
-you can use as type-hints for autowiring:
+                The <info>%command.name%</info> command displays the classes and interfaces that
+                you can use as type-hints for autowiring:
 
-  <info>php %command.full_name%</info>
+                  <info>php %command.full_name%</info>
 
-You can also pass a search term to filter the list:
+                You can also pass a search term to filter the list:
 
-  <info>php %command.full_name% log</info>
+                  <info>php %command.full_name% log</info>
 
-EOF
+                EOF
             )
         ;
     }
@@ -78,10 +73,10 @@ EOF
         if ($search = $input->getArgument('search')) {
             $searchNormalized = preg_replace('/[^a-zA-Z0-9\x7f-\xff $]++/', '', $search);
 
-            $serviceIds = array_filter($serviceIds, fn ($serviceId) => false !== stripos(str_replace('\\', '', $serviceId), $searchNormalized) && !str_starts_with($serviceId, '.'));
+            $serviceIds = array_filter($serviceIds, static fn ($serviceId) => false !== stripos(str_replace('\\', '', $serviceId), $searchNormalized) && !str_starts_with($serviceId, '.'));
 
             if (!$serviceIds) {
-                $errorIo->error(sprintf('No autowirable classes or interfaces found matching "%s"', $search));
+                $errorIo->error(\sprintf('No autowirable classes or interfaces found matching "%s"', $search));
 
                 return 1;
             }
@@ -98,9 +93,10 @@ EOF
         uasort($serviceIds, 'strnatcmp');
 
         $io->title('Autowirable Types');
-        $io->text('The following classes & interfaces can be used as type-hints when autowiring:');
+        $io->text('Use the following classes & interfaces as type-hints in constructor arguments to autowire services.');
+        $io->text('Add <fg=magenta>#[Target(\'</><fg=cyan>name</><fg=magenta>\')]</> to the argument to select a specific variant.');
         if ($search) {
-            $io->text(sprintf('(only showing classes/interfaces matching <comment>%s</comment>)', $search));
+            $io->text(\sprintf('(only showing classes/interfaces matching <comment>%s</comment>)', $search));
         }
         $hasAlias = [];
         $all = $input->getOption('all');
@@ -112,21 +108,16 @@ EOF
             }
             $text = [];
             $resolvedServiceId = $serviceId;
-            if (!str_starts_with($serviceId, $previousId.' $')) {
+            $description = '';
+
+            if ($isNewGroup = !str_starts_with($serviceId, $previousId.' $')) {
                 $text[] = '';
                 $previousId = preg_replace('/ \$.*/', '', $serviceId);
-                if ('' !== $description = Descriptor::getClassDescription($previousId, $resolvedServiceId)) {
-                    if (isset($hasAlias[$previousId])) {
-                        continue;
-                    }
-                    $text[] = $description;
+                $skipReflection = $container->hasAlias($previousId) && $container->getAlias($previousId)->isDeprecated();
+                $description = $skipReflection ? '' : Descriptor::getClassDescription($previousId, $resolvedServiceId);
+                if ('' !== $description && isset($hasAlias[$previousId])) {
+                    continue;
                 }
-            }
-
-            $serviceLine = sprintf('<fg=yellow>%s</>', $serviceId);
-            if ($this->supportsHref && '' !== $fileLink = $this->getFileLink($previousId)) {
-                $serviceLine = substr($serviceId, \strlen($previousId));
-                $serviceLine = sprintf('<fg=yellow;href=%s>%s</>', $fileLink, $previousId).('' !== $serviceLine ? sprintf('<fg=yellow>%s</>', $serviceLine) : '');
             }
 
             if ($container->hasAlias($serviceId)) {
@@ -135,14 +126,13 @@ EOF
                 $alias = (string) $serviceAlias;
 
                 $target = null;
-                foreach ($reverseAliases[(string) $serviceAlias] ?? [] as $id) {
-                    if (!str_starts_with($id, '.'.$previousId.' $')) {
+                foreach ($reverseAliases[$alias] ?? [] as $id) {
+                    if (!str_starts_with($id, '.'.$previousId.' $') || !str_contains($serviceId, ' $')) {
                         continue;
                     }
                     $target = substr($id, \strlen($previousId) + 3);
 
-                    if ($previousId.' $'.(new Target($target))->getParsedName() === $serviceId) {
-                        $serviceLine .= ' - <fg=magenta>target:</><fg=cyan>'.$target.'</>';
+                    if ($container->findDefinition($id) === $container->findDefinition($serviceId)) {
                         break;
                     }
                 }
@@ -151,27 +141,79 @@ EOF
                     $alias = $decorated[0]['id'];
                 }
 
-                if ($alias !== $target) {
-                    $serviceLine .= ' - <fg=magenta>alias:</><fg=cyan>'.$alias.'</>';
-                }
+                if ($isNewGroup) {
+                    // Build the main type line with optional file link
+                    $typeLine = \sprintf('<fg=yellow>%s</>', $previousId);
+                    if (!$skipReflection && '' !== $fileLink = $this->getFileLink($previousId)) {
+                        $typeLine = \sprintf('<fg=yellow;href=%s>%s</>', $fileLink, $previousId);
+                    }
 
-                if ($serviceAlias->isDeprecated()) {
-                    $serviceLine .= ' - <fg=magenta>deprecated</>';
+                    if (null !== $target) {
+                        // Type whose first entry is already targeted (no un-targeted base)
+                        $text[] = $typeLine;
+                        if ('' !== $description) {
+                            $text[] = \sprintf('  %s', $description);
+                        }
+                        $targetLine = \sprintf('  <fg=magenta>#[Target(\'</><fg=cyan>%s</><fg=magenta>\')]</>', $target);
+                        if ($alias !== $target) {
+                            $targetLine .= \sprintf(' → <fg=cyan>%s</>', $alias);
+                        }
+                        if ($serviceAlias->isDeprecated()) {
+                            $targetLine .= ' <fg=magenta>[deprecated]</>';
+                        }
+                        $text[] = $targetLine;
+                    } else {
+                        // Regular main entry: Type → alias
+                        if ($alias !== $target) {
+                            $typeLine .= \sprintf(' → <fg=cyan>%s</>', $alias);
+                        }
+                        if ($serviceAlias->isDeprecated()) {
+                            $typeLine .= ' <fg=magenta>[deprecated]</>';
+                        }
+                        $text[] = $typeLine;
+                        if ('' !== $description) {
+                            $text[] = \sprintf('  %s', $description);
+                        }
+                    }
+                } else {
+                    // Variant entry: indented #[Target] line
+                    if (null !== $target) {
+                        $variantLine = \sprintf('  <fg=magenta>#[Target(\'</><fg=cyan>%s</><fg=magenta>\')]</>', $target);
+                    } else {
+                        $variantLine = \sprintf('  <fg=yellow>%s</>', $serviceId);
+                    }
+                    if ($alias !== $target) {
+                        $variantLine .= \sprintf(' → <fg=cyan>%s</>', $alias);
+                    }
+                    if ($serviceAlias->isDeprecated()) {
+                        $variantLine .= ' <fg=magenta>[deprecated]</>';
+                    }
+                    $text[] = $variantLine;
                 }
             } elseif (!$all) {
                 ++$serviceIdsNb;
                 continue;
-            } elseif ($container->getDefinition($serviceId)->isDeprecated()) {
-                $serviceLine .= ' - <fg=magenta>deprecated</>';
+            } else {
+                // Service without alias (shown with --all)
+                $serviceLine = \sprintf('<fg=yellow>%s</>', $previousId);
+                if ('' !== $fileLink = $this->getFileLink($previousId)) {
+                    $serviceLine = \sprintf('<fg=yellow;href=%s>%s</>', $fileLink, $previousId);
+                }
+                if ($container->getDefinition($serviceId)->isDeprecated()) {
+                    $serviceLine .= ' <fg=magenta>[deprecated]</>';
+                }
+                $text[] = $serviceLine;
+                if ($isNewGroup && '' !== $description) {
+                    $text[] = \sprintf('  %s', $description);
+                }
             }
-            $text[] = $serviceLine;
             $io->text($text);
         }
 
         $io->newLine();
 
         if (0 < $serviceIdsNb) {
-            $io->text(sprintf('%s more concrete service%s would be displayed when adding the "--all" option.', $serviceIdsNb, $serviceIdsNb > 1 ? 's' : ''));
+            $io->text(\sprintf('%s more concrete service%s would be displayed when adding the "--all" option.', $serviceIdsNb, $serviceIdsNb > 1 ? 's' : ''));
         }
         if ($all) {
             $io->text('Pro-tip: use interfaces in your type-hints instead of classes to benefit from the dependency inversion principle.');
@@ -189,7 +231,7 @@ EOF
             return '';
         }
 
-        return (string) $this->fileLinkFormatter->format($r->getFileName(), $r->getStartLine());
+        return $r->getFileName() ? ($this->fileLinkFormatter->format($r->getFileName(), $r->getStartLine()) ?: '') : '';
     }
 
     public function complete(CompletionInput $input, CompletionSuggestions $suggestions): void

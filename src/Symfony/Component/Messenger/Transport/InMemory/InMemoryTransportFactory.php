@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Messenger\Transport\InMemory;
 
+use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportFactoryInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
@@ -18,6 +19,8 @@ use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * @author Gary PEGEOT <garypegeot@gmail.com>
+ *
+ * @implements TransportFactoryInterface<InMemoryTransport>
  */
 class InMemoryTransportFactory implements TransportFactoryInterface, ResetInterface
 {
@@ -26,11 +29,16 @@ class InMemoryTransportFactory implements TransportFactoryInterface, ResetInterf
      */
     private array $createdTransports = [];
 
+    public function __construct(
+        private readonly ?ClockInterface $clock = null,
+    ) {
+    }
+
     public function createTransport(string $dsn, array $options, SerializerInterface $serializer): TransportInterface
     {
         ['serialize' => $serialize] = $this->parseDsn($dsn);
 
-        return $this->createdTransports[] = new InMemoryTransport($serialize ? $serializer : null);
+        return $this->createdTransports[] = new InMemoryTransport($serialize ? $serializer : null, $this->clock);
     }
 
     public function supports(string $dsn, array $options): bool
@@ -38,10 +46,7 @@ class InMemoryTransportFactory implements TransportFactoryInterface, ResetInterf
         return str_starts_with($dsn, 'in-memory://');
     }
 
-    /**
-     * @return void
-     */
-    public function reset()
+    public function reset(): void
     {
         foreach ($this->createdTransports as $transport) {
             $transport->reset();

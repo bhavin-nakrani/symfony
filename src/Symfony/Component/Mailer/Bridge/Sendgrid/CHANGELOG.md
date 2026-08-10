@@ -1,6 +1,27 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Add support for scheduling delivery with the `send_at` API parameter via a `Send-At` date-header
+
+7.4
+---
+
+ * Add support for suppression groups via `SuppressionGroupHeader`
+ * Add support for `global` region
+
+7.2
+---
+
+ * Add support for region in DSN
+
+6.4
+---
+
+ * Add support for webhooks
+
 5.4
 ---
 

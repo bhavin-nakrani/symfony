@@ -15,9 +15,10 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\AssetMapper\AssetMapper;
 use Symfony\Component\AssetMapper\AssetMapperRepository;
+use Symfony\Component\AssetMapper\CompiledAssetMapperConfigReader;
 use Symfony\Component\AssetMapper\Factory\MappedAssetFactoryInterface;
 use Symfony\Component\AssetMapper\MappedAsset;
-use Symfony\Component\AssetMapper\Path\PublicAssetsPathResolverInterface;
+use Symfony\Component\Filesystem\Filesystem;
 
 class AssetMapperTest extends TestCase
 {
@@ -30,7 +31,7 @@ class AssetMapperTest extends TestCase
         $file1Asset = new MappedAsset('file1.css');
         $this->mappedAssetFactory->expects($this->once())
             ->method('createMappedAsset')
-            ->with('file1.css', realpath(__DIR__.'/fixtures/dir1/file1.css'))
+            ->with('file1.css', realpath(__DIR__.'/Fixtures/dir1/file1.css'))
             ->willReturn($file1Asset);
 
         $actualAsset = $assetMapper->getAsset('file1.css');
@@ -54,13 +55,36 @@ class AssetMapperTest extends TestCase
         $this->assertSame('/final-assets/file4.checksumfrommanifest.js', $assetMapper->getPublicPath('file4.js'));
     }
 
+    public function testCompiledManifestIsIgnoredInDebugMode()
+    {
+        $repository = new AssetMapperRepository(['dir1' => '', 'dir2' => '', 'dir3' => ''], __DIR__.'/Fixtures');
+
+        $filesystem = new Filesystem();
+        $writableRoot = __DIR__.'/Fixtures/debug_compiled_manifest';
+        $filesystem->dumpFile($writableRoot.'/manifest.json', json_encode(['file1.css' => '/from-manifest/file1.css']));
+
+        try {
+            $factory = $this->createStub(MappedAssetFactoryInterface::class);
+            $factory->method('createMappedAsset')
+                ->willReturn(new MappedAsset('file1.css', publicPath: '/dynamically-computed/file1.css'));
+
+            // debug: true -> the compiled manifest is ignored, the public path is computed dynamically
+            $debugReader = new CompiledAssetMapperConfigReader($writableRoot, true);
+            $assetMapper = new AssetMapper($repository, $factory, $debugReader);
+
+            $this->assertSame('/dynamically-computed/file1.css', $assetMapper->getPublicPath('file1.css'));
+        } finally {
+            $filesystem->remove($writableRoot);
+        }
+    }
+
     public function testAllAssets()
     {
         $assetMapper = $this->createAssetMapper();
 
         $this->mappedAssetFactory->expects($this->exactly(8))
             ->method('createMappedAsset')
-            ->willReturnCallback(function (string $logicalPath, string $filePath) {
+            ->willReturnCallback(static function (string $logicalPath, string $filePath) {
                 $asset = new MappedAsset($logicalPath, publicPath: '/final-assets/'.$logicalPath);
 
                 return $asset;
@@ -79,28 +103,31 @@ class AssetMapperTest extends TestCase
 
         $this->mappedAssetFactory->expects($this->once())
             ->method('createMappedAsset')
-            ->with('file1.css', realpath(__DIR__.'/fixtures/dir1/file1.css'))
+            ->with('file1.css', realpath(__DIR__.'/Fixtures/dir1/file1.css'))
             ->willReturn(new MappedAsset('file1.css'));
 
-        $asset = $assetMapper->getAssetFromSourcePath(__DIR__.'/fixtures/dir1/file1.css');
+        $asset = $assetMapper->getAssetFromSourcePath(__DIR__.'/Fixtures/dir1/file1.css');
         $this->assertSame('file1.css', $asset->logicalPath);
     }
 
     private function createAssetMapper(): AssetMapper
     {
         $dirs = ['dir1' => '', 'dir2' => '', 'dir3' => ''];
-        $repository = new AssetMapperRepository($dirs, __DIR__.'/fixtures');
-        $pathResolver = $this->createMock(PublicAssetsPathResolverInterface::class);
-        $pathResolver->expects($this->any())
-            ->method('getPublicFilesystemPath')
-            ->willReturn(__DIR__.'/fixtures/test_public/final-assets');
+        $repository = new AssetMapperRepository($dirs, __DIR__.'/Fixtures');
+        $compiledConfigReader = $this->createStub(CompiledAssetMapperConfigReader::class);
+        $compiledConfigReader
+            ->method('configExists')
+            ->willReturn(true);
+        $compiledConfigReader
+            ->method('loadConfig')
+            ->willReturn(['file4.js' => '/final-assets/file4.checksumfrommanifest.js']);
 
         $this->mappedAssetFactory = $this->createMock(MappedAssetFactoryInterface::class);
 
         return new AssetMapper(
             $repository,
             $this->mappedAssetFactory,
-            $pathResolver,
+            $compiledConfigReader,
         );
     }
 }

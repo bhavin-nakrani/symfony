@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Form\Tests\DependencyInjection;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
@@ -21,6 +22,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Form\AbstractTypeExtension;
 use Symfony\Component\Form\Command\DebugCommand;
 use Symfony\Component\Form\DependencyInjection\FormPass;
+use Symfony\Component\Form\Extension\Csrf\Type\FormTypeCsrfExtension;
 use Symfony\Component\Form\FormRegistry;
 
 /**
@@ -59,13 +61,13 @@ class FormPassTest extends TestCase
         $extDefinition = $container->getDefinition('form.extension');
 
         $locator = $extDefinition->getArgument(0);
-        $this->assertTrue(!$locator->isPublic() || $locator->isPrivate());
+        $this->assertTrue($locator->isPrivate());
         $this->assertEquals(
             (new Definition(ServiceLocator::class, [[
                 __CLASS__.'_Type1' => new ServiceClosureArgument(new Reference('my.type1')),
                 __CLASS__.'_Type2' => new ServiceClosureArgument(new Reference('my.type2')),
-            ]]))->addTag('container.service_locator')->setPublic(false),
-            $locator->setPublic(false)
+            ]]))->addTag('container.service_locator'),
+            $locator
         );
     }
 
@@ -95,9 +97,26 @@ class FormPassTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider addTaggedTypeExtensionsDataProvider
-     */
+    public function testAddTaggedTypesToCsrfTypeExtension()
+    {
+        $container = $this->createContainerBuilder();
+
+        $container->register('form.registry', FormRegistry::class);
+        $container->register('form.type_extension.csrf', FormTypeCsrfExtension::class)
+            ->setArguments([null, true, '_token', null, 'validator.translation_domain', null, [], null])
+            ->setPublic(true);
+
+        $container->setDefinition('form.extension', $this->createExtensionDefinition());
+        $container->register('my.type1', __CLASS__.'_Type1')->addTag('form.type', ['csrf_token_id' => 'the_token_id']);
+        $container->register('my.type2', __CLASS__.'_Type2')->addTag('form.type');
+
+        $container->compile();
+
+        $csrfDefinition = $container->getDefinition('form.type_extension.csrf');
+        $this->assertSame([__CLASS__.'_Type1' => 'the_token_id'], $csrfDefinition->getArgument(7));
+    }
+
+    #[DataProvider('addTaggedTypeExtensionsDataProvider')]
     public function testAddTaggedTypeExtensions(array $extensions, array $expectedRegisteredExtensions, array $parameters = [])
     {
         $container = $this->createContainerBuilder();
@@ -260,9 +279,21 @@ class FormPassTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider privateTaggedServicesProvider
-     */
+    public function testTypeExtensionClassIsTrackedAsResource()
+    {
+        $container = $this->createContainerBuilder();
+
+        $container->setDefinition('form.extension', $this->createExtensionDefinition());
+        $container->register('my.type_extension', Type1TypeExtension::class)
+            ->addTag('form.type_extension');
+
+        $container->compile();
+
+        $resources = array_map('strval', $container->getResources());
+        $this->assertContains('reflection.'.Type1TypeExtension::class, $resources);
+    }
+
+    #[DataProvider('privateTaggedServicesProvider')]
     public function testPrivateTaggedServices($id, $class, $tagName, callable $assertion, array $tagAttributes = [])
     {
         $formPass = new FormPass();
@@ -282,7 +313,7 @@ class FormPassTest extends TestCase
                 'my.type',
                 'stdClass',
                 'form.type',
-                function (ContainerBuilder $container) {
+                static function (ContainerBuilder $container) {
                     $formTypes = $container->getDefinition('form.extension')->getArgument(0);
 
                     self::assertInstanceOf(Reference::class, $formTypes);
@@ -300,7 +331,7 @@ class FormPassTest extends TestCase
                 'my.type_extension',
                 Type1TypeExtension::class,
                 'form.type_extension',
-                function (ContainerBuilder $container) {
+                static function (ContainerBuilder $container) {
                     self::assertEquals(
                         ['Symfony\Component\Form\Extension\Core\Type\FormType' => new IteratorArgument([new Reference('my.type_extension')])],
                         $container->getDefinition('form.extension')->getArgument(1)
@@ -308,7 +339,7 @@ class FormPassTest extends TestCase
                 },
                 ['extended_type' => 'Symfony\Component\Form\Extension\Core\Type\FormType'],
             ],
-            ['my.guesser', 'stdClass', 'form.type_guesser', function (ContainerBuilder $container) {
+            ['my.guesser', 'stdClass', 'form.type_guesser', static function (ContainerBuilder $container) {
                 self::assertEquals(new IteratorArgument([new Reference('my.guesser')]), $container->getDefinition('form.extension')->getArgument(2));
             }],
         ];

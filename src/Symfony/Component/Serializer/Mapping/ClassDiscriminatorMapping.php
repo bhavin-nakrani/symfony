@@ -22,6 +22,7 @@ class ClassDiscriminatorMapping
     public function __construct(
         private readonly string $typeProperty,
         private array $typesMapping = [],
+        private readonly ?string $defaultType = null,
     ) {
         uasort($this->typesMapping, static function (string $a, string $b): int {
             if (is_a($a, $b, true)) {
@@ -48,17 +49,44 @@ class ClassDiscriminatorMapping
 
     public function getMappedObjectType(object|string $object): ?string
     {
+        $mappedType = null;
         foreach ($this->typesMapping as $type => $typeClass) {
             if (is_a($object, $typeClass, true)) {
-                return $type;
+                $mappedType = $type;
+                break;
             }
         }
 
-        return null;
+        if (null === $mappedType || !\is_object($object) || !property_exists($object, $this->typeProperty)) {
+            return $mappedType;
+        }
+
+        try {
+            $value = (new \ReflectionProperty($object, $this->typeProperty))->getValue($object);
+        } catch (\Error) {
+            return $mappedType;
+        }
+
+        if ($value instanceof \BackedEnum) {
+            $value = $value->value;
+        }
+
+        // several types can map to the same class, in which case the value carried by the object
+        // decides which of them is used
+        if ((\is_string($value) || \is_int($value)) && ($this->typesMapping[$value] ?? null) === $this->typesMapping[$mappedType]) {
+            return (string) $value;
+        }
+
+        return $mappedType;
     }
 
     public function getTypesMapping(): array
     {
         return $this->typesMapping;
+    }
+
+    public function getDefaultType(): ?string
+    {
+        return $this->defaultType;
     }
 }

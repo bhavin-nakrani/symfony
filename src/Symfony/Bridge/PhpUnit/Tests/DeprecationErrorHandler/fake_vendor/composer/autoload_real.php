@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 class ComposerLoaderFake
 {
     public function getPrefixes()
@@ -17,6 +26,16 @@ class ComposerLoaderFake
         ];
     }
 
+    public function getFallbackDirs()
+    {
+        return [];
+    }
+
+    public function getFallbackDirsPsr4()
+    {
+        return [];
+    }
+
     public function loadClass($className)
     {
         if ($file = $this->findFile($className)) {
@@ -27,7 +46,7 @@ class ComposerLoaderFake
     public function findFile($class)
     {
         foreach ($this->getPrefixesPsr4() as $prefix => $baseDirs) {
-            if (0 !== strpos($class, $prefix)) {
+            if (!str_starts_with($class, $prefix)) {
                 continue;
             }
 

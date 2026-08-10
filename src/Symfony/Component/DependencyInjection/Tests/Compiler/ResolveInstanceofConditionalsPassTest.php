@@ -22,6 +22,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\DependencyInjection\TypedReference;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Service\ServiceSubscriberInterface;
 
@@ -39,7 +40,7 @@ class ResolveInstanceofConditionalsPassTest extends TestCase
 
         $parent = '.instanceof.'.parent::class.'.0.foo';
         $def = $container->getDefinition('foo');
-        $this->assertEmpty($def->getInstanceofConditionals());
+        $this->assertSame([], $def->getInstanceofConditionals());
         $this->assertInstanceOf(ChildDefinition::class, $def);
         $this->assertTrue($def->isAutowired());
         $this->assertSame($parent, $def->getParent());
@@ -136,6 +137,32 @@ class ResolveInstanceofConditionalsPassTest extends TestCase
         $this->assertEquals('locally_set_factory', $def->getFactory());
         // tags are merged, the locally set one is first
         $this->assertSame(['local_instanceof_tag' => [[]], 'autoconfigured_tag' => [[]]], $def->getTags());
+    }
+
+    public function testAutoconfigurationOfTheClassWinsOverTheInheritedOne()
+    {
+        $container = new ContainerBuilder();
+        $container->register('normal_service', self::class)->setAutoconfigured(true);
+        $container->registerForAutoconfiguration(self::class)->addTag('some_tag', ['priority' => 100]);
+        $container->registerForAutoconfiguration(parent::class)->addTag('some_tag');
+
+        (new ResolveInstanceofConditionalsPass())->process($container);
+
+        $this->assertSame([['priority' => 100], []], $container->getDefinition('normal_service')->getTag('some_tag'));
+    }
+
+    public function testAutoconfiguredTagsAreOrderedFromTheMostSpecificType()
+    {
+        $container = new ContainerBuilder();
+        $container->register('normal_service', TypedReference::class)->setAutoconfigured(true);
+        $container->registerForAutoconfiguration(Reference::class)->addTag('some_tag', ['from' => 'parent']);
+        $container->registerForAutoconfiguration(\Stringable::class)->addTag('some_tag', ['from' => 'interface']);
+        $container->registerForAutoconfiguration(TypedReference::class)->addTag('some_tag', ['from' => 'class']);
+
+        (new ResolveInstanceofConditionalsPass())->process($container);
+
+        $expected = [['from' => 'class'], ['from' => 'parent'], ['from' => 'interface']];
+        $this->assertSame($expected, $container->getDefinition('normal_service')->getTag('some_tag'));
     }
 
     public function testAutoconfigureInstanceofDoesNotDuplicateTags()
@@ -266,10 +293,10 @@ class ResolveInstanceofConditionalsPassTest extends TestCase
 
         $abstract = $container->getDefinition('.abstract.instanceof.bar');
 
-        $this->assertEmpty($abstract->getArguments());
-        $this->assertEmpty($abstract->getMethodCalls());
+        $this->assertSame([], $abstract->getArguments());
+        $this->assertSame([], $abstract->getMethodCalls());
         $this->assertNull($abstract->getDecoratedService());
-        $this->assertEmpty($abstract->getTags());
+        $this->assertSame([], $abstract->getTags());
         $this->assertTrue($abstract->isAbstract());
     }
 
@@ -375,6 +402,21 @@ class ResolveInstanceofConditionalsPassTest extends TestCase
             ],
         ], $container->getDefinition('decorator')->getTags());
         $this->assertFalse($container->hasParameter('container.behavior_describing_tags'));
+    }
+
+    public function testSyntheticService()
+    {
+        $container = new ContainerBuilder();
+        $container->register('kernel', \stdClass::class)
+            ->setInstanceofConditionals([
+                \stdClass::class => (new ChildDefinition(''))
+                    ->addTag('container.excluded'),
+            ])
+            ->setSynthetic(true);
+
+        (new ResolveInstanceofConditionalsPass())->process($container);
+
+        $this->assertSame([], $container->getDefinition('kernel')->getTags());
     }
 }
 

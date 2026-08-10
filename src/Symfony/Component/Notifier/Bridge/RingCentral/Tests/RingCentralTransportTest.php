@@ -11,7 +11,9 @@
 
 namespace Symfony\Component\Notifier\Bridge\RingCentral\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\RingCentral\RingCentralOptions;
 use Symfony\Component\Notifier\Bridge\RingCentral\RingCentralTransport;
 use Symfony\Component\Notifier\Exception\InvalidArgumentException;
@@ -24,7 +26,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final class RingCentralTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null, string $from = 'from'): RingCentralTransport
+    public static function createTransport(?HttpClientInterface $client = null, string $from = 'from'): RingCentralTransport
     {
         return new RingCentralTransport('apiToken', $from, $client ?? new MockHttpClient());
     }
@@ -41,33 +43,26 @@ final class RingCentralTransportTest extends TransportTestCase
         yield [new SmsMessage('0611223344', 'Hello!', 'from', new RingCentralOptions(['from' => 'foo']))];
     }
 
-    /**
-     * @dataProvider invalidFromProvider
-     */
+    #[DataProvider('invalidFromProvider')]
     public function testInvalidArgumentExceptionIsThrownIfFromIsInvalid(string $from)
     {
         $transport = $this->createTransport(null, $from);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The "From" number "%s" is not a valid phone number.', $from));
+        $this->expectExceptionMessage(\sprintf('The "From" number "%s" is not a valid phone number.', $from));
 
         $transport->send(new SmsMessage('+33612345678', 'Hello!'));
     }
 
-    /**
-     * @dataProvider validFromProvider
-     */
+    #[DataProvider('validFromProvider')]
     public function testNoInvalidArgumentExceptionIsThrownIfFromIsValid(string $from)
     {
         $message = new SmsMessage('+33612345678', 'Hello!');
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects(self::exactly(2))->method('getStatusCode')->willReturn(200);
-        $response->expects(self::once())->method('getContent')->willReturn(json_encode(['id' => 'foo']));
-        $client = new MockHttpClient(function (string $method, string $url) use ($response): ResponseInterface {
+        $client = new MockHttpClient(static function (string $method, string $url): ResponseInterface {
             self::assertSame('POST', $method);
             self::assertSame('https://platform.ringcentral.com/restapi/v1.0/account/~/extension/~/sms', $url);
 
-            return $response;
+            return new MockResponse(json_encode(['id' => 'foo']));
         }
         );
         $transport = $this->createTransport($client, $from);

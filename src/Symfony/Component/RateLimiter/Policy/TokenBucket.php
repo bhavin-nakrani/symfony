@@ -20,26 +20,34 @@ use Symfony\Component\RateLimiter\LimiterStateInterface;
  */
 final class TokenBucket implements LimiterStateInterface
 {
-    private string $id;
-    private Rate $rate;
+    /**
+     * __serialize() stores the burst size in a 32-bit field; 2^31-1 is the
+     * largest value that also survives the round trip on 32-bit platforms.
+     */
+    public const MAX_BURST_SIZE = 2147483647;
+
     private int $tokens;
     private int $burstSize;
     private float $timer;
 
     /**
      * @param string     $id            unique identifier for this bucket
-     * @param int        $initialTokens the initial number of tokens in the bucket (i.e. the max burst size)
+     * @param int        $initialTokens the initial number of tokens in the bucket (i.e. the max burst size), capped at self::MAX_BURST_SIZE
      * @param Rate       $rate          the fill rate and time of this bucket
      * @param float|null $timer         the current timer of the bucket, defaulting to microtime(true)
      */
-    public function __construct(string $id, int $initialTokens, Rate $rate, float $timer = null)
-    {
+    public function __construct(
+        private string $id,
+        int $initialTokens,
+        private Rate $rate,
+        ?float $timer = null,
+    ) {
         if ($initialTokens < 1) {
-            throw new \InvalidArgumentException(sprintf('Cannot set the limit of "%s" to 0, as that would never accept any hit.', TokenBucketLimiter::class));
+            throw new \InvalidArgumentException(\sprintf('Cannot set the limit of "%s" to 0, as that would never accept any hit.', TokenBucketLimiter::class));
         }
 
         $this->id = $id;
-        $this->tokens = $this->burstSize = $initialTokens;
+        $this->tokens = $this->burstSize = min($initialTokens, self::MAX_BURST_SIZE);
         $this->rate = $rate;
         $this->timer = $timer ?? microtime(true);
     }
@@ -67,13 +75,23 @@ final class TokenBucket implements LimiterStateInterface
     public function getAvailableTokens(float $now): int
     {
         $elapsed = max(0, $now - $this->timer);
+        $newTokens = $this->rate->calculateNewTokensDuringInterval($elapsed);
 
-        return min($this->burstSize, $this->tokens + $this->rate->calculateNewTokensDuringInterval($elapsed));
+        if ($newTokens > 0) {
+            $this->timer += $this->rate->calculateRefillInterval($elapsed);
+        }
+
+        return min($this->burstSize, $this->tokens + $newTokens);
     }
 
     public function getExpirationTime(): int
     {
-        return $this->rate->calculateTimeForTokens($this->burstSize);
+        // The bucket must persist long enough to cover both a natural refill
+        // back to the burst size and any outstanding reservation debt — the
+        // latter is tracked by a negative token count. Evicting early would
+        // lose the debt and let a fresh bucket hand out already-reserved
+        // tokens.
+        return $this->rate->calculateTimeForTokens(max($this->burstSize, $this->burstSize - $this->tokens));
     }
 
     public function __serialize(): array
@@ -89,6 +107,9 @@ final class TokenBucket implements LimiterStateInterface
         // BC layer for old objects serialized via __sleep
         if (5 === \count($data)) {
             $data = array_values($data);
+            if ($data[0] instanceof \Stringable || $data[4] instanceof \Stringable) {
+                throw new \BadMethodCallException('Cannot unserialize '.self::class);
+            }
             $this->id = $data[0];
             $this->tokens = $data[1];
             $this->timer = $data[2];

@@ -21,16 +21,10 @@ use Symfony\Component\String\UnicodeString;
  */
 abstract class Helper implements HelperInterface
 {
-    protected $helperSet;
+    protected ?HelperSet $helperSet = null;
 
-    /**
-     * @return void
-     */
-    public function setHelperSet(HelperSet $helperSet = null)
+    public function setHelperSet(?HelperSet $helperSet): void
     {
-        if (1 > \func_num_args()) {
-            trigger_deprecation('symfony/console', '6.2', 'Calling "%s()" without any arguments is deprecated, pass null explicitly instead.', __METHOD__);
-        }
         $this->helperSet = $helperSet;
     }
 
@@ -47,8 +41,18 @@ abstract class Helper implements HelperInterface
     {
         $string ??= '';
 
-        if (preg_match('//u', $string)) {
-            return (new UnicodeString($string))->width(false);
+        if ('' === $string) {
+            return 0;
+        }
+
+        // Fast path for ASCII-only strings (no multi-byte, no control chars except common ones)
+        if (!preg_match('/[^\x20-\x7E]/', $string)) {
+            return \strlen($string);
+        }
+
+        // Single PCRE call: returns null if string is not valid UTF-8
+        if (null !== $clean = preg_replace('/[\p{Cc}\x7F]++/u', '', $string, -1, $count)) {
+            return (new UnicodeString($clean))->width(false) + $count;
         }
 
         if (false === $encoding = mb_detect_encoding($string, null, true)) {
@@ -80,9 +84,13 @@ abstract class Helper implements HelperInterface
     /**
      * Returns the subset of a string, using mb_substr if it is available.
      */
-    public static function substr(?string $string, int $from, int $length = null): string
+    public static function substr(?string $string, int $from, ?int $length = null): string
     {
         $string ??= '';
+
+        if (preg_match('//u', $string)) {
+            return (new UnicodeString($string))->slice($from, $length);
+        }
 
         if (false === $encoding = mb_detect_encoding($string, null, true)) {
             return substr($string, $from, $length);
@@ -91,67 +99,77 @@ abstract class Helper implements HelperInterface
         return mb_substr($string, $from, $length, $encoding);
     }
 
-    /**
-     * @return string
-     */
-    public static function formatTime(int|float $secs)
+    public static function formatTime(int|float $secs, int $precision = 1): string
     {
+        $ms = (int) ($secs * 1000);
+        $secs = (int) floor($secs);
+
+        if (0 === $ms) {
+            return '< 1 ms';
+        }
+
         static $timeFormats = [
-            [0, '< 1 sec'],
-            [1, '1 sec'],
-            [2, 'secs', 1],
-            [60, '1 min'],
-            [120, 'mins', 60],
-            [3600, '1 hr'],
-            [7200, 'hrs', 3600],
-            [86400, '1 day'],
-            [172800, 'days', 86400],
+            [1, 'ms'],
+            [1000, 's'],
+            [60000, 'min'],
+            [3600000, 'h'],
+            [86_400_000, 'd'],
         ];
 
+        $times = [];
         foreach ($timeFormats as $index => $format) {
-            if ($secs >= $format[0]) {
-                if ((isset($timeFormats[$index + 1]) && $secs < $timeFormats[$index + 1][0])
-                    || $index == \count($timeFormats) - 1
-                ) {
-                    if (2 == \count($format)) {
-                        return $format[1];
-                    }
+            $milliSeconds = isset($timeFormats[$index + 1]) ? $ms % $timeFormats[$index + 1][0] : $ms;
 
-                    return floor($secs / $format[2]).' '.$format[1];
-                }
+            if (isset($times[$index - $precision])) {
+                unset($times[$index - $precision]);
             }
+
+            if (0 === $milliSeconds) {
+                continue;
+            }
+
+            $unitCount = ($milliSeconds / $format[0]);
+            $times[$index] = $unitCount.' '.$format[1];
+
+            if ($ms === $milliSeconds) {
+                break;
+            }
+
+            $ms -= $milliSeconds;
         }
+
+        return implode(', ', array_reverse($times));
     }
 
-    /**
-     * @return string
-     */
-    public static function formatMemory(int $memory)
+    public static function formatMemory(int $memory): string
     {
         if ($memory >= 1024 * 1024 * 1024) {
-            return sprintf('%.1f GiB', $memory / 1024 / 1024 / 1024);
+            return \sprintf('%.1f GiB', $memory / 1024 / 1024 / 1024);
         }
 
         if ($memory >= 1024 * 1024) {
-            return sprintf('%.1f MiB', $memory / 1024 / 1024);
+            return \sprintf('%.1f MiB', $memory / 1024 / 1024);
         }
 
         if ($memory >= 1024) {
-            return sprintf('%d KiB', $memory / 1024);
+            return \sprintf('%d KiB', $memory / 1024);
         }
 
-        return sprintf('%d B', $memory);
+        return \sprintf('%d B', $memory);
     }
 
-    /**
-     * @return string
-     */
-    public static function removeDecoration(OutputFormatterInterface $formatter, ?string $string)
+    public static function removeDecoration(OutputFormatterInterface $formatter, ?string $string): string
     {
+        $string ??= '';
+
+        if (!str_contains($string, '<') && !str_contains($string, "\033")) {
+            return $string;
+        }
+
         $isDecorated = $formatter->isDecorated();
         $formatter->setDecorated(false);
         // remove <...> formatting
-        $string = $formatter->format($string ?? '');
+        $string = $formatter->format($string);
         // remove already formatted characters
         $string = preg_replace("/\033\[[^m]*m/", '', $string ?? '');
         // remove terminal hyperlinks

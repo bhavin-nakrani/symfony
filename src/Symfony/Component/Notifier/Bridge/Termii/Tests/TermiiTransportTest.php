@@ -11,7 +11,9 @@
 
 namespace Symfony\Component\Notifier\Bridge\Termii\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Termii\TermiiOptions;
 use Symfony\Component\Notifier\Bridge\Termii\TermiiTransport;
 use Symfony\Component\Notifier\Exception\InvalidArgumentException;
@@ -24,7 +26,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final class TermiiTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null, string $from = 'from'): TermiiTransport
+    public static function createTransport(?HttpClientInterface $client = null, string $from = 'from'): TermiiTransport
     {
         return new TermiiTransport('apiKey', $from, 'generic', $client ?? new MockHttpClient());
     }
@@ -43,33 +45,26 @@ final class TermiiTransportTest extends TransportTestCase
         yield [new SmsMessage('0611223344', 'Hello!', 'from', new TermiiOptions(['from' => 'foo']))];
     }
 
-    /**
-     * @dataProvider invalidFromProvider
-     */
+    #[DataProvider('invalidFromProvider')]
     public function testInvalidArgumentExceptionIsThrownIfFromIsInvalid(string $from)
     {
         $transport = $this->createTransport(null, $from);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $from));
+        $this->expectExceptionMessage(\sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $from));
 
         $transport->send(new SmsMessage('+33612345678', 'Hello!'));
     }
 
-    /**
-     * @dataProvider validFromProvider
-     */
+    #[DataProvider('validFromProvider')]
     public function testNoInvalidArgumentExceptionIsThrownIfFromIsValid(string $from)
     {
         $message = new SmsMessage('+33612345678', 'Hello!');
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects(self::exactly(2))->method('getStatusCode')->willReturn(200);
-        $response->expects(self::once())->method('getContent')->willReturn(json_encode(['message' => 'Successfully sent', 'message_id' => 'foo', 'balance' => 9, 'user' => 'Foo Bar']));
-        $client = new MockHttpClient(function (string $method, string $url) use ($response): ResponseInterface {
+        $client = new MockHttpClient(static function (string $method, string $url): ResponseInterface {
             self::assertSame('POST', $method);
             self::assertSame('https://api.ng.termii.com/api/sms/send', $url);
 
-            return $response;
+            return new MockResponse(json_encode(['message' => 'Successfully sent', 'message_id' => 'foo', 'balance' => 9, 'user' => 'Foo Bar']));
         }
         );
         $transport = $this->createTransport($client, $from);

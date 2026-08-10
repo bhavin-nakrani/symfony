@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\HttpKernel\Tests\Fragment;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
@@ -26,21 +27,19 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class InlineFragmentRendererTest extends TestCase
 {
     public function testRender()
     {
-        $strategy = new InlineFragmentRenderer($this->getKernel($this->returnValue(new Response('foo'))));
+        $strategy = new InlineFragmentRenderer($this->getKernel(new Response('foo')));
 
         $this->assertEquals('foo', $strategy->render('/', Request::create('/'))->getContent());
     }
 
     public function testRenderWithControllerReference()
     {
-        $strategy = new InlineFragmentRenderer($this->getKernel($this->returnValue(new Response('foo'))));
+        $strategy = new InlineFragmentRenderer($this->getKernel(new Response('foo')));
 
         $this->assertEquals('foo', $strategy->render(new ControllerReference('main_controller', [], []), Request::create('/'))->getContent());
     }
@@ -81,7 +80,7 @@ class InlineFragmentRendererTest extends TestCase
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->expects($this->never())->method('dispatch');
 
-        $strategy = new InlineFragmentRenderer($this->getKernel($this->throwException(new \RuntimeException('foo'))), $dispatcher);
+        $strategy = new InlineFragmentRenderer($this->getKernel(new \RuntimeException('foo')), $dispatcher);
 
         $this->assertEquals('foo', $strategy->render('/', Request::create('/'))->getContent());
     }
@@ -89,7 +88,7 @@ class InlineFragmentRendererTest extends TestCase
     public function testRenderExceptionIgnoreErrors()
     {
         $exception = new \RuntimeException('foo');
-        $kernel = $this->getKernel($this->throwException($exception));
+        $kernel = $this->getKernel($exception);
         $request = Request::create('/');
         $expectedEvent = new ExceptionEvent($kernel, $request, $kernel::SUB_REQUEST, $exception);
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
@@ -97,27 +96,40 @@ class InlineFragmentRendererTest extends TestCase
 
         $strategy = new InlineFragmentRenderer($kernel, $dispatcher);
 
-        $this->assertEmpty($strategy->render('/', $request, ['ignore_errors' => true])->getContent());
+        $this->assertSame('', $strategy->render('/', $request, ['ignore_errors' => true])->getContent());
     }
 
     public function testRenderExceptionIgnoreErrorsWithAlt()
     {
-        $strategy = new InlineFragmentRenderer($this->getKernel($this->onConsecutiveCalls(
-            $this->throwException(new \RuntimeException('foo')),
-            $this->returnValue(new Response('bar'))
-        )));
+        $strategy = new InlineFragmentRenderer($this->getKernel(static function () {
+            static $firstCall = true;
+
+            if ($firstCall) {
+                $firstCall = false;
+
+                throw new \RuntimeException('foo');
+            }
+
+            return new Response('bar');
+        }));
 
         $this->assertEquals('bar', $strategy->render('/', Request::create('/'), ['ignore_errors' => true, 'alt' => '/foo'])->getContent());
     }
 
     private function getKernel($returnValue)
     {
-        $kernel = $this->createMock(HttpKernelInterface::class);
-        $kernel
-            ->expects($this->any())
+        $kernel = $this->createStub(HttpKernelInterface::class);
+        $mocker = $kernel
             ->method('handle')
-            ->will($returnValue)
         ;
+
+        if ($returnValue instanceof \Exception) {
+            $mocker->willThrowException($returnValue);
+        } elseif ($returnValue instanceof \Closure) {
+            $mocker->willReturnCallback($returnValue);
+        } else {
+            $mocker->willReturn(...(\is_array($returnValue) ? $returnValue : [$returnValue]));
+        }
 
         return $kernel;
     }
@@ -128,7 +140,7 @@ class InlineFragmentRendererTest extends TestCase
         $controllerResolver
             ->expects($this->once())
             ->method('getController')
-            ->willReturn(function () {
+            ->willReturn(static function () {
                 ob_start();
                 echo 'bar';
                 throw new \RuntimeException();
@@ -297,7 +309,7 @@ class InlineFragmentRendererTest extends TestCase
         $kernel
             ->expects($this->once())
             ->method('handle')
-            ->with($this->callback(function (Request $request) use ($expectedRequest) {
+            ->with($this->callback(static function (Request $request) use ($expectedRequest) {
                 $expectedRequest->server->remove('REQUEST_TIME_FLOAT');
                 $request->server->remove('REQUEST_TIME_FLOAT');
 

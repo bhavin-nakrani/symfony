@@ -12,6 +12,7 @@
 namespace Symfony\Component\Notifier\Bridge\Novu\Tests;
 
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Novu\NovuOptions;
 use Symfony\Component\Notifier\Bridge\Novu\NovuTransport;
 use Symfony\Component\Notifier\Exception\TransportException;
@@ -21,11 +22,10 @@ use Symfony\Component\Notifier\Test\TransportTestCase;
 use Symfony\Component\Notifier\Tests\Transport\DummyMessage;
 use Symfony\Component\Notifier\Transport\TransportInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class NovuTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): TransportInterface
+    public static function createTransport(?HttpClientInterface $client = null): TransportInterface
     {
         return (new NovuTransport('9c9ced75881ddc65c033273f466b42d1', $client ?? new MockHttpClient()))->setHost('host.test');
     }
@@ -37,7 +37,7 @@ class NovuTransportTest extends TransportTestCase
 
     public static function supportedMessagesProvider(): iterable
     {
-        yield [new PushMessage('test', '{}', new NovuOptions(123, null, null, 'test@example.com', null, null, null, []))];
+        yield [new PushMessage('test', '{}', new NovuOptions(123, null, null, 'test@example.com', null, null, null, ['email' => ['from' => 'no-reply@example.com', 'senderName' => 'No-Reply']], []))];
     }
 
     public static function unsupportedMessagesProvider(): iterable
@@ -48,21 +48,13 @@ class NovuTransportTest extends TransportTestCase
 
     public function testWithErrorResponseThrows()
     {
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(400);
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn(json_encode(['error' => 'Bad request', 'message' => 'subscriberId under property to is not configured']));
-
-        $client = new MockHttpClient(static fn (): ResponseInterface => $response);
+        $client = new MockHttpClient(new MockResponse(json_encode(['error' => 'Bad request', 'message' => 'subscriberId under property to is not configured']), ['http_code' => 400]));
 
         $transport = $this->createTransport($client);
 
         $this->expectException(TransportException::class);
         $this->expectExceptionMessageMatches('/400: "subscriberId under property to is not configured"/');
 
-        $transport->send(new PushMessage('test', '{}', new NovuOptions(123, null, null, 'test@example.com', null, null, null, [])));
+        $transport->send(new PushMessage('test', '{}', new NovuOptions(123, null, null, 'test@example.com', null, null, null, ['email' => ['from' => 'no-reply@example.com', 'senderName' => 'No-Reply']], [])));
     }
 }

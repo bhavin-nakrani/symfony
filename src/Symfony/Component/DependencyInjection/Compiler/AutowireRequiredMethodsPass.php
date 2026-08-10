@@ -36,6 +36,7 @@ class AutowireRequiredMethodsPass extends AbstractRecursivePass
 
         $alreadyCalledMethods = [];
         $withers = [];
+        $setters = [];
 
         foreach ($value->getMethodCalls() as [$method]) {
             $alreadyCalledMethods[strtolower($method)] = true;
@@ -49,42 +50,37 @@ class AutowireRequiredMethodsPass extends AbstractRecursivePass
             }
 
             while (true) {
-                if ($r->getAttributes(Required::class)) {
+                if ($attributes = $r->getAttributes(Required::class)) {
+                    $priority = $attributes[0]->newInstance()->priority ?? 0;
+
                     if ($this->isWither($r, $r->getDocComment() ?: '')) {
-                        $withers[] = [$r->name, [], true];
+                        $withers[] = [$r->name, [], $priority, true];
                     } else {
-                        $value->addMethodCall($r->name, []);
+                        $setters[] = [$r->name, [], $priority];
                     }
                     break;
                 }
-                if (false !== $doc = $r->getDocComment()) {
-                    if (false !== stripos($doc, '@required') && preg_match('#(?:^/\*\*|\n\s*+\*)\s*+@required(?:\s|\*/$)#i', $doc)) {
-                        trigger_deprecation('symfony/dependency-injection', '6.3', 'Relying on the "@required" annotation on method "%s::%s()" is deprecated, use the "Symfony\Contracts\Service\Attribute\Required" attribute instead.', $reflectionMethod->class, $reflectionMethod->name);
-
-                        if ($this->isWither($reflectionMethod, $doc)) {
-                            $withers[] = [$reflectionMethod->name, [], true];
-                        } else {
-                            $value->addMethodCall($reflectionMethod->name, []);
-                        }
-                        break;
-                    }
-                    if (false === stripos($doc, '@inheritdoc') || !preg_match('#(?:^/\*\*|\n\s*+\*)\s*+(?:\{@inheritdoc\}|@inheritdoc)(?:\s|\*/$)#i', $doc)) {
-                        break;
-                    }
+                if (!$r->hasPrototype()) {
+                    break;
                 }
-                try {
-                    $r = $r->getPrototype();
-                } catch (\ReflectionException) {
-                    break; // method has no prototype
-                }
+                $r = $r->getPrototype();
             }
         }
 
+        usort($setters, static fn ($a, $b) => $b[2] <=> $a[2]);
+        foreach ($setters as $call) {
+            $value->addMethodCall($call[0], $call[1]);
+        }
+
         if ($withers) {
+            usort($withers, static fn ($a, $b) => $b[2] <=> $a[2]);
             // Prepend withers to prevent creating circular loops
-            $setters = $value->getMethodCalls();
-            $value->setMethodCalls($withers);
-            foreach ($setters as $call) {
+            $calls = $value->getMethodCalls();
+            $value->setMethodCalls([]);
+            foreach ($withers as $call) {
+                $value->addMethodCall($call[0], $call[1], $call[3]);
+            }
+            foreach ($calls as $call) {
                 $value->addMethodCall($call[0], $call[1], $call[2] ?? false);
             }
         }

@@ -12,6 +12,7 @@
 namespace Symfony\Component\Notifier\Bridge\Ntfy\Tests;
 
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Ntfy\NtfyTransport;
 use Symfony\Component\Notifier\Message\PushMessage;
 use Symfony\Component\Notifier\Message\SmsMessage;
@@ -25,7 +26,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  */
 final class NtfyTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): NtfyTransport
+    public static function createTransport(?HttpClientInterface $client = null): NtfyTransport
     {
         return new NtfyTransport('test', true, $client ?? new MockHttpClient());
     }
@@ -50,7 +51,7 @@ final class NtfyTransportTest extends TransportTestCase
     {
         $transport = $this->createTransport();
         $transport->setHost($customHost = self::CUSTOM_HOST);
-        $this->assertSame(sprintf('ntfy://%s/test', $customHost), (string) $transport);
+        $this->assertSame(\sprintf('ntfy://%s/test', $customHost), (string) $transport);
     }
 
     public function testCanSetCustomHostAndPort()
@@ -58,24 +59,16 @@ final class NtfyTransportTest extends TransportTestCase
         $transport = $this->createTransport();
         $transport->setHost($customHost = self::CUSTOM_HOST);
         $transport->setPort($customPort = self::CUSTOM_PORT);
-        $this->assertSame(sprintf('ntfy://%s:%s/test', $customHost, $customPort), (string) $transport);
+        $this->assertSame(\sprintf('ntfy://%s:%s/test', $customHost, $customPort), (string) $transport);
     }
 
     public function testSend()
     {
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(200);
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn(json_encode(['id' => '2BYIwRmvBKcv', 'event' => 'message']));
-
-        $client = new MockHttpClient(function (string $method, string $url, array $options = []) use ($response): ResponseInterface {
+        $client = new MockHttpClient(function (string $method, string $url, array $options = []): ResponseInterface {
             $expectedBody = json_encode(['topic' => 'test', 'title' => 'Hello', 'message' => 'World']);
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
 
-            return $response;
+            return new MockResponse(json_encode(['id' => '2BYIwRmvBKcv', 'event' => 'message']));
         });
 
         $transport = $this->createTransport($client);
@@ -85,23 +78,33 @@ final class NtfyTransportTest extends TransportTestCase
         $this->assertSame('2BYIwRmvBKcv', $sentMessage->getMessageId());
     }
 
+    public function testSendWithPassword()
+    {
+        $client = new MockHttpClient(function (string $method, string $url, array $options = []): ResponseInterface {
+            $expectedBody = json_encode(['topic' => 'test', 'title' => 'Hello', 'message' => 'World']);
+            $expectedAuthorization = 'Authorization: Bearer testtokentesttoken';
+            $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
+            $this->assertTrue(\in_array($expectedAuthorization, $options['headers'], true));
+
+            return new MockResponse(json_encode(['id' => '2BYIwRmvBKcv', 'event' => 'message']));
+        });
+
+        $transport = $this->createTransport($client)->setPassword('testtokentesttoken');
+
+        $sentMessage = $transport->send(new PushMessage('Hello', 'World'));
+
+        $this->assertSame('2BYIwRmvBKcv', $sentMessage->getMessageId());
+    }
+
     public function testSendWithUserAndPassword()
     {
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects($this->exactly(2))
-            ->method('getStatusCode')
-            ->willReturn(200);
-        $response->expects($this->once())
-            ->method('getContent')
-            ->willReturn(json_encode(['id' => '2BYIwRmvBKcv', 'event' => 'message']));
-
-        $client = new MockHttpClient(function (string $method, string $url, array $options = []) use ($response): ResponseInterface {
+        $client = new MockHttpClient(function (string $method, string $url, array $options = []): ResponseInterface {
             $expectedBody = json_encode(['topic' => 'test', 'title' => 'Hello', 'message' => 'World']);
-            $expectedAuthorization = 'Authorization: Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ';
+            $expectedAuthorization = 'Authorization: Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=';
             $this->assertJsonStringEqualsJsonString($expectedBody, $options['body']);
-            $this->assertTrue(\in_array($expectedAuthorization, $options['headers']));
+            $this->assertTrue(\in_array($expectedAuthorization, $options['headers'], true));
 
-            return $response;
+            return new MockResponse(json_encode(['id' => '2BYIwRmvBKcv', 'event' => 'message']));
         });
 
         $transport = $this->createTransport($client)->setUser('test_user')->setPassword('test_password');

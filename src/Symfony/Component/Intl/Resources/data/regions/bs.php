@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'UserAssignedNames' => [
+        'XK' => 'Kosovo',
+    ],
     'Names' => [
         'AD' => 'Andora',
         'AE' => 'Ujedinjeni Arapski Emirati',
@@ -147,7 +150,7 @@ return [
         'MH' => 'Maršalova ostrva',
         'MK' => 'Sjeverna Makedonija',
         'ML' => 'Mali',
-        'MM' => 'Mjanmar',
+        'MM' => 'Mijanmar',
         'MN' => 'Mongolija',
         'MO' => 'Makao (SAR Kina)',
         'MP' => 'Sjeverna Marijanska ostrva',
@@ -167,7 +170,7 @@ return [
         'NF' => 'Ostrvo Norfolk',
         'NG' => 'Nigerija',
         'NI' => 'Nikaragva',
-        'NL' => 'Holandija',
+        'NL' => 'Nizozemska',
         'NO' => 'Norveška',
         'NP' => 'Nepal',
         'NR' => 'Nauru',
@@ -202,7 +205,7 @@ return [
         'SG' => 'Singapur',
         'SH' => 'Sveta Helena',
         'SI' => 'Slovenija',
-        'SJ' => 'Svalbard i Jan Majen',
+        'SJ' => 'Svalbard i Jan Mayen',
         'SK' => 'Slovačka',
         'SL' => 'Sijera Leone',
         'SM' => 'San Marino',

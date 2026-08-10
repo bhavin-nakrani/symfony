@@ -890,9 +890,13 @@ return [
             'SKK',
             'Koruna Slovakia',
         ],
+        'SLE' => [
+            'SLE',
+            'Leone Sierra Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Leone Sierra Leone',
+            'Leone Sierra Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1066,6 +1070,10 @@ return [
             'EC$',
             'Dolar Karibia Timur',
         ],
+        'XCG' => [
+            'Cg.',
+            'Guilder Karibia',
+        ],
         'XEU' => [
             'XEU',
             'Satuan Mata Uang Eropa',
@@ -1141,6 +1149,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Dolar Zimbabwe (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Emas Zimbabwe',
         ],
         'ZWL' => [
             'ZWL',

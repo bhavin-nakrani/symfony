@@ -28,16 +28,13 @@ use Symfony\Component\HttpFoundation\Request;
 final class FormEncodedBodyExtractor implements AccessTokenExtractorInterface
 {
     public function __construct(
-        private readonly string $parameter = 'access_token'
+        private readonly string $parameter = 'access_token',
     ) {
     }
 
     public function extractAccessToken(Request $request): ?string
     {
-        if (
-            Request::METHOD_POST !== $request->getMethod()
-            || !str_starts_with($request->headers->get('CONTENT_TYPE', ''), 'application/x-www-form-urlencoded')
-        ) {
+        if ('POST' !== $request->getMethod() || !str_starts_with($request->headers->get('CONTENT_TYPE', ''), 'application/x-www-form-urlencoded')) {
             return null;
         }
         $parameter = $request->request->get($this->parameter);

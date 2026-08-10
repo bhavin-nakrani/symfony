@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Security\Core\Authentication\Token;
 
+use Symfony\Component\Security\Core\Exception\InvalidArgumentException;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
@@ -20,28 +21,18 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 class RememberMeToken extends AbstractToken
 {
-    private string $secret;
-    private string $firewallName;
-
     /**
-     * @param string $secret A secret used to make sure the token is created by the app and not by a malicious client
-     *
      * @throws \InvalidArgumentException
      */
-    public function __construct(UserInterface $user, string $firewallName, #[\SensitiveParameter] string $secret)
-    {
+    public function __construct(
+        UserInterface $user,
+        private string $firewallName,
+    ) {
         parent::__construct($user->getRoles());
 
-        if (empty($secret)) {
-            throw new \InvalidArgumentException('$secret must not be empty.');
+        if (!$firewallName) {
+            throw new InvalidArgumentException('$firewallName must not be empty.');
         }
-
-        if ('' === $firewallName) {
-            throw new \InvalidArgumentException('$firewallName must not be empty.');
-        }
-
-        $this->firewallName = $firewallName;
-        $this->secret = $secret;
 
         $this->setUser($user);
     }
@@ -51,20 +42,18 @@ class RememberMeToken extends AbstractToken
         return $this->firewallName;
     }
 
-    public function getSecret(): string
-    {
-        return $this->secret;
-    }
-
     public function __serialize(): array
     {
-        return [$this->secret, $this->firewallName, parent::__serialize()];
+        return [null, $this->firewallName, parent::__serialize()];
     }
 
     public function __unserialize(array $data): void
     {
-        [$this->secret, $this->firewallName, $parentData] = $data;
-        $parentData = \is_array($parentData) ? $parentData : unserialize($parentData);
+        if (($data[1] ?? null) instanceof \Stringable) {
+            throw new \BadMethodCallException('Cannot unserialize '.self::class);
+        }
+
+        [, $this->firewallName, $parentData] = $data;
         parent::__unserialize($parentData);
     }
 }

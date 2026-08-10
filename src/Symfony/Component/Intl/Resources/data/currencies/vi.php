@@ -580,7 +580,7 @@ return [
         ],
         'LSL' => [
             'LSL',
-            'Ioti Lesotho',
+            'Loti Lesotho',
         ],
         'LTL' => [
             'LTL',
@@ -636,7 +636,7 @@ return [
         ],
         'MGA' => [
             'MGA',
-            'Ariary Malagasy',
+            'Ariary Madagascar',
         ],
         'MGF' => [
             'MGF',
@@ -685,6 +685,10 @@ return [
         'MUR' => [
             'MUR',
             'Rupee Mauritius',
+        ],
+        'MVP' => [
+            'MVP',
+            'Rupee Maldives (1947–1981)',
         ],
         'MVR' => [
             'MVR',
@@ -878,13 +882,17 @@ return [
             'SKK',
             'Cuaron Xlôvác',
         ],
+        'SLE' => [
+            'SLE',
+            'Leone Sierra Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Leone Sierra Leone',
+            'Leone Sierra Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
-            'Schilling Somali',
+            'Shilling Somali',
         ],
         'SRD' => [
             'SRD',
@@ -1054,6 +1062,10 @@ return [
             'EC$',
             'Đô la Đông Caribê',
         ],
+        'XCG' => [
+            'Cg.',
+            'Guilder Caribe',
+        ],
         'XEU' => [
             'XEU',
             'Đơn vị Tiền Châu Âu',
@@ -1129,6 +1141,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Đồng Đô la Zimbabwe (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabwean Gold',
         ],
         'ZWL' => [
             'ZWL',

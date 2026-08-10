@@ -11,9 +11,9 @@
 
 namespace Symfony\Bridge\Monolog\Tests\Handler;
 
+use Monolog\Logger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Monolog\Handler\FirePHPHandler;
-use Symfony\Bridge\Monolog\Logger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -98,14 +98,16 @@ class FirePHPHandlerTest extends TestCase
 
     private function createHandler(): FirePHPHandler
     {
-        // Monolog 1
-        if (!method_exists(FirePHPHandler::class, 'isWebRequest')) {
-            return new FirePHPHandler();
+        if (method_exists($this, 'getStubBuilder')) {
+            $handler = self::getStubBuilder(FirePHPHandler::class)
+                ->onlyMethods(['isWebRequest'])
+                ->getStub();
+        } else {
+            $handler = $this->getMockBuilder(FirePHPHandler::class)
+                ->onlyMethods(['isWebRequest'])
+                ->getMock();
         }
 
-        $handler = $this->getMockBuilder(FirePHPHandler::class)
-            ->onlyMethods(['isWebRequest'])
-            ->getMock();
         // Disable web request detection
         $handler->method('isWebRequest')->willReturn(true);
 
@@ -120,7 +122,7 @@ class FirePHPHandlerTest extends TestCase
         $request->headers->remove('User-Agent');
 
         $error = null;
-        set_error_handler(function ($type, $message) use (&$error) { $error = $message; }, \E_DEPRECATED);
+        set_error_handler(static function ($type, $message) use (&$error) { $error = $message; }, \E_DEPRECATED);
 
         $this->dispatchResponseEvent($handler, $request);
         restore_error_handler();

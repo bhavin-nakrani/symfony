@@ -1,8 +1,6 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'messenger' => [
         'enabled' => true,
     ],
@@ -12,10 +10,10 @@ $container->loadFromExtension('framework', [
     'notifier' => [
         'message_bus' => false,
         'chatter_transports' => [
-            'test' => 'null'
+            'test' => 'null',
         ],
         'texter_transports' => [
-            'test' => 'null'
+            'test' => 'null',
         ],
     ],
 ]);

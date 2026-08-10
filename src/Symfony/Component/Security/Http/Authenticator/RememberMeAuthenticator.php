@@ -43,19 +43,12 @@ use Symfony\Component\Security\Http\RememberMe\ResponseListener;
  */
 class RememberMeAuthenticator implements InteractiveAuthenticatorInterface
 {
-    private RememberMeHandlerInterface $rememberMeHandler;
-    private string $secret;
-    private TokenStorageInterface $tokenStorage;
-    private string $cookieName;
-    private ?LoggerInterface $logger;
-
-    public function __construct(RememberMeHandlerInterface $rememberMeHandler, #[\SensitiveParameter] string $secret, TokenStorageInterface $tokenStorage, string $cookieName, LoggerInterface $logger = null)
-    {
-        $this->rememberMeHandler = $rememberMeHandler;
-        $this->secret = $secret;
-        $this->tokenStorage = $tokenStorage;
-        $this->cookieName = $cookieName;
-        $this->logger = $logger;
+    public function __construct(
+        private RememberMeHandlerInterface $rememberMeHandler,
+        private TokenStorageInterface $tokenStorage,
+        private string $cookieName,
+        private ?LoggerInterface $logger = null,
+    ) {
     }
 
     public function supports(Request $request): ?bool
@@ -94,7 +87,7 @@ class RememberMeAuthenticator implements InteractiveAuthenticatorInterface
 
     public function createToken(Passport $passport, string $firewallName): TokenInterface
     {
-        return new RememberMeToken($passport->getUser(), $firewallName, $this->secret);
+        return new RememberMeToken($passport->getUser(), $firewallName);
     }
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response

@@ -28,7 +28,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
     use CommonResponseTrait;
     use TransportResponseTrait;
 
-    private string|iterable $body;
+    private string|iterable|null $body;
     private array $requestOptions = [];
     private string $requestUrl;
     private string $requestMethod;
@@ -64,6 +64,15 @@ class MockResponse implements ResponseInterface, StreamableInterface
         self::addResponseHeaders($responseHeaders, $this->info, $this->headers);
     }
 
+    public static function fromFile(string $path, array $info = []): static
+    {
+        if (!is_file($path)) {
+            throw new \InvalidArgumentException(\sprintf('File not found: "%s".', $path));
+        }
+
+        return new static(file_get_contents($path), $info);
+    }
+
     /**
      * Returns the options used when doing the request.
      */
@@ -88,7 +97,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
         return $this->requestMethod;
     }
 
-    public function getInfo(string $type = null): mixed
+    public function getInfo(?string $type = null): mixed
     {
         return null !== $type ? $this->info[$type] ?? null : $this->info;
     }
@@ -98,7 +107,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
         $this->info['canceled'] = true;
         $this->info['error'] = 'Response has been canceled.';
         try {
-            unset($this->body);
+            $this->body = null;
         } catch (TransportException $e) {
             // ignore errors when canceling
         }
@@ -137,6 +146,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
         $response->info['http_code'] = 0;
         $response->info['user_data'] = $options['user_data'] ?? null;
         $response->info['max_duration'] = $options['max_duration'] ?? null;
+        $response->info['max_connect_duration'] = $options['max_connect_duration'] ?? null;
         $response->info['url'] = $url;
         $response->info['original_url'] = $url;
 
@@ -167,12 +177,12 @@ class MockResponse implements ResponseInterface, StreamableInterface
         $runningResponses[0][1][$response->id] = $response;
     }
 
-    protected static function perform(ClientState $multi, array &$responses): void
+    protected static function perform(ClientState $multi, array $responses): void
     {
         foreach ($responses as $response) {
             $id = $response->id;
 
-            if (!isset($response->body)) {
+            if (null === $response->body) {
                 // Canceled response
                 $response->body = [];
             } elseif ([] === $response->body) {
@@ -217,6 +227,9 @@ class MockResponse implements ResponseInterface, StreamableInterface
     {
         $onProgress = $options['on_progress'] ?? static function () {};
         $response->info += $mock->getInfo() ?: [];
+        if (null !== $mock->getInfo('start_time')) {
+            $response->info['start_time'] = $mock->getInfo('start_time');
+        }
 
         // simulate "size_upload" if it is set
         if (isset($response->info['size_upload'])) {
@@ -240,7 +253,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
         } elseif ($body instanceof \Closure) {
             while ('' !== $data = $body(16372)) {
                 if (!\is_string($data)) {
-                    throw new TransportException(sprintf('Return value of the "body" option callback must be string, "%s" returned.', get_debug_type($data)));
+                    throw new TransportException(\sprintf('Return value of the "body" option callback must be string, "%s" returned.', get_debug_type($data)));
                 }
 
                 // "notify" upload progress
@@ -270,6 +283,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
             'start_time' => $response->info['start_time'],
             'user_data' => $response->info['user_data'],
             'max_duration' => $response->info['max_duration'],
+            'max_connect_duration' => $response->info['max_connect_duration'],
             'http_code' => $response->info['http_code'],
         ] + $info + $response->info;
 
@@ -296,7 +310,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
 
                     if ('' === $chunk = (string) $chunk) {
                         // simulate an idle timeout
-                        $response->body[] = new ErrorChunk($offset, sprintf('Idle timeout reached for "%s".', $response->info['url']));
+                        $response->body[] = new ErrorChunk($offset, \sprintf('Idle timeout reached for "%s".', $response->info['url']));
                     } else {
                         $response->body[] = $chunk;
                         $offset += \strlen($chunk);
@@ -320,7 +334,7 @@ class MockResponse implements ResponseInterface, StreamableInterface
         $onProgress($offset, $dlSize, $response->info);
 
         if ($dlSize && $offset !== $dlSize) {
-            throw new TransportException(sprintf('Transfer closed with %d bytes remaining to read.', $dlSize - $offset));
+            throw new TransportException(\sprintf('Transfer closed with %d bytes remaining to read.', $dlSize - $offset));
         }
     }
 }

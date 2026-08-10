@@ -14,13 +14,18 @@ namespace Symfony\Component\Validator\Constraints;
 /**
  * Attribute to define a group sequence provider.
  *
- * @Annotation
- *
- * @Target({"CLASS", "ANNOTATION"})
- *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 class GroupSequenceProvider
 {
+    /**
+     * @param bool $cascadeCurrentGroup Whether the group being stepped through must be cascaded to referenced
+     *                                  objects on top of "Default"; see {@see GroupSequence::$cascadeCurrentGroup}
+     */
+    public function __construct(
+        public ?string $provider = null,
+        public bool $cascadeCurrentGroup = false,
+    ) {
+    }
 }

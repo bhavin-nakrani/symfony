@@ -15,8 +15,7 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is a valid timezone identifier.
  *
  * @author Javier Spagnoletti <phansys@gmail.com>
  * @author Hugo Hamon <hugohamon@neuf.fr>
@@ -29,10 +28,10 @@ class Timezone extends Constraint
     public const TIMEZONE_IDENTIFIER_IN_COUNTRY_ERROR = 'c4a22222-dc92-4fc0-abb0-d95b268c7d0b';
     public const TIMEZONE_IDENTIFIER_INTL_ERROR = '45863c26-88dc-41ba-bf53-c73bd1f7e90d';
 
-    public $zone = \DateTimeZone::ALL;
-    public $countryCode;
-    public $intlCompatible = false;
-    public $message = 'This value is not a valid timezone.';
+    public int $zone = \DateTimeZone::ALL;
+    public ?string $countryCode = null;
+    public bool $intlCompatible = false;
+    public string $message = 'This value is not a valid timezone.';
 
     protected const ERROR_NAMES = [
         self::TIMEZONE_IDENTIFIER_ERROR => 'TIMEZONE_IDENTIFIER_ERROR',
@@ -42,29 +41,26 @@ class Timezone extends Constraint
     ];
 
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param int|null      $zone           Restrict valid timezones to this geographical zone (defaults to {@see \DateTimeZone::ALL})
+     * @param string|null   $countryCode    Restrict the valid timezones to this country if the zone option is {@see \DateTimeZone::PER_COUNTRY}
+     * @param bool|null     $intlCompatible Whether to restrict valid timezones to ones available in PHP's intl (defaults to false)
+     * @param string[]|null $groups
+     *
+     * @see \DateTimeZone
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
     public function __construct(
-        int|array $zone = null,
-        string $message = null,
-        string $countryCode = null,
-        bool $intlCompatible = null,
-        array $groups = null,
+        ?int $zone = null,
+        ?string $message = null,
+        ?string $countryCode = null,
+        ?bool $intlCompatible = null,
+        ?array $groups = null,
         mixed $payload = null,
-        array $options = []
     ) {
-        if (\is_array($zone)) {
-            $options = array_merge($zone, $options);
-        } elseif (null !== $zone) {
-            $options['value'] = $zone;
-        }
+        parent::__construct(null, $groups, $payload);
 
-        parent::__construct($options, $groups, $payload);
-
+        $this->zone = $zone ?? $this->zone;
         $this->message = $message ?? $this->message;
-        $this->countryCode = $countryCode ?? $this->countryCode;
+        $this->countryCode = $countryCode;
         $this->intlCompatible = $intlCompatible ?? $this->intlCompatible;
 
         if (null === $this->countryCode) {
@@ -77,10 +73,5 @@ class Timezone extends Constraint
         if ($this->intlCompatible && !class_exists(\IntlTimeZone::class)) {
             throw new ConstraintDefinitionException('The option "intlCompatible" can only be used when the PHP intl extension is available.');
         }
-    }
-
-    public function getDefaultOption(): ?string
-    {
-        return 'zone';
     }
 }

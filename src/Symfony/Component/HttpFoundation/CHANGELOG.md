@@ -1,10 +1,101 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Deprecate not passing an expiry to `UriSigner::sign()`
+ * Add the `$defaultExpiration` argument to `UriSigner::__construct()`
+ * Add argument `$version` to `UriSigner::sign()`, `UriSigner::check()`, `UriSigner::checkRequest()`, and `UriSigner::verify()` to bind a signed URI to a state token, folded into the signature
+ * Add `ParameterBag::filterCallback()` to filter a parameter value through a callback
+ * Reject a `Cookie` whose name uses the `__Secure-`/`__Host-` prefix when its attributes break the prefix contract
+ * Deprecate the `Request::$trustedHosts` property, it is never populated anymore
+
+8.1
+---
+
+ * Add `BinaryFileResponse::shouldDeleteFileAfterSend()`
+ * Deprecate setting public properties of `Request` and `Response` objects directly; use setters or constructor arguments instead
+ * Add `SessionHasFlashMessage` test constraint
+ * `Response::__construct()` now accepts a `ResponseHeaderBag` as its third argument
+ * `ParameterBag::getInt()` and `ParameterBag::getBoolean()` now throw `UnexpectedValueException` instead of silently returning `0`/`false` when the value cannot be converted
+
+8.0
+---
+
+ * Drop HTTP method override support for methods GET, HEAD, CONNECT and TRACE
+ * Add argument `$subtypeFallback` to `Request::getFormat()`
+ * Remove the following deprecated session options from `NativeSessionStorage`: `referer_check`, `use_only_cookies`, `use_trans_sid`, `sid_length`, `sid_bits_per_character`, `trans_sid_hosts`, `trans_sid_tags`
+ * Trigger PHP warning when using `Request::sendHeaders()` after headers have already been sent; use a `StreamedResponse` instead
+ * Add arguments `$v4Bytes` and `$v6Bytes` to `IpUtils::anonymize()`
+ * Add argument `$partitioned` to `ResponseHeaderBag::clearCookie()`
+ * Add argument `$expiration` to `UriSigner::sign()`
+ * Remove `Request::get()`, use properties `->attributes`, `query` or `request` directly instead
+ * Remove accepting null `$format` argument to `Request::setFormat()`
+
+7.4
+---
+
+ * Add `#[WithHttpStatus]` to define status codes: 404 for `SignedUriException` and 403 for `ExpiredSignedUriException`
+ * Add support for the `QUERY` HTTP method
+ * Add support for structured MIME suffix
+ * Add `Request::set/getAllowedHttpMethodOverride()` to list which HTTP methods can be overridden
+ * Deprecate using `Request::sendHeaders()` after headers have already been sent; use a `StreamedResponse` instead
+ * Deprecate method `Request::get()`, use properties `->attributes`, `query` or `request` directly instead
+ * Make `Request::createFromGlobals()` parse the body of PUT, DELETE, PATCH and QUERY requests
+ * Deprecate HTTP method override for methods GET, HEAD, CONNECT and TRACE; it will be ignored in Symfony 8.0
+ * Deprecate accepting null `$format` argument to `Request::setFormat()`
+
+7.3
+---
+
+ * Add support for iterable of string in `StreamedResponse`
+ * Add `EventStreamResponse` and `ServerEvent` classes to streamline server event streaming
+ * Add support for `valkey:` / `valkeys:` schemes for sessions
+ * `Request::getPreferredLanguage()` now favors a more preferred language above exactly matching a locale
+ * Allow `UriSigner` to use a `ClockInterface`
+ * Add `UriSigner::verify()`
+
+7.2
+---
+
+ * Add optional `$requests` parameter to `RequestStack::__construct()`
+ * Add optional `$v4Bytes` and `$v6Bytes` parameters to `IpUtils::anonymize()`
+ * Add `PRIVATE_SUBNETS` as a shortcut for private IP address ranges to `Request::setTrustedProxies()`
+ * Deprecate passing `referer_check`, `use_only_cookies`, `use_trans_sid`, `trans_sid_hosts`, `trans_sid_tags`, `sid_bits_per_character` and `sid_length` options to `NativeSessionStorage`
+
+7.1
+---
+
+ * Add optional `$expirationParameter` argument to `UriSigner::__construct()`
+ * Add optional `$expiration` argument to `UriSigner::sign()`
+ * Rename `$parameter` argument of `UriSigner::__construct()` to `$hashParameter`
+ * Add `UploadedFile::getClientOriginalPath()`
+ * Add `QueryParameterRequestMatcher`
+ * Add `HeaderRequestMatcher`
+ * Add support for `\SplTempFileObject` in `BinaryFileResponse`
+ * Add `verbose` argument to response test constraints
+
+7.0
+---
+
+ * Calling `ParameterBag::filter()` throws an `UnexpectedValueException` on invalid value, unless flag `FILTER_NULL_ON_FAILURE` is set
+ * Calling `ParameterBag::getInt()` and `ParameterBag::getBool()` throws an `UnexpectedValueException` on invalid value
+ * Remove classes `RequestMatcher` and `ExpressionRequestMatcher`
+ * Remove `Request::getContentType()`, use `Request::getContentTypeFormat()` instead
+ * Throw an `InvalidArgumentException` when calling `Request::create()` with a malformed URI
+ * Require explicit argument when calling `JsonResponse::setCallback()`, `Response::setExpires/setLastModified/setEtag()`, `MockArraySessionStorage/NativeSessionStorage::setMetadataBag()`, `NativeSessionStorage::setSaveHandler()`
+ * Add argument `$statusCode` to `Response::sendHeaders()` and `StreamedResponse::sendHeaders()`
+
 6.4
 ---
 
  * Make `HeaderBag::getDate()`, `Response::getDate()`, `getExpires()` and `getLastModified()` return a `DateTimeImmutable`
+ * Support root-level `Generator` in `StreamedJsonResponse`
+ * Add `UriSigner` from the HttpKernel component
+ * Add `partitioned` flag to `Cookie` (CHIPS Cookie)
+ * Add argument `bool $flush = true` to `Response::send()`
+ * Make `MongoDbSessionHandler` instantiable with the mongodb extension directly
 
 6.3
 ---

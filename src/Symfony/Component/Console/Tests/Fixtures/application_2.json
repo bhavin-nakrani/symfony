@@ -21,6 +21,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "deprecated",
                         "default": null
                     },
@@ -30,7 +32,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -39,7 +54,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -48,6 +65,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -57,6 +76,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -66,6 +87,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -75,6 +98,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -84,6 +109,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     },
@@ -93,6 +120,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "The shell type (\"bash\", \"fish\", \"zsh\")",
                         "default": null
                     },
@@ -102,8 +131,10 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "The index of the \"input\" array that the cursor is in (e.g. COMP_CWORD)",
-                        "default": false
+                        "default": null
                     },
                     "input": {
                         "name": "--input",
@@ -111,6 +142,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": true,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "An array of input tokens (e.g. COMP_WORDS or argv)",
                         "default": []
                     },
@@ -120,6 +153,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "The API version of the completion script",
                         "default": null
                     }
@@ -151,7 +186,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -160,7 +208,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -169,6 +219,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -178,6 +230,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -187,6 +241,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -196,6 +252,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -205,6 +263,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     },
@@ -214,6 +274,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Tail the completion debug log",
                         "default": false
                     }
@@ -227,7 +289,7 @@
                 "help [--format FORMAT] [--raw] [--] [<command_name>]"
             ],
             "description": "Display help for a command",
-            "help": "The <info>help<\/info> command displays help for a given command:\n\n  <info>%%PHP_SELF%% help list<\/info>\n\nYou can also output the help in other formats by using the <comment>--format<\/comment> option:\n\n  <info>%%PHP_SELF%% help --format=xml list<\/info>\n\nTo display the list of available commands, please use the <info>list<\/info> command.",
+            "help": "The <info>help</info> command displays help for a given command:\n\n  <info>%%PHP_SELF%% help list</info>\n\nYou can also output the help in other formats by using the <info>--format</info> option:\n\n  <info>%%PHP_SELF%% help --format=xml list</info>\n\nTo display the list of available commands, please use the <info>list</info> command.",
             "definition": {
                 "arguments": {
                     "command_name": {
@@ -245,6 +307,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "The output format (txt, xml, json, or md)",
                         "default": "txt"
                     },
@@ -254,6 +318,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "To output raw command help",
                         "default": false
                     },
@@ -263,7 +329,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -272,7 +351,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -281,6 +362,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -290,6 +373,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -299,6 +384,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -308,6 +395,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -317,6 +406,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     }
@@ -330,7 +421,7 @@
                 "list [--raw] [--format FORMAT] [--short] [--] [<namespace>]"
             ],
             "description": "List commands",
-            "help": "The <info>list<\/info> command lists all commands:\n\n  <info>%%PHP_SELF%% list<\/info>\n\nYou can also display the commands for a specific namespace:\n\n  <info>%%PHP_SELF%% list test<\/info>\n\nYou can also output the information in other formats by using the <comment>--format<\/comment> option:\n\n  <info>%%PHP_SELF%% list --format=xml<\/info>\n\nIt's also possible to get raw list of commands (useful for embedding command runner):\n\n  <info>%%PHP_SELF%% list --raw<\/info>",
+            "help": "The <info>list</info> command lists all commands:\n\n  <info>%%PHP_SELF%% list</info>\n\nYou can also display the commands for a specific namespace:\n\n  <info>%%PHP_SELF%% list test</info>\n\nYou can also output the information in other formats by using the <info>--format</info> option:\n\n  <info>%%PHP_SELF%% list --format=xml</info>\n\nIt's also possible to get raw list of commands (useful for embedding command runner):\n\n  <info>%%PHP_SELF%% list --raw</info>",
             "definition": {
                 "arguments": {
                     "namespace": {
@@ -348,6 +439,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "To output raw command list",
                         "default": false
                     },
@@ -357,6 +450,8 @@
                         "accept_value": true,
                         "is_value_required": true,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "The output format (txt, xml, json, or md)",
                         "default": "txt"
                     },
@@ -366,7 +461,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -375,7 +483,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -384,6 +494,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -393,6 +505,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -402,6 +516,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -411,6 +527,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -420,6 +538,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     },
@@ -429,6 +549,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "To skip describing commands' arguments",
                         "default": false
                     }
@@ -454,7 +576,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -463,7 +598,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -472,6 +609,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -481,6 +620,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -490,6 +631,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -499,6 +642,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -508,6 +653,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     }
@@ -541,6 +688,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "",
                         "default": false
                     },
@@ -550,7 +699,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -559,7 +721,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -568,6 +732,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -577,6 +743,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -586,6 +754,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -595,6 +765,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -604,6 +776,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     }
@@ -619,7 +793,7 @@
             "description": "command 3 description",
             "help": "command 3 help",
             "definition": {
-                "arguments": {},
+                "arguments": [],
                 "options": {
                     "help": {
                         "name": "--help",
@@ -627,7 +801,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -636,7 +823,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -645,6 +834,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -654,6 +845,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -663,6 +856,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -672,6 +867,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -681,6 +878,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
                         "default": false
                     }
@@ -695,10 +894,10 @@
                 "descriptor:alias_command4",
                 "command4:descriptor"
             ],
-            "description": null,
+            "description": "",
             "help": "",
             "definition": {
-                "arguments": {},
+                "arguments": [],
                 "options": {
                     "help": {
                         "name": "--help",
@@ -706,7 +905,20 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     },
                     "quiet": {
@@ -715,7 +927,9 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
-                        "description": "Do not output any message",
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
                         "default": false
                     },
                     "verbose": {
@@ -724,6 +938,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
                         "default": false
                     },
@@ -733,6 +949,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Display this application version",
                         "default": false
                     },
@@ -742,6 +960,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Force (or disable --no-ansi) ANSI output",
                         "default": null
                     },
@@ -751,6 +971,8 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Negate the \"--ansi\" option",
                         "default": null
                     },
@@ -760,7 +982,122 @@
                         "accept_value": false,
                         "is_value_required": false,
                         "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
                         "description": "Do not ask any interactive question",
+                        "default": false
+                    }
+                }
+            }
+        },
+        {
+            "name": "descriptor:command5",
+            "hidden": false,
+            "usage": [
+                "descriptor:command5 [-y|--deprecated_option]"
+            ],
+            "description": "command 5 description",
+            "help": "command 5 help",
+            "definition": {
+                "arguments": [],
+                "options": {
+                    "help": {
+                        "name": "--help",
+                        "shortcut": "-h",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Display help for the given command. When no command is given display help for the <info>list</info> command",
+                        "default": false
+                    },
+                    "quiet": {
+                        "name": "--quiet",
+                        "shortcut": "-q",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Only errors are displayed. All other output is suppressed",
+                        "default": false
+                    },
+                    "verbose": {
+                        "name": "--verbose",
+                        "shortcut": "-v|-vv|-vvv",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
+                        "default": false
+                    },
+                    "version": {
+                        "name": "--version",
+                        "shortcut": "-V",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Display this application version",
+                        "default": false
+                    },
+                    "ansi": {
+                        "name": "--ansi",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Force (or disable --no-ansi) ANSI output",
+                        "default": null
+                    },
+                    "no-ansi": {
+                        "name": "--no-ansi",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Negate the \"--ansi\" option",
+                        "default": null
+                    },
+                    "no-interaction": {
+                        "name": "--no-interaction",
+                        "shortcut": "-n",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not ask any interactive question",
+                        "default": false
+                    },
+                    "deprecated_option": {
+                        "name": "--deprecated_option",
+                        "shortcut": "-y",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": true,
+                        "is_hidden": false,
+                        "description": "",
+                        "default": false
+                    },
+                    "silent": {
+                        "name": "--silent",
+                        "shortcut": "",
+                        "accept_value": false,
+                        "is_value_required": false,
+                        "is_multiple": false,
+                        "is_deprecated": false,
+                        "is_hidden": false,
+                        "description": "Do not output any message",
                         "default": false
                     }
                 }
@@ -792,7 +1129,8 @@
                 "descriptor:command1",
                 "descriptor:command2",
                 "descriptor:command3",
-                "descriptor:command4"
+                "descriptor:command4",
+                "descriptor:command5"
             ]
         }
     ]

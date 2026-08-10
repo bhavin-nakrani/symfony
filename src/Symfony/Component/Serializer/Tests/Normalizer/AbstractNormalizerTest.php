@@ -11,16 +11,15 @@
 
 namespace Symfony\Component\Serializer\Tests\Normalizer;
 
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\PropertyInfo\Extractor\PhpDocExtractor;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\MissingConstructorArgumentsException;
+use Symfony\Component\Serializer\Exception\NotNormalizableValueException;
 use Symfony\Component\Serializer\Mapping\AttributeMetadata;
 use Symfony\Component\Serializer\Mapping\ClassMetadata;
-use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactory;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactoryInterface;
-use Symfony\Component\Serializer\Mapping\Loader\LoaderChain;
 use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
@@ -29,10 +28,12 @@ use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\Tests\Fixtures\AbstractNormalizerDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\Attributes\IgnoreDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\Dummy;
+use Symfony\Component\Serializer\Tests\Fixtures\DummyWithWithVariadicParameterConstructor;
 use Symfony\Component\Serializer\Tests\Fixtures\NullableConstructorArgumentDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\NullableOptionalConstructorArgumentDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\StaticConstructorDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\StaticConstructorNormalizer;
+use Symfony\Component\Serializer\Tests\Fixtures\UnitEnumDummy;
 use Symfony\Component\Serializer\Tests\Fixtures\VariadicConstructorTypedArgsDummy;
 
 /**
@@ -43,12 +44,11 @@ use Symfony\Component\Serializer\Tests\Fixtures\VariadicConstructorTypedArgsDumm
 class AbstractNormalizerTest extends TestCase
 {
     private AbstractNormalizerDummy $normalizer;
-    private MockObject&ClassMetadataFactoryInterface $classMetadata;
+    private ClassMetadataFactoryInterface $classMetadata;
 
     protected function setUp(): void
     {
-        $loader = $this->getMockBuilder(LoaderChain::class)->setConstructorArgs([[]])->getMock();
-        $this->classMetadata = $this->getMockBuilder(ClassMetadataFactory::class)->setConstructorArgs([$loader])->getMock();
+        $this->classMetadata = $this->createStub(ClassMetadataFactoryInterface::class);
         $this->normalizer = new AbstractNormalizerDummy($this->classMetadata);
     }
 
@@ -82,6 +82,16 @@ class AbstractNormalizerTest extends TestCase
 
         $result = $this->normalizer->getAllowedAttributes('c', [AbstractNormalizer::GROUPS => ['*']], true);
         $this->assertEquals(['a1', 'a2', 'a3', 'a4'], $result);
+    }
+
+    public function testGetAllowedAttributesWithWildcardGroupAndNoMetadata()
+    {
+        $classMetadata = new ClassMetadata('c');
+
+        $this->classMetadata->method('getMetadataFor')->willReturn($classMetadata);
+
+        $result = $this->normalizer->getAllowedAttributes('c', [AbstractNormalizer::GROUPS => ['*']], true);
+        $this->assertFalse($result);
     }
 
     public function testGetAllowedAttributesAsObjects()
@@ -170,10 +180,8 @@ class AbstractNormalizerTest extends TestCase
         $normalizer->denormalize([], NullableConstructorArgumentDummy::class, null, [AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true]);
     }
 
-    /**
-     * @dataProvider getNormalizer
-     * @dataProvider getNormalizerWithCustomNameConverter
-     */
+    #[DataProvider('getNormalizer')]
+    #[DataProvider('getNormalizerWithCustomNameConverter')]
     public function testObjectWithVariadicConstructorTypedArguments(AbstractNormalizer $normalizer)
     {
         $d1 = new Dummy();
@@ -206,9 +214,7 @@ class AbstractNormalizerTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider getNormalizer
-     */
+    #[DataProvider('getNormalizer')]
     public function testVariadicSerializationWithPreservingKeys(AbstractNormalizer $normalizer)
     {
         $d1 = new Dummy();
@@ -246,16 +252,35 @@ class AbstractNormalizerTest extends TestCase
         yield [new ObjectNormalizer(null, null, null, $extractor)];
     }
 
+    public function testVariadicConstructorDenormalization()
+    {
+        $data = [
+            'foo' => 'woo',
+            'baz' => [
+                ['foo' => null, 'bar' => null, 'baz' => null, 'qux' => null],
+                ['foo' => null, 'bar' => null, 'baz' => null, 'qux' => null],
+            ],
+        ];
+
+        $normalizer = new ObjectNormalizer();
+        $normalizer->setSerializer(new Serializer([$normalizer]));
+
+        $expected = new DummyWithWithVariadicParameterConstructor('woo', 1, new Dummy(), new Dummy());
+        $actual = $normalizer->denormalize($data, DummyWithWithVariadicParameterConstructor::class);
+
+        $this->assertEquals($expected, $actual);
+    }
+
     public static function getNormalizerWithCustomNameConverter()
     {
         $extractor = new PhpDocExtractor();
-        $nameConverter = new class() implements NameConverterInterface {
-            public function normalize(string $propertyName): string
+        $nameConverter = new class implements NameConverterInterface {
+            public function normalize(string $propertyName, ?string $class = null, ?string $format = null, array $context = []): string
             {
                 return ucfirst($propertyName);
             }
 
-            public function denormalize(string $propertyName): string
+            public function denormalize(string $propertyName, ?string $class = null, ?string $format = null, array $context = []): string
             {
                 return lcfirst($propertyName);
             }
@@ -279,5 +304,14 @@ class AbstractNormalizerTest extends TestCase
         $normalizer = new PropertyNormalizer($this->classMetadata);
 
         $this->assertSame([], $normalizer->normalize($dummy));
+    }
+
+    public function testDenormalizeWhenObjectNotInstantiable()
+    {
+        $this->expectException(NotNormalizableValueException::class);
+
+        $normalizer = new ObjectNormalizer();
+
+        $normalizer->denormalize('{}', UnitEnumDummy::class);
     }
 }

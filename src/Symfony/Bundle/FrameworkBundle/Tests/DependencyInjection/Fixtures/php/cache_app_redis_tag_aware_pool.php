@@ -1,8 +1,6 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'cache' => [
         'app' => 'cache.redis_tag_aware.foo',
         'pools' => [

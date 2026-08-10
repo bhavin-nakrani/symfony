@@ -34,7 +34,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 final class MercureTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null, HubInterface $hub = null, string $hubId = 'hubId', $topics = null): MercureTransport
+    public static function createTransport(?HttpClientInterface $client = null, ?HubInterface $hub = null, string $hubId = 'hubId', $topics = null): MercureTransport
     {
         $hub ??= new DummyHub();
 
@@ -83,7 +83,7 @@ final class MercureTransportTest extends TransportTestCase
     public function testSendWithNonMercureOptionsThrows()
     {
         $this->expectException(LogicException::class);
-        self::createTransport()->send(new ChatMessage('testMessage', $this->createMock(MessageOptionsInterface::class)));
+        self::createTransport()->send(new ChatMessage('testMessage', $this->createStub(MessageOptionsInterface::class)));
     }
 
     public function testSendWithTransportFailureThrows()
@@ -114,7 +114,7 @@ final class MercureTransportTest extends TransportTestCase
     {
         $hub = new MockHub('https://foo.com/.well-known/mercure', new StaticTokenProvider('foo'), function (Update $update): string {
             $this->assertSame(['/topic/1', '/topic/2'], $update->getTopics());
-            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject"}', $update->getData());
+            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject","mediaType":"application\/json","content":{"tag":"1234","body":"TEST"}}', $update->getData());
             $this->assertSame('id', $update->getId());
             $this->assertSame('type', $update->getType());
             $this->assertSame(1, $update->getRetry());
@@ -123,14 +123,14 @@ final class MercureTransportTest extends TransportTestCase
             return 'id';
         });
 
-        self::createTransport(null, $hub)->send(new ChatMessage('subject', new MercureOptions(['/topic/1', '/topic/2'], true, 'id', 'type', 1)));
+        self::createTransport(null, $hub)->send(new ChatMessage('subject', new MercureOptions(['/topic/1', '/topic/2'], true, 'id', 'type', 1, ['tag' => '1234', 'body' => 'TEST'])));
     }
 
     public function testSendWithMercureOptionsButWithoutOptionTopic()
     {
         $hub = new MockHub('https://foo.com/.well-known/mercure', new StaticTokenProvider('foo'), function (Update $update): string {
             $this->assertSame(['https://symfony.com/notifier'], $update->getTopics());
-            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject"}', $update->getData());
+            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject","mediaType":"application\/json","content":null}', $update->getData());
             $this->assertSame('id', $update->getId());
             $this->assertSame('type', $update->getType());
             $this->assertSame(1, $update->getRetry());
@@ -146,7 +146,7 @@ final class MercureTransportTest extends TransportTestCase
     {
         $hub = new MockHub('https://foo.com/.well-known/mercure', new StaticTokenProvider('foo'), function (Update $update): string {
             $this->assertSame(['https://symfony.com/notifier'], $update->getTopics());
-            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject"}', $update->getData());
+            $this->assertSame('{"@context":"https:\/\/www.w3.org\/ns\/activitystreams","type":"Announce","summary":"subject","mediaType":"application\/json","content":null}', $update->getData());
             $this->assertFalse($update->isPrivate());
 
             return 'id';
@@ -159,7 +159,7 @@ final class MercureTransportTest extends TransportTestCase
     {
         $messageId = 'urn:uuid:a7045be0-a75d-4d40-8bd2-29fa4e5dd10b';
 
-        $hub = new MockHub('https://foo.com/.well-known/mercure', new StaticTokenProvider('foo'), fn (Update $update): string => $messageId);
+        $hub = new MockHub('https://foo.com/.well-known/mercure', new StaticTokenProvider('foo'), static fn (Update $update): string => $messageId);
 
         $sentMessage = self::createTransport(null, $hub)->send(new ChatMessage('subject'));
         $this->assertSame($messageId, $sentMessage->getMessageId());

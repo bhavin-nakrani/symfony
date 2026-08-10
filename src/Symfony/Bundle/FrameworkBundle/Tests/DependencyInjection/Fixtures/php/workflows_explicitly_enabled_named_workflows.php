@@ -3,8 +3,6 @@
 use Symfony\Bundle\FrameworkBundle\Tests\DependencyInjection\FrameworkExtensionTestCase;
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'workflows' => [
         'enabled' => true,
         'workflows' => [

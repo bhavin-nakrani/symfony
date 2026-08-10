@@ -30,7 +30,7 @@ class ApcuAdapterTest extends AdapterTestCase
             $this->markTestSkipped('APCu extension is required.');
         }
         if ('cli' === \PHP_SAPI && !filter_var(\ini_get('apc.enable_cli'), \FILTER_VALIDATE_BOOL)) {
-            if ('testWithCliSapi' !== $this->getName()) {
+            if ('testWithCliSapi' !== (method_exists($this, 'name') ? $this->name() : $this->getName())) {
                 $this->markTestSkipped('apc.enable_cli=1 is required.');
             }
         }
@@ -46,7 +46,7 @@ class ApcuAdapterTest extends AdapterTestCase
         $pool = $this->createCachePool();
 
         $item = $pool->getItem('foo');
-        $item->set(function () {});
+        $item->set(static function () {});
 
         $this->assertFalse($pool->save($item));
 
@@ -109,7 +109,7 @@ class ApcuAdapterTest extends AdapterTestCase
         try {
             // disable PHPUnit error handler to mimic a production environment
             $isCalled = false;
-            set_error_handler(function () use (&$isCalled) {
+            set_error_handler(static function () use (&$isCalled) {
                 $isCalled = true;
             });
             $pool = new ApcuAdapter(str_replace('\\', '.', __CLASS__));

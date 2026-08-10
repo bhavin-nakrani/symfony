@@ -11,13 +11,10 @@
 
 namespace Symfony\Component\Translation\Bridge\Phrase;
 
-use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mime\Part\DataPart;
 use Symfony\Component\Mime\Part\Multipart\FormDataPart;
-use Symfony\Component\Translation\Bridge\Phrase\Config\ReadConfig;
-use Symfony\Component\Translation\Bridge\Phrase\Config\WriteConfig;
 use Symfony\Component\Translation\Dumper\XliffFileDumper;
 use Symfony\Component\Translation\Exception\ProviderException;
 use Symfony\Component\Translation\Loader\LoaderInterface;
@@ -35,21 +32,22 @@ class PhraseProvider implements ProviderInterface
     private array $phraseLocales = [];
 
     public function __construct(
-        private readonly HttpClientInterface $httpClient,
+        private readonly HttpClientInterface $client,
         private readonly LoggerInterface $logger,
         private readonly LoaderInterface $loader,
         private readonly XliffFileDumper $xliffFileDumper,
         private readonly CacheItemPoolInterface $cache,
         private readonly string $defaultLocale,
         private readonly string $endpoint,
-        private readonly ReadConfig $readConfig,
-        private readonly WriteConfig $writeConfig,
+        private array $readConfig,
+        private array $writeConfig,
+        private readonly bool $isFallbackLocaleEnabled = false,
     ) {
     }
 
     public function __toString(): string
     {
-        return sprintf('phrase://%s', $this->endpoint);
+        return \sprintf('phrase://%s', $this->endpoint);
     }
 
     public function write(TranslatorBagInterface $translatorBag): void
@@ -58,26 +56,28 @@ class PhraseProvider implements ProviderInterface
 
         foreach ($translatorBag->getCatalogues() as $catalogue) {
             foreach ($catalogue->getDomains() as $domain) {
-                if (0 === \count($catalogue->all($domain))) {
+                if (!\count($catalogue->all($domain))) {
                     continue;
                 }
 
                 $phraseLocale = $this->getLocale($catalogue->getLocale());
 
                 $content = $this->xliffFileDumper->formatCatalogue($catalogue, $domain, ['default_locale' => $this->defaultLocale]);
-                $filename = sprintf('%d-%s-%s.xlf', date('YmdHis'), $domain, $catalogue->getLocale());
+                $filename = \sprintf('%d-%s-%s.xlf', date('YmdHis'), $domain, $catalogue->getLocale());
 
-                $fields = array_merge($this->writeConfig->setTag($domain)->setLocale($phraseLocale)->getOptions(), ['file' => new DataPart($content, $filename, 'application/xml')]);
+                $this->writeConfig['tags'] = $domain;
+                $this->writeConfig['locale_id'] = $phraseLocale;
+                $fields = array_merge($this->writeConfig, ['file' => new DataPart($content, $filename, 'application/xml')]);
 
                 $formData = new FormDataPart($fields);
 
-                $response = $this->httpClient->request('POST', 'uploads', [
+                $response = $this->client->request('POST', 'uploads', [
                     'body' => $formData->bodyToIterable(),
                     'headers' => $formData->getPreparedHeaders()->toArray(),
                 ]);
 
                 if (201 !== $statusCode = $response->getStatusCode()) {
-                    $this->logger->error(sprintf('Unable to upload translations for domain "%s" to phrase: "%s".', $domain, $response->getContent(false)));
+                    $this->logger->error(\sprintf('Unable to upload translations for domain "%s" to phrase: "%s".', $domain, $response->getContent(false)));
 
                     $this->throwProviderException($statusCode, $response, 'Unable to upload translations to phrase.');
                 }
@@ -93,13 +93,13 @@ class PhraseProvider implements ProviderInterface
             $phraseLocale = $this->getLocale($locale);
 
             foreach ($domains as $domain) {
-                $this->readConfig->setTag($domain);
+                $this->readConfig['tags'] = $domain;
 
-                if ($this->readConfig->isFallbackLocaleEnabled() && null !== $fallbackLocale = $this->getFallbackLocale($locale)) {
-                    $this->readConfig->setFallbackLocale($fallbackLocale);
+                if ($this->isFallbackLocaleEnabled && null !== $fallbackLocale = $this->getFallbackLocale($locale)) {
+                    $this->readConfig['fallback_locale_id'] = $fallbackLocale;
                 }
 
-                $cacheKey = $this->generateCacheKey($locale, $domain, $this->readConfig->getOptions());
+                $cacheKey = $this->generateCacheKey($locale, $domain, $this->readConfig);
                 $cacheItem = $this->cache->getItem($cacheKey);
 
                 $headers = [];
@@ -109,13 +109,13 @@ class PhraseProvider implements ProviderInterface
                     $headers = ['If-None-Match' => $cachedResponse['etag']];
                 }
 
-                $response = $this->httpClient->request('GET', 'locales/'.$phraseLocale.'/download', [
-                    'query' => $this->readConfig->getOptions(),
+                $response = $this->client->request('GET', 'locales/'.$phraseLocale.'/download', [
+                    'query' => $this->readConfig,
                     'headers' => $headers,
                 ]);
 
                 if (200 !== ($statusCode = $response->getStatusCode()) && 304 !== $statusCode) {
-                    $this->logger->error(sprintf('Unable to get translations for locale "%s" from phrase: "%s".', $locale, $response->getContent(false)));
+                    $this->logger->error(\sprintf('Unable to get translations for locale "%s" from phrase: "%s".', $locale, $response->getContent(false)));
 
                     $this->throwProviderException($statusCode, $response, 'Unable to get translations from phrase.');
                 }
@@ -124,7 +124,7 @@ class PhraseProvider implements ProviderInterface
                 $translatorBag->addCatalogue($this->loader->load($content, $locale, $domain));
 
                 // using weak etags, responses for requests with fallback locale enabled can not be reliably cached...
-                if (false === $this->readConfig->isFallbackLocaleEnabled()) {
+                if (!$this->isFallbackLocaleEnabled) {
                     $headers = $response->getHeaders(false);
                     $cacheItem->set(['etag' => $headers['etag'][0], 'modified' => $headers['last-modified'][0], 'content' => $content]);
                     $this->cache->save($cacheItem);
@@ -149,14 +149,14 @@ class PhraseProvider implements ProviderInterface
         $names = array_map(static fn ($v): ?string => preg_replace('/([\s:,])/', '\\\\\\\\$1', $v), $keys);
 
         foreach ($names as $name) {
-            $response = $this->httpClient->request('DELETE', 'keys', [
+            $response = $this->client->request('DELETE', 'keys', [
                 'query' => [
                     'q' => 'name:'.$name,
                 ],
             ]);
 
             if (200 !== $statusCode = $response->getStatusCode()) {
-                $this->logger->error(sprintf('Unable to delete key "%s" in phrase: "%s".', $name, $response->getContent(false)));
+                $this->logger->error(\sprintf('Unable to delete key "%s" in phrase: "%s".', $name, $response->getContent(false)));
 
                 $this->throwProviderException($statusCode, $response, 'Unable to delete key in phrase.');
             }
@@ -167,7 +167,7 @@ class PhraseProvider implements ProviderInterface
     {
         array_multisort($options);
 
-        return sprintf('%s.%s.%s', $locale, $domain, sha1(serialize($options)));
+        return \sprintf('%s.%s.%s', $locale, $domain, sha1(serialize($options)));
     }
 
     private function getLocale(string $locale): string
@@ -194,7 +194,7 @@ class PhraseProvider implements ProviderInterface
 
     private function createLocale(string $locale): void
     {
-        $response = $this->httpClient->request('POST', 'locales', [
+        $response = $this->client->request('POST', 'locales', [
             'body' => [
                 'name' => $locale,
                 'code' => $locale,
@@ -206,7 +206,7 @@ class PhraseProvider implements ProviderInterface
         ]);
 
         if (201 !== $statusCode = $response->getStatusCode()) {
-            $this->logger->error(sprintf('Unable to create locale "%s" in phrase: "%s".', $locale, $response->getContent(false)));
+            $this->logger->error(\sprintf('Unable to create locale "%s" in phrase: "%s".', $locale, $response->getContent(false)));
 
             $this->throwProviderException($statusCode, $response, 'Unable to create locale phrase.');
         }
@@ -221,7 +221,7 @@ class PhraseProvider implements ProviderInterface
         $page = 1;
 
         do {
-            $response = $this->httpClient->request('GET', 'locales', [
+            $response = $this->client->request('GET', 'locales', [
                 'query' => [
                     'per_page' => 100,
                     'page' => $page,
@@ -229,7 +229,7 @@ class PhraseProvider implements ProviderInterface
             ]);
 
             if (200 !== $statusCode = $response->getStatusCode()) {
-                $this->logger->error(sprintf('Unable to get locales from phrase: "%s".', $response->getContent(false)));
+                $this->logger->error(\sprintf('Unable to get locales from phrase: "%s".', $response->getContent(false)));
 
                 $this->throwProviderException($statusCode, $response, 'Unable to get locales from phrase.');
             }
@@ -248,7 +248,7 @@ class PhraseProvider implements ProviderInterface
         $headers = $response->getHeaders(false);
 
         throw match (true) {
-            429 === $statusCode => new ProviderException(sprintf('Rate limit exceeded (%s). please wait %s seconds.',
+            429 === $statusCode => new ProviderException(\sprintf('Rate limit exceeded (%s). please wait %s seconds.',
                 $headers['x-rate-limit-limit'][0],
                 $headers['x-rate-limit-reset'][0]
             ), $response),

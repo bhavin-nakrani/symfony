@@ -11,11 +11,12 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\Regex;
-use Symfony\Component\Validator\Exception\InvalidArgumentException;
+use Symfony\Component\Validator\Exception\MissingOptionsException;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
 
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
@@ -64,15 +65,13 @@ class RegexTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideHtmlPatterns
-     */
+    #[DataProvider('provideHtmlPatterns')]
     public function testGetHtmlPattern($pattern, $htmlPattern, $match = true)
     {
-        $constraint = new Regex([
-            'pattern' => $pattern,
-            'match' => $match,
-        ]);
+        $constraint = new Regex(
+            pattern: $pattern,
+            match: $match,
+        );
 
         $this->assertSame($pattern, $constraint->pattern);
         $this->assertSame($htmlPattern, $constraint->getHtmlPattern());
@@ -80,10 +79,10 @@ class RegexTest extends TestCase
 
     public function testGetCustomHtmlPattern()
     {
-        $constraint = new Regex([
-            'pattern' => '((?![0-9]$|[a-z]+).)*',
-            'htmlPattern' => 'foobar',
-        ]);
+        $constraint = new Regex(
+            pattern: '((?![0-9]$|[a-z]+).)*',
+            htmlPattern: 'foobar',
+        );
 
         $this->assertSame('((?![0-9]$|[a-z]+).)*', $constraint->pattern);
         $this->assertSame('foobar', $constraint->getHtmlPattern());
@@ -91,46 +90,40 @@ class RegexTest extends TestCase
 
     public function testNormalizerCanBeSet()
     {
-        $regex = new Regex(['pattern' => '/^[0-9]+$/', 'normalizer' => 'trim']);
+        $regex = new Regex(pattern: '/^[0-9]+$/', normalizer: 'trim');
 
         $this->assertEquals('trim', $regex->normalizer);
-    }
-
-    public function testInvalidNormalizerThrowsException()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The "normalizer" option must be a valid callable ("string" given).');
-        new Regex(['pattern' => '/^[0-9]+$/', 'normalizer' => 'Unknown Callable']);
-    }
-
-    public function testInvalidNormalizerObjectThrowsException()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The "normalizer" option must be a valid callable ("stdClass" given).');
-        new Regex(['pattern' => '/^[0-9]+$/', 'normalizer' => new \stdClass()]);
     }
 
     public function testAttributes()
     {
         $metadata = new ClassMetadata(RegexDummy::class);
-        $loader = new AnnotationLoader();
+        $loader = new AttributeLoader();
         self::assertTrue($loader->loadClassMetadata($metadata));
 
-        [$aConstraint] = $metadata->properties['a']->getConstraints();
+        [$aConstraint] = $metadata->getPropertyMetadata('a')[0]->getConstraints();
         self::assertSame('/^[0-9]+$/', $aConstraint->pattern);
         self::assertTrue($aConstraint->match);
         self::assertNull($aConstraint->normalizer);
 
-        [$bConstraint] = $metadata->properties['b']->getConstraints();
+        [$bConstraint] = $metadata->getPropertyMetadata('b')[0]->getConstraints();
         self::assertSame('myMessage', $bConstraint->message);
         self::assertSame('/^[0-9]+$/', $bConstraint->pattern);
         self::assertSame('[0-9]+', $bConstraint->htmlPattern);
         self::assertFalse($bConstraint->match);
         self::assertSame(['Default', 'RegexDummy'], $bConstraint->groups);
 
-        [$cConstraint] = $metadata->properties['c']->getConstraints();
+        [$cConstraint] = $metadata->getPropertyMetadata('c')[0]->getConstraints();
         self::assertSame(['my_group'], $cConstraint->groups);
         self::assertSame('some attached data', $cConstraint->payload);
+    }
+
+    public function testMissingPattern()
+    {
+        $this->expectException(MissingOptionsException::class);
+        $this->expectExceptionMessage(\sprintf('The options "pattern" must be set for constraint "%s".', Regex::class));
+
+        new Regex(null);
     }
 }
 

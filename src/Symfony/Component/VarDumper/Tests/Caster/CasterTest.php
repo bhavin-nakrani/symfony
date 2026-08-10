@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\VarDumper\Tests\Caster;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\VarDumper\Caster\Caster;
 use Symfony\Component\VarDumper\Test\VarDumperTestTrait;
@@ -32,9 +33,7 @@ class CasterTest extends TestCase
         "\0Foo\0private" => 'priv',
     ];
 
-    /**
-     * @dataProvider provideFilter
-     */
+    #[DataProvider('provideFilter')]
     public function testFilter($filter, $expectedDiff, $listedProperties = null)
     {
         if (null === $listedProperties) {
@@ -157,32 +156,62 @@ class CasterTest extends TestCase
 
         $this->assertDumpMatchesFormat(
             <<<'EOTXT'
-stdClass@anonymous {
-  -foo: "foo"
-}
-EOTXT
-            , $c
+                stdClass@anonymous {
+                  -foo: "foo"
+                }
+                EOTXT,
+            $c
         );
 
         $c = eval('return new class implements \Countable { private $foo = "foo"; public function count(): int { return 0; } };');
 
         $this->assertDumpMatchesFormat(
             <<<'EOTXT'
-Countable@anonymous {
-  -foo: "foo"
-}
-EOTXT
-            , $c
+                Countable@anonymous {
+                  -foo: "foo"
+                }
+                EOTXT,
+            $c
         );
     }
 
     public function testTypeErrorInDebugInfo()
     {
-        $this->assertDumpMatchesFormat('class@anonymous {}', new class() {
+        $this->assertDumpMatchesFormat('class@anonymous {}', new class {
             public function __debugInfo(): array
             {
                 return ['class' => \get_class(null)];
             }
         });
     }
+
+    public function testClassHierarchy()
+    {
+        $this->assertDumpMatchesFormat(<<<'DUMP'
+            Symfony\Component\VarDumper\Tests\Caster\B {
+              +a: "a"
+              #b: "b"
+              -c: "c"
+              +d: "d"
+              #e: "e"
+              -f: "f"
+            }
+            DUMP,
+            new B()
+        );
+    }
+}
+
+class A
+{
+    public $a = 'a';
+    protected $b = 'b';
+    private $c = 'c';
+}
+
+class B extends A
+{
+    public $d = 'd';
+    protected $e = 'e';
+    private $f = 'f';
 }

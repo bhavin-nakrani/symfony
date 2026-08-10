@@ -11,15 +11,24 @@
 
 namespace Symfony\Component\Messenger\Handler;
 
+use Symfony\Component\Clock\Clock;
+use Symfony\Component\Clock\ClockInterface;
+
 /**
  * @author Nicolas Grekas <p@tchwork.com>
  */
 trait BatchHandlerTrait
 {
     private array $jobs = [];
+    private ?int $lastMessageAt = null;
+    private ?ClockInterface $batchClock = null;
 
     public function flush(bool $force): void
     {
+        if (!$force && !$this->shouldFlush()) {
+            return;
+        }
+
         if ($jobs = $this->jobs) {
             $this->jobs = [];
             $this->process($jobs);
@@ -35,8 +44,11 @@ trait BatchHandlerTrait
      */
     private function handle(object $message, ?Acknowledger $ack): mixed
     {
+        $this->batchClock ??= $ack?->clock ?? Clock::get();
+        $this->lastMessageAt = (int) $this->batchClock->now()->format('U');
+
         if (null === $ack) {
-            $ack = new Acknowledger(get_debug_type($this));
+            $ack = new Acknowledger(get_debug_type($this), null, $this->batchClock);
             $this->jobs[] = [$message, $ack];
             $this->flush(true);
 
@@ -55,18 +67,35 @@ trait BatchHandlerTrait
 
     private function shouldFlush(): bool
     {
-        return $this->getBatchSize() <= \count($this->jobs);
+        if ($this->getBatchSize() <= \count($this->jobs)) {
+            return true;
+        }
+
+        $idleTimeout = $this->getIdleTimeout();
+        if (null !== $idleTimeout && null !== $this->lastMessageAt) {
+            return ((int) ($this->batchClock ?? Clock::get())->now()->format('U') - $this->lastMessageAt) >= $idleTimeout;
+        }
+
+        return false;
     }
 
     /**
      * Completes the jobs in the list.
      *
-     * @list<array{0: object, 1: Acknowledger}> $jobs A list of pairs of messages and their corresponding acknowledgers
+     * @param list<array{0: object, 1: Acknowledger}> $jobs A list of pairs of messages and their corresponding acknowledgers
      */
     abstract private function process(array $jobs): void;
 
     private function getBatchSize(): int
     {
         return 10;
+    }
+
+    /**
+     * @return int|null The idle timeout in seconds
+     */
+    private function getIdleTimeout(): ?int
+    {
+        return 1;
     }
 }

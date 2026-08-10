@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Serializer\Tests\Context\Normalizer;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Serializer\Context\Normalizer\AbstractObjectNormalizerContextBuilder;
 use Symfony\Component\Serializer\Exception\InvalidArgumentException;
@@ -25,20 +26,20 @@ class AbstractObjectNormalizerContextBuilderTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->contextBuilder = new class() extends AbstractObjectNormalizerContextBuilder {};
+        $this->contextBuilder = new class extends AbstractObjectNormalizerContextBuilder {};
     }
 
     /**
-     * @dataProvider withersDataProvider
-     *
      * @param array<string, mixed> $values
      */
+    #[DataProvider('withersDataProvider')]
     public function testWithers(array $values)
     {
         $context = $this->contextBuilder
             ->withEnableMaxDepth($values[AbstractObjectNormalizer::ENABLE_MAX_DEPTH])
             ->withDepthKeyPattern($values[AbstractObjectNormalizer::DEPTH_KEY_PATTERN])
             ->withDisableTypeEnforcement($values[AbstractObjectNormalizer::DISABLE_TYPE_ENFORCEMENT])
+            ->withEnableTypeConversion($values[AbstractObjectNormalizer::ENABLE_TYPE_CONVERSION])
             ->withSkipNullValues($values[AbstractObjectNormalizer::SKIP_NULL_VALUES])
             ->withSkipUninitializedValues($values[AbstractObjectNormalizer::SKIP_UNINITIALIZED_VALUES])
             ->withMaxDepthHandler($values[AbstractObjectNormalizer::MAX_DEPTH_HANDLER])
@@ -59,6 +60,7 @@ class AbstractObjectNormalizerContextBuilderTest extends TestCase
             AbstractObjectNormalizer::ENABLE_MAX_DEPTH => true,
             AbstractObjectNormalizer::DEPTH_KEY_PATTERN => '%s_%s',
             AbstractObjectNormalizer::DISABLE_TYPE_ENFORCEMENT => false,
+            AbstractObjectNormalizer::ENABLE_TYPE_CONVERSION => false,
             AbstractObjectNormalizer::SKIP_NULL_VALUES => true,
             AbstractObjectNormalizer::SKIP_UNINITIALIZED_VALUES => false,
             AbstractObjectNormalizer::MAX_DEPTH_HANDLER => static function (): void {},
@@ -71,6 +73,7 @@ class AbstractObjectNormalizerContextBuilderTest extends TestCase
             AbstractObjectNormalizer::ENABLE_MAX_DEPTH => null,
             AbstractObjectNormalizer::DEPTH_KEY_PATTERN => null,
             AbstractObjectNormalizer::DISABLE_TYPE_ENFORCEMENT => null,
+            AbstractObjectNormalizer::ENABLE_TYPE_CONVERSION => null,
             AbstractObjectNormalizer::SKIP_NULL_VALUES => null,
             AbstractObjectNormalizer::SKIP_UNINITIALIZED_VALUES => null,
             AbstractObjectNormalizer::MAX_DEPTH_HANDLER => null,
@@ -80,9 +83,7 @@ class AbstractObjectNormalizerContextBuilderTest extends TestCase
         ]];
     }
 
-    /**
-     * @dataProvider validateDepthKeyPatternDataProvider
-     */
+    #[DataProvider('validateDepthKeyPatternDataProvider')]
     public function testValidateDepthKeyPattern(string $pattern, bool $expectException)
     {
         $exception = null;

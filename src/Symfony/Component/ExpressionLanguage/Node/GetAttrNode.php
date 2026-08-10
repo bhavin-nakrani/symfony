@@ -26,18 +26,22 @@ class GetAttrNode extends Node
 
     /**
      * @param self::* $type
+     * @param bool    $isNullSafe Whether the access uses the `?.[]` null-safe operator; only honored for self::ARRAY_CALL.
+     *                            For self::PROPERTY_CALL and self::METHOD_CALL, null-safety is driven by ConstantNode::$isNullSafe.
      */
-    public function __construct(Node $node, Node $attribute, ArrayNode $arguments, int $type)
+    public function __construct(Node $node, Node $attribute, ArrayNode $arguments, int $type, bool $isNullSafe = false)
     {
+        $isNullSafe = self::ARRAY_CALL === $type && $isNullSafe;
+
         parent::__construct(
             ['node' => $node, 'attribute' => $attribute, 'arguments' => $arguments],
-            ['type' => $type, 'is_null_coalesce' => false, 'is_short_circuited' => false],
+            ['type' => $type, 'is_null_coalesce' => false, 'is_short_circuited' => false, 'is_null_safe' => $isNullSafe],
         );
     }
 
     public function compile(Compiler $compiler): void
     {
-        $nullSafe = $this->nodes['attribute'] instanceof ConstantNode && $this->nodes['attribute']->isNullSafe;
+        $nullSafe = ($this->nodes['attribute'] instanceof ConstantNode && $this->nodes['attribute']->isNullSafe) || $this->attributes['is_null_safe'];
         switch ($this->attributes['type']) {
             case self::PROPERTY_CALL:
                 $compiler
@@ -59,17 +63,30 @@ class GetAttrNode extends Node
                 break;
 
             case self::ARRAY_CALL:
-                $compiler
-                    ->compile($this->nodes['node'])
-                    ->raw('[')
-                    ->compile($this->nodes['attribute'])->raw(']')
-                ;
+                if ($nullSafe) {
+                    $compiler
+                        ->raw('\\'.self::class.'::convertToArrayAccess(')
+                        ->compile($this->nodes['node'])
+                        ->raw(', ')
+                        ->string($this->nodes['node']->dump())
+                        ->raw(')?->offsetGet(')
+                        ->compile($this->nodes['attribute'])
+                        ->raw(')')
+                    ;
+                } else {
+                    $compiler
+                        ->compile($this->nodes['node'])
+                        ->raw('[')
+                        ->compile($this->nodes['attribute'])->raw(']')
+                    ;
+                }
                 break;
         }
     }
 
     public function evaluate(array $functions, array $values): mixed
     {
+        $nullSafe = $this->attributes['is_null_safe'];
         switch ($this->attributes['type']) {
             case self::PROPERTY_CALL:
                 $obj = $this->nodes['node']->evaluate($functions, $values);
@@ -83,7 +100,7 @@ class GetAttrNode extends Node
                 }
 
                 if (!\is_object($obj)) {
-                    throw new \RuntimeException(sprintf('Unable to get property "%s" of non-object "%s".', $this->nodes['attribute']->dump(), $this->nodes['node']->dump()));
+                    throw new \RuntimeException(\sprintf('Unable to get property "%s" of non-object "%s".', $this->nodes['attribute']->dump(), $this->nodes['node']->dump()));
                 }
 
                 $property = $this->nodes['attribute']->attributes['value'];
@@ -107,10 +124,10 @@ class GetAttrNode extends Node
                 }
 
                 if (!\is_object($obj)) {
-                    throw new \RuntimeException(sprintf('Unable to call method "%s" of non-object "%s".', $this->nodes['attribute']->dump(), $this->nodes['node']->dump()));
+                    throw new \RuntimeException(\sprintf('Unable to call method "%s" of non-object "%s".', $this->nodes['attribute']->dump(), $this->nodes['node']->dump()));
                 }
                 if (!\is_callable($toCall = [$obj, $this->nodes['attribute']->attributes['value']])) {
-                    throw new \RuntimeException(sprintf('Unable to call method "%s" of object "%s".', $this->nodes['attribute']->attributes['value'], get_debug_type($obj)));
+                    throw new \RuntimeException(\sprintf('Unable to call method "%s" of object "%s".', $this->nodes['attribute']->attributes['value'], get_debug_type($obj)));
                 }
 
                 return $toCall(...array_values($this->nodes['arguments']->evaluate($functions, $values)));
@@ -118,12 +135,14 @@ class GetAttrNode extends Node
             case self::ARRAY_CALL:
                 $array = $this->nodes['node']->evaluate($functions, $values);
 
-                if (null === $array && $this->isShortCircuited()) {
+                if (null === $array && ($nullSafe || $this->isShortCircuited())) {
+                    $this->attributes['is_short_circuited'] = $nullSafe || $this->attributes['is_short_circuited'];
+
                     return null;
                 }
 
                 if (!\is_array($array) && !$array instanceof \ArrayAccess && !(null === $array && $this->attributes['is_null_coalesce'])) {
-                    throw new \RuntimeException(sprintf('Unable to get an item of non-array "%s".', $this->nodes['node']->dump()));
+                    throw new \RuntimeException(\sprintf('Unable to get an item of non-array "%s".', $this->nodes['node']->dump()));
                 }
 
                 if ($this->attributes['is_null_coalesce']) {
@@ -134,6 +153,26 @@ class GetAttrNode extends Node
         }
     }
 
+    /**
+     * @internal
+     */
+    public static function convertToArrayAccess(mixed $value, string $nodeDump): ?\ArrayAccess
+    {
+        if (null === $value) {
+            return null;
+        }
+
+        if (\is_array($value)) {
+            return new \ArrayObject($value);
+        }
+
+        if ($value instanceof \ArrayAccess) {
+            return $value;
+        }
+
+        throw new \RuntimeException(\sprintf('Unable to get an item of non-array "%s".', $nodeDump));
+    }
+
     private function isShortCircuited(): bool
     {
         return $this->attributes['is_short_circuited'] || ($this->nodes['node'] instanceof self && $this->nodes['node']->isShortCircuited());
@@ -141,15 +180,16 @@ class GetAttrNode extends Node
 
     public function toArray(): array
     {
+        $nullSafe = $this->nodes['attribute'] instanceof ConstantNode && $this->nodes['attribute']->isNullSafe;
         switch ($this->attributes['type']) {
             case self::PROPERTY_CALL:
-                return [$this->nodes['node'], '.', $this->nodes['attribute']];
+                return [$this->nodes['node'], $nullSafe ? '?.' : '.', $this->nodes['attribute']];
 
             case self::METHOD_CALL:
-                return [$this->nodes['node'], '.', $this->nodes['attribute'], '(', $this->nodes['arguments'], ')'];
+                return [$this->nodes['node'], $nullSafe ? '?.' : '.', $this->nodes['attribute'], '(', $this->nodes['arguments'], ')'];
 
             case self::ARRAY_CALL:
-                return [$this->nodes['node'], '[', $this->nodes['attribute'], ']'];
+                return [$this->nodes['node'], $this->attributes['is_null_safe'] ? '?.[' : '[', $this->nodes['attribute'], ']'];
         }
     }
 
@@ -161,6 +201,7 @@ class GetAttrNode extends Node
         $this->nodes = $data['nodes'];
         $this->attributes = $data['attributes'];
         $this->attributes['is_null_coalesce'] ??= false;
+        $this->attributes['is_null_safe'] ??= false;
         $this->attributes['is_short_circuited'] ??= $data["\x00Symfony\Component\ExpressionLanguage\Node\GetAttrNode\x00isShortCircuited"] ?? false;
     }
 }

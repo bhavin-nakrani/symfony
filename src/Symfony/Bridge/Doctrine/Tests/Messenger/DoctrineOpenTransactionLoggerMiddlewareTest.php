@@ -24,12 +24,12 @@ class DoctrineOpenTransactionLoggerMiddlewareTest extends MiddlewareTestCase
 {
     private AbstractLogger $logger;
     private MockObject&Connection $connection;
-    private MockObject&EntityManagerInterface $entityManager;
+    private EntityManagerInterface $entityManager;
     private DoctrineOpenTransactionLoggerMiddleware $middleware;
 
     protected function setUp(): void
     {
-        $this->logger = new class() extends AbstractLogger {
+        $this->logger = new class extends AbstractLogger {
             public array $logs = [];
 
             public function log($level, $message, $context = []): void
@@ -40,10 +40,10 @@ class DoctrineOpenTransactionLoggerMiddlewareTest extends MiddlewareTestCase
 
         $this->connection = $this->createMock(Connection::class);
 
-        $this->entityManager = $this->createMock(EntityManagerInterface::class);
+        $this->entityManager = $this->createStub(EntityManagerInterface::class);
         $this->entityManager->method('getConnection')->willReturn($this->connection);
 
-        $managerRegistry = $this->createMock(ManagerRegistry::class);
+        $managerRegistry = $this->createStub(ManagerRegistry::class);
         $managerRegistry->method('getManager')->willReturn($this->entityManager);
 
         $this->middleware = new DoctrineOpenTransactionLoggerMiddleware($managerRegistry, null, $this->logger);
@@ -51,9 +51,9 @@ class DoctrineOpenTransactionLoggerMiddlewareTest extends MiddlewareTestCase
 
     public function testMiddlewareWrapsInTransactionAndFlushes()
     {
-        $this->connection->expects($this->exactly(1))
-            ->method('isTransactionActive')
-            ->will($this->onConsecutiveCalls(true, true, false))
+        $this->connection->expects($this->exactly(2))
+            ->method('getTransactionNestingLevel')
+            ->willReturn(0, 1)
         ;
 
         $this->middleware->handle(new Envelope(new \stdClass()), $this->getStackMock());

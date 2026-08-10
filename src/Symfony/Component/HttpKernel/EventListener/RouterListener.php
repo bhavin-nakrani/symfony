@@ -23,6 +23,7 @@ use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Routing\Exception\InvalidParameterException;
 use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\NoConfigurationException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
@@ -41,30 +42,26 @@ use Symfony\Component\Routing\RequestContextAwareInterface;
  */
 class RouterListener implements EventSubscriberInterface
 {
-    private RequestMatcherInterface|UrlMatcherInterface $matcher;
     private RequestContext $context;
-    private ?LoggerInterface $logger;
-    private RequestStack $requestStack;
-    private ?string $projectDir;
-    private bool $debug;
 
     /**
      * @param RequestContext|null $context The RequestContext (can be null when $matcher implements RequestContextAwareInterface)
      *
      * @throws \InvalidArgumentException
      */
-    public function __construct(UrlMatcherInterface|RequestMatcherInterface $matcher, RequestStack $requestStack, RequestContext $context = null, LoggerInterface $logger = null, string $projectDir = null, bool $debug = true)
-    {
+    public function __construct(
+        private UrlMatcherInterface|RequestMatcherInterface $matcher,
+        private RequestStack $requestStack,
+        ?RequestContext $context = null,
+        private ?LoggerInterface $logger = null,
+        private ?string $projectDir = null,
+        private bool $debug = true,
+    ) {
         if (null === $context && !$matcher instanceof RequestContextAwareInterface) {
             throw new \InvalidArgumentException('You must either pass a RequestContext or the matcher must implement RequestContextAwareInterface.');
         }
 
-        $this->matcher = $matcher;
         $this->context = $context ?? $matcher->getContext();
-        $this->requestStack = $requestStack;
-        $this->logger = $logger;
-        $this->projectDir = $projectDir;
-        $this->debug = $debug;
     }
 
     private function setCurrentRequest(?Request $request): void
@@ -114,19 +111,64 @@ class RouterListener implements EventSubscriberInterface
                 'method' => $request->getMethod(),
             ]);
 
-            $request->attributes->add($parameters);
-            unset($parameters['_route'], $parameters['_controller']);
+            $attributes = $parameters;
+            if ($mapping = $parameters['_route_mapping'] ?? false) {
+                unset($parameters['_route_mapping']);
+                $mappedAttributes = [];
+                $attributes = [];
+
+                foreach ($parameters as $parameter => $value) {
+                    if (!isset($mapping[$parameter])) {
+                        $attribute = $parameter;
+                    } elseif (\is_array($mapping[$parameter])) {
+                        [$attribute, $parameter] = $mapping[$parameter];
+                        $mappedAttributes[$attribute] = '';
+                    } else {
+                        $attribute = $mapping[$parameter];
+                    }
+
+                    if (!isset($mappedAttributes[$attribute])) {
+                        $attributes[$attribute] = $value;
+                        $mappedAttributes[$attribute] = $parameter;
+                    } elseif ('' !== $mappedAttributes[$attribute]) {
+                        $attributes[$attribute] = [
+                            $mappedAttributes[$attribute] => $attributes[$attribute],
+                            $parameter => $value,
+                        ];
+                        $mappedAttributes[$attribute] = '';
+                    } else {
+                        $attributes[$attribute][$parameter] = $value;
+                    }
+                }
+
+                $attributes['_route_mapping'] = $mapping;
+            }
+
+            $request->attributes->add($attributes);
+
+            // the route may declare query parameters it always carries, the request wins over them
+            if (!\is_array($query = $attributes['_query'] ?? [])) {
+                throw new InvalidParameterException(\sprintf('Default "_query" must be an array of query parameters for route "%s".', $parameters['_route'] ?? ''));
+            }
+
+            if ($query = array_filter($query, static fn ($value) => null !== $value)) {
+                // going through the query string gives the same values a real one would have parsed to
+                parse_str(http_build_query($query, '', '&', \PHP_QUERY_RFC3986), $query);
+                $request->query->add(array_diff_key($query, $request->query->all()));
+            }
+
+            unset($parameters['_route'], $parameters['_controller'], $parameters['_query']);
             $request->attributes->set('_route_params', $parameters);
         } catch (ResourceNotFoundException $e) {
-            $message = sprintf('No route found for "%s %s"', $request->getMethod(), $request->getUriForPath($request->getPathInfo()));
+            $message = \sprintf('No route found for "%s %s"', $request->getMethod(), $request->getUriForPath($request->getPathInfo()));
 
             if ($referer = $request->headers->get('referer')) {
-                $message .= sprintf(' (from "%s")', $referer);
+                $message .= \sprintf(' (from "%s")', $referer);
             }
 
             throw new NotFoundHttpException($message, $e);
         } catch (MethodNotAllowedException $e) {
-            $message = sprintf('No route found for "%s %s": Method Not Allowed (Allow: %s)', $request->getMethod(), $request->getUriForPath($request->getPathInfo()), implode(', ', $e->getAllowedMethods()));
+            $message = \sprintf('No route found for "%s %s": Method Not Allowed (Allow: %s)', $request->getMethod(), $request->getUriForPath($request->getPathInfo()), implode(', ', $e->getAllowedMethods()));
 
             throw new MethodNotAllowedHttpException($e->getAllowedMethods(), $message, $e);
         }
@@ -154,9 +196,8 @@ class RouterListener implements EventSubscriberInterface
 
     private function createWelcomeResponse(): Response
     {
-        $version = Kernel::VERSION;
         $projectDir = realpath((string) $this->projectDir).\DIRECTORY_SEPARATOR;
-        $docVersion = substr(Kernel::VERSION, 0, 3);
+        $version = $docVersion = Kernel::MAJOR_VERSION.'.'.Kernel::MINOR_VERSION;
 
         ob_start();
         include \dirname(__DIR__).'/Resources/welcome.html.php';

@@ -12,10 +12,10 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is valid as an ExpressionLanguage expression.
  *
  * @author Andrey Sevastianov <mrpkmail@gmail.com>
  */
@@ -28,17 +28,26 @@ class ExpressionSyntax extends Constraint
         self::EXPRESSION_SYNTAX_ERROR => 'EXPRESSION_SYNTAX_ERROR',
     ];
 
-    public $message = 'This value should be a valid expression.';
-    public $service;
-    public $allowedVariables;
+    public string $message = 'This value should be a valid expression.';
+    public ?string $service = null;
+    public ?array $allowedVariables = null;
 
-    public function __construct(array $options = null, string $message = null, string $service = null, array $allowedVariables = null, array $groups = null, mixed $payload = null)
+    /**
+     * @param non-empty-string|null $service          The service used to validate the constraint instead of the default one
+     * @param string[]|null         $allowedVariables Restrict the available variables in the expression to these values (defaults to null that allows any variable)
+     * @param string[]|null         $groups
+     */
+    public function __construct(?array $options = null, ?string $message = null, ?string $service = null, ?array $allowedVariables = null, ?array $groups = null, mixed $payload = null)
     {
-        parent::__construct($options, $groups, $payload);
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        parent::__construct(null, $groups, $payload);
 
         $this->message = $message ?? $this->message;
-        $this->service = $service ?? $this->service;
-        $this->allowedVariables = $allowedVariables ?? $this->allowedVariables;
+        $this->service = $service;
+        $this->allowedVariables = $allowedVariables;
     }
 
     public function validatedBy(): string

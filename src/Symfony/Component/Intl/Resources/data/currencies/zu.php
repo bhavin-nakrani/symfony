@@ -514,9 +514,13 @@ return [
             'SHP',
             'i-Saint Helena Pound',
         ],
+        'SLE' => [
+            'SLE',
+            'i-Sierra Leonean Leone',
+        ],
         'SLL' => [
             'SLL',
-            'i-Sierra Leonean Leone',
+            'i-Sierra Leonean Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -630,6 +634,10 @@ return [
             'EC$',
             'i-East Caribbean Dollar',
         ],
+        'XCG' => [
+            'Cg.',
+            'Caribbean guilder',
+        ],
         'XOF' => [
             'F CFA',
             'i-West African CFA Franc',
@@ -653,6 +661,10 @@ return [
         'ZMW' => [
             'ZMW',
             'i-Zambian Kwacha',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabwean Gold',
         ],
     ],
 ];

@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
@@ -41,6 +42,9 @@ class DefinitionTest extends TestCase
 
         $def->setFactory($ref = new Reference('baz'));
         $this->assertSame([$ref, '__invoke'], $def->getFactory(), '->setFactory() converts service reference to class invoke call');
+
+        $def->setFactory($innerDef = new Definition());
+        $this->assertSame([$innerDef, '__invoke'], $def->getFactory(), '->setFactory() converts inline definition to class invoke call');
         $this->assertSame(['factory' => true], $def->getChanges());
     }
 
@@ -118,9 +122,11 @@ class DefinitionTest extends TestCase
 
     public function testExceptionOnEmptyMethodCall()
     {
+        $def = new Definition('stdClass');
+
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Method name cannot be empty.');
-        $def = new Definition('stdClass');
+
         $def->addMethodCall('');
     }
 
@@ -184,24 +190,23 @@ class DefinitionTest extends TestCase
         $this->assertSame('1.1', $deprecation['version']);
     }
 
-    /**
-     * @dataProvider invalidDeprecationMessageProvider
-     */
+    #[DataProvider('invalidDeprecationMessageProvider')]
     public function testSetDeprecatedWithInvalidDeprecationTemplate($message)
     {
-        $this->expectException(InvalidArgumentException::class);
         $def = new Definition('stdClass');
+
+        $this->expectException(InvalidArgumentException::class);
+
         $def->setDeprecated('vendor/package', '1.1', $message);
     }
 
-    public static function invalidDeprecationMessageProvider()
+    public static function invalidDeprecationMessageProvider(): array
     {
         return [
             "With \rs" => ["invalid \r message %service_id%"],
             "With \ns" => ["invalid \n message %service_id%"],
             'With */s' => ['invalid */ message %service_id%'],
             'message not containing require %service_id% variable' => ['this is deprecated'],
-            'template not containing require %service_id% variable' => [true],
         ];
     }
 
@@ -210,6 +215,15 @@ class DefinitionTest extends TestCase
         $def = new Definition('stdClass');
         $this->assertSame($def, $def->setConfigurator('foo'), '->setConfigurator() implements a fluent interface');
         $this->assertEquals('foo', $def->getConfigurator(), '->getConfigurator() returns the configurator');
+
+        $def->setConfigurator('Foo::bar');
+        $this->assertEquals(['Foo', 'bar'], $def->getConfigurator(), '->setConfigurator() converts string static method call to the array');
+
+        $def->setConfigurator($ref = new Reference('baz'));
+        $this->assertSame([$ref, '__invoke'], $def->getConfigurator(), '->setConfigurator() converts service reference to class invoke call');
+
+        $def->setConfigurator($innerDef = new Definition());
+        $this->assertSame([$innerDef, '__invoke'], $def->getConfigurator(), '->setConfigurator() converts inline definition to class invoke call');
     }
 
     public function testClearTags()
@@ -254,6 +268,16 @@ class DefinitionTest extends TestCase
         ], $def->getTags(), '->getTags() returns all tags');
     }
 
+    public function testAddResourceTag()
+    {
+        $def = new Definition('stdClass');
+        $def->addResourceTag('foo', ['bar' => true]);
+
+        $this->assertSame([['bar' => true]], $def->getTag('foo'));
+        $this->assertFalse($def->isAbstract());
+        $this->assertSame([['source' => 'by tag "foo"']], $def->getTag('container.excluded'));
+    }
+
     public function testSetArgument()
     {
         $def = new Definition('stdClass');
@@ -274,29 +298,44 @@ class DefinitionTest extends TestCase
 
     public function testGetArgumentShouldCheckBounds()
     {
-        $this->expectException(\OutOfBoundsException::class);
         $def = new Definition('stdClass');
-
         $def->addArgument('foo');
+
+        $this->expectException(\OutOfBoundsException::class);
+
         $def->getArgument(1);
     }
 
     public function testReplaceArgumentShouldCheckBounds()
     {
-        $this->expectException(\OutOfBoundsException::class);
-        $this->expectExceptionMessage('The index "1" is not in the range [0, 0] of the arguments of class "stdClass".');
         $def = new Definition('stdClass');
-
         $def->addArgument('foo');
+
+        $this->expectException(\OutOfBoundsException::class);
+        $this->expectExceptionMessage('The argument "1" doesn\'t exist in class "stdClass".');
+
         $def->replaceArgument(1, 'bar');
     }
 
     public function testReplaceArgumentWithoutExistingArgumentsShouldCheckBounds()
     {
+        $def = new Definition('stdClass');
+
         $this->expectException(\OutOfBoundsException::class);
         $this->expectExceptionMessage('Cannot replace arguments for class "stdClass" if none have been configured yet.');
-        $def = new Definition('stdClass');
+
         $def->replaceArgument(0, 'bar');
+    }
+
+    public function testReplaceArgumentWithNonConsecutiveIntIndex()
+    {
+        $def = new Definition('stdClass');
+
+        $def->setArguments([1 => 'foo']);
+        $this->assertSame([1 => 'foo'], $def->getArguments());
+
+        $def->replaceArgument(1, 'bar');
+        $this->assertSame([1 => 'bar'], $def->getArguments());
     }
 
     public function testSetGetProperties()

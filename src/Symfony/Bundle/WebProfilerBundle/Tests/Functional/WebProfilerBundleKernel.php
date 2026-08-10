@@ -43,19 +43,17 @@ class WebProfilerBundleKernel extends Kernel
 
     protected function configureRoutes(RoutingConfigurator $routes): void
     {
-        $routes->import(__DIR__.'/../../Resources/config/routing/profiler.xml')->prefix('/_profiler');
-        $routes->import(__DIR__.'/../../Resources/config/routing/wdt.xml')->prefix('/_wdt');
+        $routes->import(__DIR__.'/../../Resources/config/routing/profiler.php')->prefix('/_profiler');
+        $routes->import(__DIR__.'/../../Resources/config/routing/wdt.php')->prefix('/_wdt');
         $routes->add('_', '/')->controller('kernel::homepageController');
     }
 
     protected function configureContainer(ContainerBuilder $container, LoaderInterface $loader): void
     {
         $config = [
-            'annotations' => false,
-            'http_method_override' => false,
             'secret' => 'foo-secret',
             'profiler' => ['only_exceptions' => false],
-            'session' => ['storage_factory_id' => 'session.storage.factory.mock_file'],
+            'session' => ['handler_id' => null, 'storage_factory_id' => 'session.storage.factory.mock_file', 'cookie-secure' => 'auto', 'cookie-samesite' => 'lax'],
             'router' => ['utf8' => true],
         ];
 
@@ -83,7 +81,7 @@ class WebProfilerBundleKernel extends Kernel
         $container->register('logger', NullLogger::class);
     }
 
-    public function homepageController()
+    public function homepageController(): Response
     {
         return new Response('<html><head></head><body>Homepage Controller.</body></html>');
     }

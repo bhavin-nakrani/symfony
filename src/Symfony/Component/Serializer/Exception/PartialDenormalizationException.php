@@ -16,28 +16,51 @@ namespace Symfony\Component\Serializer\Exception;
  */
 class PartialDenormalizationException extends UnexpectedValueException
 {
+    private ?ExtraAttributesException $extraAttributesError = null;
+
     /**
-     * @param NotNormalizableValueException[] $errors
+     * @param NotNormalizableValueException[] $notNormalizableErrors
+     * @param ExtraAttributesException[]      $extraAttributesErrors
      */
     public function __construct(
         private mixed $data,
-        private array $errors,
+        private array $notNormalizableErrors,
+        array $extraAttributesErrors = [],
     ) {
+        $extraAttributes = [];
+        foreach ($extraAttributesErrors as $error) {
+            $extraAttributes = array_merge($extraAttributes, $error->getExtraAttributes());
+        }
+        if ($extraAttributes) {
+            $this->extraAttributesError = new ExtraAttributesException($extraAttributes);
+        }
     }
 
-    /**
-     * @return mixed
-     */
-    public function getData()
+    public function getData(): mixed
     {
         return $this->data;
     }
 
     /**
-     * @return NotNormalizableValueException[]
+     * @deprecated since Symfony 8.1, use getNotNormalizableValueErrors() instead
      */
     public function getErrors(): array
     {
-        return $this->errors;
+        trigger_deprecation('symfony/serializer', '8.1', 'The "%s()" method is deprecated, use "%s::getNotNormalizableValueErrors()" instead.', __METHOD__, self::class);
+
+        return $this->getNotNormalizableValueErrors();
+    }
+
+    /**
+     * @return NotNormalizableValueException[]
+     */
+    public function getNotNormalizableValueErrors(): array
+    {
+        return $this->notNormalizableErrors;
+    }
+
+    public function getExtraAttributesError(): ?ExtraAttributesException
+    {
+        return $this->extraAttributesError;
     }
 }

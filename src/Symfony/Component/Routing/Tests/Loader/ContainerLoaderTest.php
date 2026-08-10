@@ -11,16 +11,15 @@
 
 namespace Symfony\Component\Routing\Tests\Loader;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\Routing\Loader\ContainerLoader;
 
 class ContainerLoaderTest extends TestCase
 {
-    /**
-     * @dataProvider supportsProvider
-     */
-    public function testSupports(bool $expected, string $type = null)
+    #[DataProvider('supportsProvider')]
+    public function testSupports(bool $expected, ?string $type = null)
     {
         $this->assertSame($expected, (new ContainerLoader(new Container()))->supports('foo', $type));
     }

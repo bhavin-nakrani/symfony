@@ -11,19 +11,24 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraint;
-use Symfony\Component\Validator\Constraints\AbstractComparison;
+use Symfony\Component\Validator\Constraints\GreaterThanValidator;
 use Symfony\Component\Validator\Constraints\Positive;
-use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
 
 /**
  * @author Jan Schädlich <jan.schaedlich@sensiolabs.de>
  */
-class GreaterThanValidatorWithPositiveConstraintTest extends GreaterThanValidatorTest
+class GreaterThanValidatorWithPositiveConstraintTest extends AbstractComparisonValidatorTestCase
 {
-    protected static function createConstraint(array $options = null): Constraint
+    protected function createValidator(): GreaterThanValidator
     {
-        return new Positive();
+        return new GreaterThanValidator();
+    }
+
+    protected static function createConstraint(?array $options = null): Constraint
+    {
+        return new Positive($options);
     }
 
     public static function provideValidComparisons(): array
@@ -33,6 +38,13 @@ class GreaterThanValidatorWithPositiveConstraintTest extends GreaterThanValidato
             [2.5, 0],
             ['333', '0'],
             [null, 0],
+        ];
+    }
+
+    public static function provideValidComparisonsToPropertyPath(): array
+    {
+        return [
+            [6],
         ];
     }
 
@@ -46,36 +58,14 @@ class GreaterThanValidatorWithPositiveConstraintTest extends GreaterThanValidato
         ];
     }
 
-    public function testThrowsConstraintExceptionIfPropertyPath()
-    {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('The "propertyPath" option of the "Symfony\Component\Validator\Constraints\Positive" constraint cannot be set.');
-
-        return new Positive(['propertyPath' => 'field']);
-    }
-
-    public function testThrowsConstraintExceptionIfValue()
-    {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('The "value" option of the "Symfony\Component\Validator\Constraints\Positive" constraint cannot be set.');
-
-        return new Positive(['value' => 0]);
-    }
-
-    /**
-     * @dataProvider provideInvalidConstraintOptions
-     */
+    #[DataProvider('provideInvalidConstraintOptions')]
     public function testThrowsConstraintExceptionIfNoValueOrPropertyPath($options)
     {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('requires either the "value" or "propertyPath" option to be set.');
         $this->markTestSkipped('Value option always set for Positive constraint.');
     }
 
     public function testThrowsConstraintExceptionIfBothValueAndPropertyPath()
     {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('requires only one of the "value" or "propertyPath" options to be set, not both.');
         $this->markTestSkipped('Value option is set for Positive constraint automatically');
     }
 
@@ -89,20 +79,10 @@ class GreaterThanValidatorWithPositiveConstraintTest extends GreaterThanValidato
         $this->markTestSkipped('PropertyPath option is not used in Positive constraint');
     }
 
-    /**
-     * @dataProvider provideValidComparisonsToPropertyPath
-     */
+    #[DataProvider('provideValidComparisonsToPropertyPath')]
     public function testValidComparisonToPropertyPath($comparedValue)
     {
         $this->markTestSkipped('PropertyPath option is not used in Positive constraint');
-    }
-
-    /**
-     * @dataProvider throwsOnInvalidStringDatesProvider
-     */
-    public function testThrowsOnInvalidStringDates(AbstractComparison $constraint, $expectedMessage, $value)
-    {
-        $this->markTestSkipped('The compared value cannot be an invalid string date because it is hardcoded to 0.');
     }
 
     public function testInvalidComparisonToPropertyPathAddsPathAsParameter()

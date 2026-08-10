@@ -11,19 +11,24 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraint;
-use Symfony\Component\Validator\Constraints\AbstractComparison;
+use Symfony\Component\Validator\Constraints\GreaterThanOrEqualValidator;
 use Symfony\Component\Validator\Constraints\PositiveOrZero;
-use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
 
 /**
  * @author Jan Schädlich <jan.schaedlich@sensiolabs.de>
  */
-class GreaterThanOrEqualValidatorWithPositiveOrZeroConstraintTest extends GreaterThanOrEqualValidatorTest
+class GreaterThanOrEqualValidatorWithPositiveOrZeroConstraintTest extends AbstractComparisonValidatorTestCase
 {
-    protected static function createConstraint(array $options = null): Constraint
+    protected function createValidator(): GreaterThanOrEqualValidator
     {
-        return new PositiveOrZero();
+        return new GreaterThanOrEqualValidator();
+    }
+
+    protected static function createConstraint(?array $options = null): Constraint
+    {
+        return new PositiveOrZero($options);
     }
 
     public static function provideValidComparisons(): array
@@ -39,6 +44,14 @@ class GreaterThanOrEqualValidatorWithPositiveOrZeroConstraintTest extends Greate
         ];
     }
 
+    public static function provideValidComparisonsToPropertyPath(): array
+    {
+        return [
+            [5],
+            [6],
+        ];
+    }
+
     public static function provideInvalidComparisons(): array
     {
         return [
@@ -48,36 +61,14 @@ class GreaterThanOrEqualValidatorWithPositiveOrZeroConstraintTest extends Greate
         ];
     }
 
-    public function testThrowsConstraintExceptionIfPropertyPath()
-    {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('The "propertyPath" option of the "Symfony\Component\Validator\Constraints\PositiveOrZero" constraint cannot be set.');
-
-        return new PositiveOrZero(['propertyPath' => 'field']);
-    }
-
-    public function testThrowsConstraintExceptionIfValue()
-    {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('The "value" option of the "Symfony\Component\Validator\Constraints\PositiveOrZero" constraint cannot be set.');
-
-        return new PositiveOrZero(['value' => 0]);
-    }
-
-    /**
-     * @dataProvider provideInvalidConstraintOptions
-     */
+    #[DataProvider('provideInvalidConstraintOptions')]
     public function testThrowsConstraintExceptionIfNoValueOrPropertyPath($options)
     {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('requires either the "value" or "propertyPath" option to be set.');
         $this->markTestSkipped('Value option always set for PositiveOrZero constraint');
     }
 
     public function testThrowsConstraintExceptionIfBothValueAndPropertyPath()
     {
-        $this->expectException(ConstraintDefinitionException::class);
-        $this->expectExceptionMessage('requires only one of the "value" or "propertyPath" options to be set, not both.');
         $this->markTestSkipped('Value option is set for PositiveOrZero constraint automatically');
     }
 
@@ -86,20 +77,15 @@ class GreaterThanOrEqualValidatorWithPositiveOrZeroConstraintTest extends Greate
         $this->markTestSkipped('PropertyPath option is not used in PositiveOrZero constraint');
     }
 
-    /**
-     * @dataProvider provideValidComparisonsToPropertyPath
-     */
+    #[DataProvider('provideValidComparisonsToPropertyPath')]
     public function testValidComparisonToPropertyPath($comparedValue)
     {
         $this->markTestSkipped('PropertyPath option is not used in PositiveOrZero constraint');
     }
 
-    /**
-     * @dataProvider throwsOnInvalidStringDatesProvider
-     */
-    public function testThrowsOnInvalidStringDates(AbstractComparison $constraint, $expectedMessage, $value)
+    public function testNoViolationOnNullObjectWithPropertyPath()
     {
-        $this->markTestSkipped('The compared value cannot be an invalid string date because it is hardcoded to 0.');
+        $this->markTestSkipped('PropertyPath option is not used in PositiveOrZero constraint');
     }
 
     public function testInvalidComparisonToPropertyPathAddsPathAsParameter()

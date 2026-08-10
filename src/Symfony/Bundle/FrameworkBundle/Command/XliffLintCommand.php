@@ -23,7 +23,7 @@ use Symfony\Component\Translation\Command\XliffLintCommand as BaseLintCommand;
  *
  * @final
  */
-#[AsCommand(name: 'lint:xliff', description: 'Lints an XLIFF file and outputs encountered errors')]
+#[AsCommand(name: 'lint:xliff', description: 'Lint an XLIFF file and outputs encountered errors')]
 class XliffLintCommand extends BaseLintCommand
 {
     public function __construct()
@@ -36,7 +36,7 @@ class XliffLintCommand extends BaseLintCommand
             return $default($directory);
         };
 
-        $isReadableProvider = fn ($fileOrDirectory, $default) => str_starts_with($fileOrDirectory, '@') || $default($fileOrDirectory);
+        $isReadableProvider = static fn ($fileOrDirectory, $default) => str_starts_with($fileOrDirectory, '@') || $default($fileOrDirectory);
 
         parent::__construct(null, $directoryIteratorProvider, $isReadableProvider);
     }
@@ -47,11 +47,11 @@ class XliffLintCommand extends BaseLintCommand
 
         $this->setHelp($this->getHelp().<<<'EOF'
 
-Or find all files in a bundle:
+            Or find all files in a bundle:
 
-  <info>php %command.full_name% @AcmeDemoBundle</info>
+              <info>php %command.full_name% @AcmeDemoBundle</info>
 
-EOF
+            EOF
         );
     }
 }

@@ -13,8 +13,11 @@ namespace Symfony\Bridge\Doctrine\Tests\Form;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Doctrine\ORM\Mapping\JoinColumnMapping;
+use Doctrine\ORM\Mapping\ManyToOneAssociationMapping;
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\ObjectManager;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Form\DoctrineOrmTypeGuesser;
 use Symfony\Component\Form\Guess\Guess;
@@ -23,9 +26,7 @@ use Symfony\Component\Form\Guess\ValueGuess;
 
 class DoctrineOrmTypeGuesserTest extends TestCase
 {
-    /**
-     * @dataProvider requiredType
-     */
+    #[DataProvider('requiredType')]
     public function testTypeGuesser(string $type, $expected)
     {
         $classMetadata = $this->createMock(ClassMetadata::class);
@@ -69,33 +70,37 @@ class DoctrineOrmTypeGuesserTest extends TestCase
 
     public function testRequiredGuesserOneToOneNullable()
     {
-        $classMetadata = $this->createMock(ClassMetadata::class);
-        $classMetadata->expects($this->once())->method('isAssociationWithSingleJoinColumn')->with('field')->willReturn(true);
+        $classMetadata = new ClassMetadata('Acme\Entity\Foo');
 
-        $mapping = ['joinColumns' => [[]]];
-        $classMetadata->expects($this->once())->method('getAssociationMapping')->with('field')->willReturn($mapping);
+        $associationMapping = new ManyToOneAssociationMapping('field', 'Acme\Entity\Foo', 'Acme\Entity\Bar');
+        $associationMapping->joinColumns[] = new JoinColumnMapping('field', 'field');
+        $classMetadata->associationMappings['field'] = $associationMapping;
 
         $this->assertEquals(new ValueGuess(false, Guess::HIGH_CONFIDENCE), $this->getGuesser($classMetadata)->guessRequired('TestEntity', 'field'));
     }
 
     public function testRequiredGuesserOneToOneExplicitNullable()
     {
-        $classMetadata = $this->createMock(ClassMetadata::class);
-        $classMetadata->expects($this->once())->method('isAssociationWithSingleJoinColumn')->with('field')->willReturn(true);
+        $classMetadata = new ClassMetadata('Acme\Entity\Foo');
 
-        $mapping = ['joinColumns' => [['nullable' => true]]];
-        $classMetadata->expects($this->once())->method('getAssociationMapping')->with('field')->willReturn($mapping);
+        $associationMapping = new ManyToOneAssociationMapping('field', 'Acme\Entity\Foo', 'Acme\Entity\Bar');
+        $joinColumnMapping = new JoinColumnMapping('field', 'field');
+        $joinColumnMapping->nullable = true;
+        $associationMapping->joinColumns[] = $joinColumnMapping;
+        $classMetadata->associationMappings['field'] = $associationMapping;
 
         $this->assertEquals(new ValueGuess(false, Guess::HIGH_CONFIDENCE), $this->getGuesser($classMetadata)->guessRequired('TestEntity', 'field'));
     }
 
     public function testRequiredGuesserOneToOneNotNullable()
     {
-        $classMetadata = $this->createMock(ClassMetadata::class);
-        $classMetadata->expects($this->once())->method('isAssociationWithSingleJoinColumn')->with('field')->willReturn(true);
+        $classMetadata = new ClassMetadata('Acme\Entity\Foo');
 
-        $mapping = ['joinColumns' => [['nullable' => false]]];
-        $classMetadata->expects($this->once())->method('getAssociationMapping')->with('field')->willReturn($mapping);
+        $associationMapping = new ManyToOneAssociationMapping('field', 'Acme\Entity\Foo', 'Acme\Entity\Bar');
+        $joinColumnMapping = new JoinColumnMapping('field', 'field');
+        $joinColumnMapping->nullable = false;
+        $associationMapping->joinColumns[] = $joinColumnMapping;
+        $classMetadata->associationMappings['field'] = $associationMapping;
 
         $this->assertEquals(new ValueGuess(true, Guess::HIGH_CONFIDENCE), $this->getGuesser($classMetadata)->guessRequired('TestEntity', 'field'));
     }

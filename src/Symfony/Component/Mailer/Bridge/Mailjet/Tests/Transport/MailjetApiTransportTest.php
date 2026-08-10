@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Mailer\Bridge\Mailjet\Tests\Transport;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -20,15 +21,14 @@ use Symfony\Component\Mailer\Exception\HttpTransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Part\DataPart;
 
 class MailjetApiTransportTest extends TestCase
 {
     protected const USER = 'u$er';
     protected const PASSWORD = 'pa$s';
 
-    /**
-     * @dataProvider getTransportData
-     */
+    #[DataProvider('getTransportData')]
     public function testToString(MailjetApiTransport $transport, string $expected)
     {
         $this->assertSame($expected, (string) $transport);
@@ -237,9 +237,7 @@ class MailjetApiTransportTest extends TestCase
         $transport->send($email);
     }
 
-    /**
-     * @dataProvider getMalformedResponse
-     */
+    #[DataProvider('getMalformedResponse')]
     public function testSendWithMalformedResponse(array $body)
     {
         $json = json_encode($body);
@@ -257,7 +255,7 @@ class MailjetApiTransportTest extends TestCase
             ->text('foobar');
 
         $this->expectExceptionObject(
-            new HttpTransportException(sprintf('Unable to send an email: "%s" malformed api response.', $json), $response)
+            new HttpTransportException(\sprintf('Unable to send an email: "%s" malformed api response.', $json), $response)
         );
 
         $transport->send($email);
@@ -369,8 +367,8 @@ class MailjetApiTransportTest extends TestCase
                         'CustomCampaign' => 'SendAPI_campaign',
                         'DeduplicateCampaign' => true,
                         'Priority' => 2,
-                        'TrackClick' => 'account_default',
-                        'TrackOpen' => 'account_default',
+                        'TrackClicks' => 'account_default',
+                        'TrackOpens' => 'account_default',
                     ],
                 ],
                 'SandBoxMode' => false,
@@ -421,13 +419,100 @@ class MailjetApiTransportTest extends TestCase
                         'CustomCampaign' => 'SendAPI_campaign',
                         'DeduplicateCampaign' => true,
                         'Priority' => 2,
-                        'TrackClick' => 'account_default',
-                        'TrackOpen' => 'account_default',
+                        'TrackClicks' => 'account_default',
+                        'TrackOpens' => 'account_default',
                     ],
                 ],
                 'SandBoxMode' => true,
             ],
             $method->invoke($transport, $email, $envelope)
         );
+    }
+
+    public function testTemplateErrorReportingHeaderSupportsSmtpRelayFormat()
+    {
+        $email = (new Email())
+            ->subject('Sending email to mailjet API')
+            ->replyTo(new Address('qux@example.com', 'Qux'));
+        $email->getHeaders()
+            ->addTextHeader('X-MJ-TemplateErrorReporting', 'errors@mailjet.com');
+        $envelope = new Envelope(new Address('foo@example.com', 'Foo'), [
+            new Address('bar@example.com', 'Bar'),
+        ]);
+
+        $transport = new MailjetApiTransport(self::USER, self::PASSWORD);
+        $method = new \ReflectionMethod(MailjetApiTransport::class, 'getPayload');
+        self::assertSame(
+            [
+                'Messages' => [
+                    [
+                        'From' => [
+                            'Email' => 'foo@example.com',
+                            'Name' => 'Foo',
+                        ],
+                        'To' => [
+                            [
+                                'Email' => 'bar@example.com',
+                                'Name' => '',
+                            ],
+                        ],
+                        'Subject' => 'Sending email to mailjet API',
+                        'Attachments' => [],
+                        'InlinedAttachments' => [],
+                        'ReplyTo' => [
+                            'Email' => 'qux@example.com',
+                            'Name' => 'Qux',
+                        ],
+                        'TemplateErrorReporting' => [
+                            'Email' => 'errors@mailjet.com',
+                            'Name' => '',
+                        ],
+                    ],
+                ],
+                'SandBoxMode' => false,
+            ],
+            $method->invoke($transport, $email, $envelope)
+        );
+    }
+
+    public function testInlineWithCustomContentId()
+    {
+        $imagePart = (new DataPart('text-contents', 'text.txt'));
+        $imagePart->asInline();
+        $imagePart->setContentId('content-identifier@symfony');
+
+        $email = new Email();
+        $email->addPart($imagePart);
+        $envelope = new Envelope(new Address('alice@system.com'), [new Address('bob@system.com')]);
+
+        $transport = new MailjetApiTransport(self::USER, self::PASSWORD);
+        $method = new \ReflectionMethod(MailjetApiTransport::class, 'getPayload');
+        $payload = $method->invoke($transport, $email, $envelope);
+
+        $contentId = $payload['Messages'][0]['InlinedAttachments'][0]['ContentID'] ?? null;
+
+        $this->assertSame('content-identifier@symfony', $contentId);
+        $this->assertCount(1, $payload['Messages']);
+        $this->assertCount(1, $payload['Messages'][0]['InlinedAttachments']);
+    }
+
+    public function testInlineWithoutCustomContentId()
+    {
+        $imagePart = (new DataPart('text-contents', 'text.txt'));
+        $imagePart->asInline();
+
+        $email = new Email();
+        $email->addPart($imagePart);
+        $envelope = new Envelope(new Address('alice@system.com'), [new Address('bob@system.com')]);
+
+        $transport = new MailjetApiTransport(self::USER, self::PASSWORD);
+        $method = new \ReflectionMethod(MailjetApiTransport::class, 'getPayload');
+        $payload = $method->invoke($transport, $email, $envelope);
+
+        $contentId = $payload['Messages'][0]['InlinedAttachments'][0]['ContentID'] ?? null;
+
+        $this->assertSame('text.txt', $contentId ?? null);
+        $this->assertCount(1, $payload['Messages']);
+        $this->assertCount(1, $payload['Messages'][0]['InlinedAttachments']);
     }
 }

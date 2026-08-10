@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'UserAssignedNames' => [],
     'Names' => [
         'AD' => 'Andorra',
         'AE' => 'Emirà Arabo mitambatra',
@@ -92,7 +93,6 @@ return [
         'IE' => 'Irlandy',
         'IL' => 'Israely',
         'IN' => 'Indy',
-        'IO' => 'Faridranomasina indiana britanika',
         'IQ' => 'Irak',
         'IR' => 'Iran',
         'IS' => 'Islandy',

@@ -12,16 +12,16 @@
 namespace Symfony\Component\Scheduler\Tests\Messenger;
 
 use PHPUnit\Framework\TestCase;
-use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Scheduler\Exception\InvalidArgumentException;
 use Symfony\Component\Scheduler\Generator\MessageGenerator;
 use Symfony\Component\Scheduler\Messenger\SchedulerTransport;
 use Symfony\Component\Scheduler\Messenger\SchedulerTransportFactory;
 use Symfony\Component\Scheduler\RecurringMessage;
-use Symfony\Component\Scheduler\Schedule;
 use Symfony\Component\Scheduler\ScheduleProviderInterface;
+use Symfony\Component\Scheduler\Tests\Fixtures\SomeScheduleProvider;
 use Symfony\Component\Scheduler\Trigger\TriggerInterface;
 use Symfony\Contracts\Service\ServiceLocatorTrait;
 
@@ -29,9 +29,9 @@ class SchedulerTransportFactoryTest extends TestCase
 {
     public function testCreateTransport()
     {
-        $trigger = $this->createMock(TriggerInterface::class);
-        $serializer = $this->createMock(SerializerInterface::class);
-        $clock = $this->createMock(ClockInterface::class);
+        $trigger = $this->createStub(TriggerInterface::class);
+        $serializer = $this->createStub(SerializerInterface::class);
+        $clock = new MockClock();
 
         $defaultRecurringMessage = RecurringMessage::trigger($trigger, (object) ['id' => 'default']);
         $customRecurringMessage = RecurringMessage::trigger($trigger, (object) ['id' => 'custom']);
@@ -41,8 +41,8 @@ class SchedulerTransportFactoryTest extends TestCase
 
         $factory = new SchedulerTransportFactory(
             new Container([
-                'default' => fn () => new SomeScheduleProvider([$defaultRecurringMessage]),
-                'custom' => fn () => new SomeScheduleProvider([$customRecurringMessage]),
+                'default' => static fn () => new SomeScheduleProvider([$defaultRecurringMessage]),
+                'custom' => static fn () => new SomeScheduleProvider([$customRecurringMessage]),
             ]),
             $clock,
         );
@@ -58,7 +58,7 @@ class SchedulerTransportFactoryTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('The given Schedule DSN "schedule://#wrong" is invalid.');
 
-        $factory->createTransport('schedule://#wrong', [], $this->createMock(SerializerInterface::class));
+        $factory->createTransport('schedule://#wrong', [], $this->createStub(SerializerInterface::class));
     }
 
     public function testNoName()
@@ -68,7 +68,7 @@ class SchedulerTransportFactoryTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('The Schedule DSN must contains a name, e.g. "schedule://default".');
 
-        $factory->createTransport('schedule://', [], $this->createMock(SerializerInterface::class));
+        $factory->createTransport('schedule://', [], $this->createStub(SerializerInterface::class));
     }
 
     public function testNotFound()
@@ -78,7 +78,7 @@ class SchedulerTransportFactoryTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('The schedule "not-exists" is not found.');
 
-        $factory->createTransport('schedule://not-exists', [], $this->createMock(SerializerInterface::class));
+        $factory->createTransport('schedule://not-exists', [], $this->createStub(SerializerInterface::class));
     }
 
     public function testSupports()
@@ -95,23 +95,10 @@ class SchedulerTransportFactoryTest extends TestCase
     {
         return new SchedulerTransportFactory(
             new Container([
-                'default' => fn () => $this->createMock(ScheduleProviderInterface::class),
+                'default' => fn () => $this->createStub(ScheduleProviderInterface::class),
             ]),
-            $this->createMock(ClockInterface::class),
+            new MockClock(),
         );
-    }
-}
-
-class SomeScheduleProvider implements ScheduleProviderInterface
-{
-    public function __construct(
-        private readonly array $messages,
-    ) {
-    }
-
-    public function getSchedule(): Schedule
-    {
-        return (new Schedule())->add(...$this->messages);
     }
 }
 

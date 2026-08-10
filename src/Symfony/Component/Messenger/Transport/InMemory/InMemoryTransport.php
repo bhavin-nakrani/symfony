@@ -56,13 +56,20 @@ class InMemoryTransport implements TransportInterface, ResetInterface
     ) {
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize Best-effort hint about how many messages can be received in one call
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
+        $fetchSize = \func_num_args() > 0 ? max(1, func_get_arg(0)) : 1;
         $envelopes = [];
         $now = $this->clock?->now() ?? new \DateTimeImmutable();
         foreach ($this->decode($this->queue) as $id => $envelope) {
             if (!isset($this->availableAt[$id]) || $now > $this->availableAt[$id]) {
                 $envelopes[] = $envelope;
+                if (\count($envelopes) >= $fetchSize) {
+                    break;
+                }
             }
         }
 
@@ -102,16 +109,13 @@ class InMemoryTransport implements TransportInterface, ResetInterface
         /** @var DelayStamp|null $delayStamp */
         if ($delayStamp = $envelope->last(DelayStamp::class)) {
             $now = $this->clock?->now() ?? new \DateTimeImmutable();
-            $this->availableAt[$id] = $now->modify(sprintf('+%d seconds', $delayStamp->getDelay() / 1000));
+            $this->availableAt[$id] = $now->modify(\sprintf('+%d seconds', $delayStamp->getDelay() / 1000));
         }
 
         return $envelope;
     }
 
-    /**
-     * @return void
-     */
-    public function reset()
+    public function reset(): void
     {
         $this->sent = $this->queue = $this->rejected = $this->acknowledged = [];
     }

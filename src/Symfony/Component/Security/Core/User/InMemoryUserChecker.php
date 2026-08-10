@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Security\Core\User;
 
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\DisabledException;
 
 /**
@@ -20,10 +21,7 @@ use Symfony\Component\Security\Core\Exception\DisabledException;
  */
 class InMemoryUserChecker implements UserCheckerInterface
 {
-    /**
-     * @return void
-     */
-    public function checkPreAuth(UserInterface $user)
+    public function checkPreAuth(UserInterface $user): void
     {
         if (!$user instanceof InMemoryUser) {
             return;
@@ -36,10 +34,7 @@ class InMemoryUserChecker implements UserCheckerInterface
         }
     }
 
-    /**
-     * @return void
-     */
-    public function checkPostAuth(UserInterface $user)
+    public function checkPostAuth(UserInterface $user, ?TokenInterface $token = null): void
     {
     }
 }

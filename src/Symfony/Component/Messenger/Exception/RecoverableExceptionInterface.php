@@ -18,7 +18,13 @@ namespace Symfony\Component\Messenger\Exception;
  * and the message should be retried, a handler can throw such an exception.
  *
  * @author Jérémy Derussé <jeremy@derusse.com>
+ *
+ * @method bool forceRetry() Whether the worker should retry even when the max retry count has been reached
  */
 interface RecoverableExceptionInterface extends \Throwable
 {
+    /**
+     * Returns the time to wait before potentially retrying, in millisecond.
+     */
+    public function getRetryDelay(): ?int;
 }

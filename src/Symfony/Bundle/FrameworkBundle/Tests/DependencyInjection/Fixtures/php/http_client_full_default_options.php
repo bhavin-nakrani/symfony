@@ -1,8 +1,6 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'http_client' => [
         'default_options' => [
             'headers' => ['X-powered' => 'PHP'],
@@ -12,6 +10,7 @@ $container->loadFromExtension('framework', [
             'proxy' => 'proxy.org',
             'timeout' => 3.5,
             'max_duration' => 10.1,
+            'max_connect_duration' => 1.5,
             'bindto' => '127.0.0.1',
             'verify_peer' => true,
             'verify_host' => true,

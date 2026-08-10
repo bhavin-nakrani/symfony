@@ -15,8 +15,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\ErrorHandler\Exception\FlattenException;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Debug\FileLinkFormatter;
-use Symfony\Component\HttpKernel\Log\DebugLoggerInterface;
+use Symfony\Component\HttpKernel\Log\DebugLoggerConfigurator;
 use Symfony\Component\VarDumper\Cloner\Data;
 use Symfony\Component\VarDumper\Dumper\HtmlDumper;
 
@@ -37,10 +36,8 @@ class HtmlErrorRenderer implements ErrorRendererInterface
 
     private bool|\Closure $debug;
     private string $charset;
-    private string|array|FileLinkFormatter|false $fileLinkFormat;
-    private ?string $projectDir;
+    private FileLinkFormatter $fileLinkFormat;
     private string|\Closure $outputBuffer;
-    private ?LoggerInterface $logger;
 
     private static string $template = 'views/error.html.php';
 
@@ -48,24 +45,25 @@ class HtmlErrorRenderer implements ErrorRendererInterface
      * @param bool|callable   $debug        The debugging mode as a boolean or a callable that should return it
      * @param string|callable $outputBuffer The output buffer as a string or a callable that should return it
      */
-    public function __construct(bool|callable $debug = false, string $charset = null, string|FileLinkFormatter $fileLinkFormat = null, string $projectDir = null, string|callable $outputBuffer = '', LoggerInterface $logger = null)
-    {
+    public function __construct(
+        bool|callable $debug = false,
+        ?string $charset = null,
+        string|FileLinkFormatter|null $fileLinkFormat = null,
+        private ?string $projectDir = null,
+        string|callable $outputBuffer = '',
+        private ?LoggerInterface $logger = null,
+    ) {
         $this->debug = \is_bool($debug) ? $debug : $debug(...);
         $this->charset = $charset ?: (\ini_get('default_charset') ?: 'UTF-8');
-        $fileLinkFormat ??= $_ENV['SYMFONY_IDE'] ?? $_SERVER['SYMFONY_IDE'] ?? null;
-        $this->fileLinkFormat = \is_string($fileLinkFormat)
-            ? (ErrorRendererInterface::IDE_LINK_FORMATS[$fileLinkFormat] ?? $fileLinkFormat ?: false)
-            : ($fileLinkFormat ?: \ini_get('xdebug.file_link_format') ?: get_cfg_var('xdebug.file_link_format') ?: false);
-        $this->projectDir = $projectDir;
+        $this->fileLinkFormat = $fileLinkFormat instanceof FileLinkFormatter ? $fileLinkFormat : new FileLinkFormatter($fileLinkFormat);
         $this->outputBuffer = \is_string($outputBuffer) ? $outputBuffer : $outputBuffer(...);
-        $this->logger = $logger;
     }
 
     public function render(\Throwable $exception): FlattenException
     {
         $headers = ['Content-Type' => 'text/html; charset='.$this->charset];
         if (\is_bool($this->debug) ? $this->debug : ($this->debug)($exception)) {
-            $headers['X-Debug-Exception'] = rawurlencode($exception->getMessage());
+            $headers['X-Debug-Exception'] = rawurlencode(substr($exception->getMessage(), 0, 2000));
             $headers['X-Debug-Exception-File'] = rawurlencode($exception->getFile()).':'.$exception->getLine();
         }
 
@@ -80,6 +78,14 @@ class HtmlErrorRenderer implements ErrorRendererInterface
     public function getBody(FlattenException $exception): string
     {
         return $this->renderException($exception, 'views/exception.html.php');
+    }
+
+    /**
+     * Gets the JavaScript associated with the given exception.
+     */
+    public function getJavaScript(): string
+    {
+        return $this->include('assets/js/exception.js');
     }
 
     /**
@@ -144,41 +150,119 @@ class HtmlErrorRenderer implements ErrorRendererInterface
             'exceptionMessage' => $exceptionMessage,
             'statusText' => $statusText,
             'statusCode' => $statusCode,
-            'logger' => $this->logger instanceof DebugLoggerInterface ? $this->logger : null,
+            'logger' => null !== $this->logger && class_exists(DebugLoggerConfigurator::class) ? DebugLoggerConfigurator::getDebugLogger($this->logger) : null,
             'currentContent' => \is_string($this->outputBuffer) ? $this->outputBuffer : ($this->outputBuffer)(),
         ]);
     }
 
-    private function dumpValue(Data $value): string
+    /**
+     * Whether to show the "Exception properties" block for the given exception class.
+     *
+     * It's only meaningful for an application's (or a third-party library's) own exception classes,
+     * which may carry custom properties worth inspecting. Ignore built-in PHP exceptions (\RuntimeException,
+     * \TypeError, …), and HTTP exceptions, whose statusCode/headers are already shown in the status line.
+     */
+    private function showExceptionProperties(string $class): bool
+    {
+        return class_exists($class)
+            && new \ReflectionClass($class)->isUserDefined()
+            && !is_a($class, 'Symfony\Component\HttpKernel\Exception\HttpExceptionInterface', true);
+    }
+
+    /**
+     * Whether the exception class is defined outside the application's own code (vendors, the
+     * framework, or PHP built-ins).
+     */
+    private function isVendorExceptionClass(string $class): bool
+    {
+        if (!class_exists($class)) {
+            return true;
+        }
+
+        return $this->isVendorTraceFile(new \ReflectionClass($class)->getFileName() ?: null);
+    }
+
+    /**
+     * Renders the exception's own properties as a table (one row per property), dumping each value
+     * with VarDumper so nested arrays/objects stay expandable.
+     */
+    private function dumpExceptionProperties(Data $data): string
+    {
+        $dumper = $this->createHtmlDumper();
+
+        $rows = '';
+        foreach ($data->getValue() as $key => $value) {
+            // strip VarCloner's visibility prefix (e.g. "\0*\0name" / "\0Class\0name") to get the bare name
+            $name = \is_string($key) && str_contains($key, "\0") ? substr($key, strrpos($key, "\0") + 1) : $key;
+            $dump = $dumper->dump($value, true);
+            // the shared <script>/<style> header rides along with the first dump; emit it only once
+            $dumper->setDumpHeader('');
+            $rows .= '<tr><th class="exception-property-name">'.$this->escape((string) $name).'</th><td class="exception-property-value">'.$dump.'</td></tr>';
+        }
+
+        return '<table class="exception-properties-table">'.$rows.'</table>';
+    }
+
+    private function createHtmlDumper(): HtmlDumper
     {
         $dumper = new HtmlDumper();
         $dumper->setTheme('light');
+        $dumper->setStyles([
+            'default' => 'background:none; color:var(--code-foreground); font:13px/1.6 var(--font-mono); word-wrap:break-word; white-space:pre-wrap; position:relative; z-index:99999; word-break:break-all',
+            'num' => 'color:var(--code-syntax-variable-other-marker)',
+            'const' => 'color:var(--code-syntax-variable-other-marker)',
+            'str' => 'color:var(--code-syntax-string)',
+            'note' => 'color:var(--code-syntax-title)',
+            'ref' => 'color:var(--code-syntax-comment)',
+            'public' => 'color:var(--code-foreground)',
+            'protected' => 'color:var(--code-foreground)',
+            'private' => 'color:var(--code-foreground)',
+            'meta' => 'color:var(--code-syntax-function-title)',
+            'key' => 'color:var(--code-syntax-string)',
+            'index' => 'color:var(--code-syntax-variable-other-marker)',
+            'ellipsis' => 'color:var(--code-syntax-comment)',
+        ]);
 
-        return $dumper->dump($value, true);
+        return $dumper;
     }
 
-    private function formatArgs(array $args): string
+    private function formatArgs(array $args, bool $formatForHtml = false): string
     {
         $result = [];
         foreach ($args as $key => $item) {
             if ('object' === $item[0]) {
-                $formattedValue = sprintf('<em>object</em>(%s)', $this->abbrClass($item[1]));
+                $formattedValue = $formatForHtml
+                    ? \sprintf('<span class="trace-arg-object">%s</span>', $this->abbrClass($item[1]))
+                    : \sprintf('object(%s)', $this->abbrClass($item[1]));
             } elseif ('array' === $item[0]) {
-                $formattedValue = sprintf('<em>array</em>(%s)', \is_array($item[1]) ? $this->formatArgs($item[1]) : $item[1]);
+                $formattedValue = $this->formatArgToken('array', 'keyword', $formatForHtml).'('.(\is_array($item[1]) ? $this->formatArgs($item[1], $formatForHtml) : $item[1]).')';
             } elseif ('null' === $item[0]) {
-                $formattedValue = '<em>null</em>';
+                $formattedValue = $this->formatArgToken('null', 'literal', $formatForHtml);
             } elseif ('boolean' === $item[0]) {
-                $formattedValue = '<em>'.strtolower(var_export($item[1], true)).'</em>';
+                $formattedValue = $this->formatArgToken(strtolower(var_export($item[1], true)), 'literal', $formatForHtml);
             } elseif ('resource' === $item[0]) {
-                $formattedValue = '<em>resource</em>';
+                $formattedValue = $this->formatArgToken('resource', 'keyword', $formatForHtml);
+            } elseif ('integer' === $item[0] || 'float' === $item[0]) {
+                $formattedValue = $this->formatArgToken($this->escape(var_export($item[1], true)), 'literal', $formatForHtml);
+            } elseif (preg_match('/[^\x07-\x0D\x1B\x20-\xFF]/', $item[1])) {
+                $formattedValue = $formatForHtml ? '<span class="trace-arg-object">binary string</span>' : 'binary string';
             } else {
-                $formattedValue = str_replace("\n", '', $this->escape(var_export($item[1], true)));
+                $formattedValue = $this->formatArgToken(str_replace("\n", '', $this->escape(var_export($item[1], true))), 'string', $formatForHtml);
             }
 
-            $result[] = \is_int($key) ? $formattedValue : sprintf("'%s' => %s", $this->escape($key), $formattedValue);
+            $result[] = \is_int($key) ? $formattedValue : $this->formatArgToken("'".$this->escape($key)."'", 'key', $formatForHtml).' => '.$formattedValue;
         }
 
         return implode(', ', $result);
+    }
+
+    /**
+     * Formats the given (already-escaped) content for rendering it on text or HTML (e.g. wraps it in a <span>
+     * to allow syntax highlighting in HTML rendering).
+     */
+    private function formatArgToken(string $html, string $class, bool $formatForHtml): string
+    {
+        return $formatForHtml ? \sprintf('<span class="trace-arg trace-arg-%s">%s</span>', $class, $html) : $html;
     }
 
     private function formatArgsAsText(array $args): string
@@ -191,12 +275,16 @@ class HtmlErrorRenderer implements ErrorRendererInterface
         return htmlspecialchars($string, \ENT_COMPAT | \ENT_SUBSTITUTE, $this->charset);
     }
 
-    private function abbrClass(string $class): string
+    private function abbrClass(string $fqcnClass): string
     {
-        $parts = explode('\\', $class);
-        $short = array_pop($parts);
+        $parts = explode('\\', $fqcnClass);
+        $className = array_pop($parts);
 
-        return sprintf('<abbr title="%s">%s</abbr>', $class, $short);
+        if ($className === $fqcnClass) {
+            return $fqcnClass;
+        }
+
+        return \sprintf('<abbr title="%s">%s</abbr>', $fqcnClass, $className);
     }
 
     private function getFileRelative(string $file): ?string
@@ -210,13 +298,29 @@ class HtmlErrorRenderer implements ErrorRendererInterface
         return null;
     }
 
-    private function getFileLink(string $file, int $line): string|false
+    /**
+     * Tells whether a stack trace frame belongs to "vendor" code rather than the application.
+     *
+     * A frame is considered to belong to the application only when its file lives inside the project
+     * directory but outside vendor/ and the compiled cache (var/cache/). Everything else (third-party
+     * dependencies, the framework, the compiled container, and fileless internal calls) is "vendor".
+     */
+    private function isVendorTraceFile(?string $file): bool
     {
-        if ($fmt = $this->fileLinkFormat) {
-            return \is_string($fmt) ? strtr($fmt, ['%f' => $file, '%l' => $line]) : $fmt->format($file, $line);
+        if (!$file) {
+            return true;
         }
 
-        return false;
+        if (null !== $this->projectDir) {
+            $relativePath = $this->getFileRelative($file);
+
+            return null === $relativePath || str_starts_with($relativePath, 'vendor/') || str_starts_with($relativePath, 'var/cache/');
+        }
+
+        // no project dir configured: best-effort match on the absolute path
+        $file = str_replace('\\', '/', $file);
+
+        return str_contains($file, '/vendor/') || str_contains($file, '/var/cache/');
     }
 
     /**
@@ -226,7 +330,7 @@ class HtmlErrorRenderer implements ErrorRendererInterface
      * @param int    $line The line number
      * @param string $text Use this text for the link rather than the file path
      */
-    private function formatFile(string $file, int $line, string $text = null): string
+    private function formatFile(string $file, int $line, ?string $text = null): string
     {
         $file = trim($file);
 
@@ -234,7 +338,7 @@ class HtmlErrorRenderer implements ErrorRendererInterface
             $text = $file;
             if (null !== $rel = $this->getFileRelative($text)) {
                 $rel = explode('/', $rel, 2);
-                $text = sprintf('<abbr title="%s%2$s">%s</abbr>%s', $this->projectDir, $rel[0], '/'.($rel[1] ?? ''));
+                $text = \sprintf('<abbr title="%s%2$s">%s</abbr>%s', $this->projectDir, $rel[0], '/'.($rel[1] ?? ''));
             }
         }
 
@@ -242,11 +346,13 @@ class HtmlErrorRenderer implements ErrorRendererInterface
             $text .= ' at line '.$line;
         }
 
-        if (false !== $link = $this->getFileLink($file, $line)) {
-            return sprintf('<a href="%s" title="Click to open this file" class="file_link">%s</a>', $this->escape($link), $text);
+        if (!file_exists($file)) {
+            return $text;
         }
 
-        return $text;
+        $link = $this->fileLinkFormat->format($file, $line);
+
+        return \sprintf('<a href="%s" title="Click to open this file" class="file_link">%s</a>', $this->escape($link), $text);
     }
 
     /**
@@ -262,25 +368,108 @@ class HtmlErrorRenderer implements ErrorRendererInterface
             // highlight_file could throw warnings
             // see https://bugs.php.net/25725
             $code = @highlight_file($file, true);
-            // remove main code/span tags
-            $code = preg_replace('#^<code.*?>\s*<span.*?>(.*)</span>\s*</code>#s', '\\1', $code);
-            // split multiline spans
-            $code = preg_replace_callback('#<span ([^>]++)>((?:[^<]*+<br \/>)++[^<]*+)</span>#', fn ($m) => "<span $m[1]>".str_replace('<br />', "</span><br /><span $m[1]>", $m[2]).'</span>', $code);
-            $content = explode('<br />', $code);
+            // remove main pre/code tags
+            $code = preg_replace('#^<pre.*?>\s*<code.*?>(.*)</code>\s*</pre>#s', '\\1', $code);
+            // split multiline span tags
+            $code = preg_replace_callback('#<span ([^>]++)>((?:[^<\\n]*+\\n)++[^<]*+)</span>#', static fn ($m) => "<span $m[1]>".str_replace("\n", "</span>\n<span $m[1]>", $m[2]).'</span>', $code);
+            $content = explode("\n", $code);
 
-            $lines = [];
             if (0 > $srcContext) {
                 $srcContext = \count($content);
             }
 
+            $excerpt = [];
             for ($i = max($line - $srcContext, 1), $max = min($line + $srcContext, \count($content)); $i <= $max; ++$i) {
-                $lines[] = '<li'.($i == $line ? ' class="selected"' : '').'><code>'.$this->fixCodeMarkup($content[$i - 1]).'</code></li>';
+                $excerpt[$i] = $this->fixCodeMarkup($content[$i - 1]);
             }
 
-            return '<ol start="'.max($line - $srcContext, 1).'">'.implode("\n", $lines).'</ol>';
+            // de-indent: drop the whitespace prefix shared by every (non-blank) line of the excerpt,
+            // so a deeply-nested snippet isn't pushed to the right; relative indentation is preserved
+            $numOfSpacesToRemove = $this->countCommonLeadingWhitespace($excerpt);
+
+            $lines = [];
+            foreach ($excerpt as $i => $html) {
+                $isSelected = $i === $line;
+                $lines[] = '<div class="trace-code-line '.($isSelected ? 'selected' : '').'" '.($isSelected ? 'aria-current="true"' : '').'><span class="trace-code-ln" aria-hidden="true">'.$i.'</span><code>'.($numOfSpacesToRemove ? $this->stripLeadingWhitespace($html, $numOfSpacesToRemove) : $html).'</code></div>';
+            }
+
+            // size the line-number gutter to the widest number (each row is its own grid, so the
+            // column can't auto-align across rows) to keep different size numbers (e.g. 9 and 10) aligned
+            $lnChars = \strlen((string) $max);
+
+            return '<div class="trace-code-lines" style="--ln-chars: '.$lnChars.'">'.implode('', $lines).'</div>';
         }
 
         return '';
+    }
+
+    /**
+     * Number of leading whitespace characters shared by every non-blank line, i.e. the common
+     * indentation that can be stripped from a syntax-highlighted excerpt without losing relative depth.
+     */
+    private function countCommonLeadingWhitespace(array $htmlLines): int
+    {
+        $min = null;
+        foreach ($htmlLines as $html) {
+            if ('' === trim(html_entity_decode(strip_tags($html)))) {
+                continue; // blank / whitespace-only lines don't constrain the common prefix
+            }
+
+            $count = 0;
+            for ($i = 0, $len = \strlen($html); $i < $len; ++$i) {
+                if ('<' === $html[$i]) {
+                    if (false === $end = strpos($html, '>', $i)) {
+                        break;
+                    }
+                    $i = $end;
+                } elseif (' ' === $html[$i] || "\t" === $html[$i]) {
+                    ++$count;
+                } else {
+                    break;
+                }
+            }
+
+            $min = null === $min ? $count : min($min, $count);
+            if (0 === $min) {
+                break;
+            }
+        }
+
+        return $min ?? 0;
+    }
+
+    /**
+     * Removes the first $count leading whitespace characters of a syntax-highlighted line,
+     * skipping (and preserving) any HTML tags that wrap the indentation. For example:
+     *
+     *     $html   = '<span style="...">        $tag = null;</span>'
+     *     $count  = 4
+     *     $output = '<span style="...">    $tag = null;</span>'
+     */
+    private function stripLeadingWhitespace(string $html, int $count): string
+    {
+        $result = '';
+        $removed = 0;
+        for ($i = 0, $len = \strlen($html); $i < $len; ++$i) {
+            $c = $html[$i];
+            if ('<' === $c) {
+                // a tag: copy it verbatim (it doesn't count as indentation)
+                if (false === $end = strpos($html, '>', $i)) {
+                    return $result.substr($html, $i);
+                }
+
+                $result .= substr($html, $i, $end - $i + 1);
+                $i = $end;
+            } elseif ($removed < $count && (' ' === $c || "\t" === $c)) {
+                // leading whitespace still within the strip budget: drop it
+                ++$removed;
+            } else {
+                // first non-strippable character: keep this and everything after it
+                return $result.substr($html, $i);
+            }
+        }
+
+        return $result;
     }
 
     private function fixCodeMarkup(string $line): string
@@ -304,7 +493,7 @@ class HtmlErrorRenderer implements ErrorRendererInterface
 
     private function formatFileFromText(string $text): string
     {
-        return preg_replace_callback('/in ("|&quot;)?(.+?)\1(?: +(?:on|at))? +line (\d+)/s', fn ($match) => 'in '.$this->formatFile($match[2], $match[3]), $text);
+        return preg_replace_callback('/in ("|&quot;)?(.+?)\1(?: +(?:on|at))? +line (\d+)/s', fn ($match) => 'in '.$this->formatFile($match[2], $match[3]), $text) ?? $text;
     }
 
     private function formatLogMessage(string $message, array $context): string
@@ -323,6 +512,38 @@ class HtmlErrorRenderer implements ErrorRendererInterface
         }
 
         return $this->escape($message);
+    }
+
+    /**
+     * Pretty-prints a log's context as syntax-highlighted JSON.
+     *
+     * The context is rendered as JSON (the format it is logged in) and then tokenized in a single
+     * left-to-right pass: strings/keys are matched first so that numbers or keywords appearing inside
+     * a string value aren't highlighted again. Tokens are wrapped in spans mapped to the shared
+     * --code-syntax-* theme variables, so the dump follows the page's light/dark theme.
+     */
+    private function formatLogContext(array $context): string
+    {
+        $json = json_encode($context, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $json = $this->escape((string) $json);
+
+        return preg_replace_callback(
+            '/(&quot;(?:\\\\.|[^&\\\\]|&(?!quot;))*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/',
+            static function (array $m): string {
+                if ('' !== $m[1]) {
+                    $isKey = isset($m[2]) && '' !== $m[2];
+
+                    return '<span class="log-json-'.($isKey ? 'key' : 'str').'">'.$m[1].'</span>'.($m[2] ?? '');
+                }
+
+                if (isset($m[3]) && '' !== $m[3]) {
+                    return '<span class="log-json-kw">'.$m[3].'</span>';
+                }
+
+                return '<span class="log-json-num">'.$m[4].'</span>';
+            },
+            $json,
+        ) ?? $json;
     }
 
     private function addElementToGhost(): string

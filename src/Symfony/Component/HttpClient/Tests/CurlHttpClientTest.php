@@ -11,38 +11,31 @@
 
 namespace Symfony\Component\HttpClient\Tests;
 
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Symfony\Component\HttpClient\CurlHttpClient;
 use Symfony\Component\HttpClient\Exception\InvalidArgumentException;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Component\HttpClient\Exception\TransportException;
+use Symfony\Component\HttpClient\Internal\CurlClientState;
 
-/**
- * @requires extension curl
- */
+#[RequiresPhpExtension('curl')]
+#[Group('dns-sensitive')]
 class CurlHttpClientTest extends HttpClientTestCase
 {
-    protected function getHttpClient(string $testCase): HttpClientInterface
+    private const HTTPS_PROXY_ERROR = 'Cannot use an "https://" proxy: the installed curl does not support HTTPS proxies and could connect to it in cleartext; curl 7.52 or higher is required.';
+
+    protected function getHttpClient(string $testCase): CurlHttpClient
     {
-        if (str_contains($testCase, 'Push')) {
-            if (!\defined('CURLMOPT_PUSHFUNCTION') || 0x073D00 > ($v = curl_version())['version_number'] || !(\CURL_VERSION_HTTP2 & $v['features'])) {
-                $this->markTestSkipped('curl <7.61 is used or it is not compiled with support for HTTP/2 PUSH');
-            }
+        $usePersistentConnections = str_contains($testCase, 'Persistent');
+        if (!str_contains($testCase, 'Push')) {
+            return new CurlHttpClient(['verify_peer' => false, 'verify_host' => false, 'extra' => ['use_persistent_connections' => $usePersistentConnections]]);
         }
 
-        return new CurlHttpClient(['verify_peer' => false, 'verify_host' => false]);
-    }
+        if (!\defined('CURLMOPT_PUSHFUNCTION') || 0x073D00 > ($v = curl_version())['version_number'] || !(\CURL_VERSION_HTTP2 & $v['features'])) {
+            $this->markTestSkipped('curl <7.61 is used or it is not compiled with support for HTTP/2 PUSH');
+        }
 
-    public function testBindToPort()
-    {
-        $client = $this->getHttpClient(__FUNCTION__);
-        $response = $client->request('GET', 'http://localhost:8057', ['bindto' => '127.0.0.1:9876']);
-        $response->getStatusCode();
-
-        $r = new \ReflectionProperty($response, 'handle');
-
-        $curlInfo = curl_getinfo($r->getValue($response));
-
-        self::assertSame('127.0.0.1', $curlInfo['local_ip']);
-        self::assertSame(9876, $curlInfo['local_port']);
+        return new CurlHttpClient(['verify_peer' => false, 'verify_host' => false, 'extra' => ['use_persistent_connections' => $usePersistentConnections]], 6, 50);
     }
 
     public function testTimeoutIsNotAFatalError()
@@ -63,6 +56,61 @@ class CurlHttpClientTest extends HttpClientTestCase
         $initialShareId = $clientState->share;
         $httpClient->reset();
         self::assertNotSame($initialShareId, $clientState->share);
+    }
+
+    public function testCurlClientStateIsSharedBetweenClones()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+        $cloneA = $client->withOptions(['headers' => ['Foo: bar']]);
+        $cloneB = $client->withOptions(['headers' => ['Foo: baz']]);
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertSame($state, $r->getValue($cloneA));
+        self::assertSame($state, $r->getValue($cloneB));
+    }
+
+    public function testCurlClientStateInitializesHandlesLazily()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertFalse(isset($state->handle));
+        self::assertFalse(isset($state->share));
+        self::assertFalse(isset($state->persistentShare));
+
+        $client->request('GET', 'http://127.0.0.1:8057/json')->getStatusCode();
+
+        self::assertInstanceOf(\CurlMultiHandle::class, $state->handle);
+        self::assertInstanceOf(\CurlShareHandle::class, $state->share);
+        self::assertFalse(isset($state->persistentShare));
+    }
+
+    public function testCurlClientPersistentStateInitializesHandlesLazily()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertFalse(isset($state->handle));
+        self::assertFalse(isset($state->share));
+        self::assertFalse(isset($state->persistentShare));
+
+        $client->request('GET', 'http://127.0.0.1:8057/json')->getStatusCode();
+
+        self::assertInstanceOf(\CurlMultiHandle::class, $state->handle);
+
+        if (\PHP_VERSION_ID >= 80500) {
+            self::assertFalse(isset($state->share));
+            self::assertInstanceOf(\CurlSharePersistentHandle::class, $state->persistentShare);
+        } else {
+            self::assertInstanceOf(\CurlShareHandle::class, $state->share);
+            self::assertSame($state->share, $state->persistentShare);
+        }
     }
 
     public function testProcessAfterReset()
@@ -115,9 +163,280 @@ class CurlHttpClientTest extends HttpClientTestCase
         $httpClient->request('POST', 'http://localhost:8057/', [
             'extra' => [
                 'curl' => [
-                    \CURLOPT_PRIVATE => 'overriden private',
+                    \CURLOPT_PRIVATE => 'overridden private',
                 ],
             ],
         ]);
+    }
+
+    public function testOverridingMaxConnectDurationUsingCurlOptions()
+    {
+        $httpClient = $this->getHttpClient(__FUNCTION__);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot set "CURLOPT_CONNECTTIMEOUT_MS" with "extra.curl", use option "max_connect_duration" instead.');
+
+        $httpClient->request('GET', 'http://localhost:8057/', [
+            'extra' => [
+                'curl' => [
+                    \CURLOPT_CONNECTTIMEOUT_MS => 5000,
+                ],
+            ],
+        ]);
+    }
+
+    public function testHttpsProxyIsRejectedWhenCurlLacksSupport()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $this->withProxyEnvironment([], [], false, function () use ($client) {
+            $this->expectException(TransportException::class);
+            $this->expectExceptionMessage(self::HTTPS_PROXY_ERROR);
+
+            $client->request('GET', 'http://127.0.0.1:8057/', ['proxy' => 'https://127.0.0.1:8057']);
+        });
+    }
+
+    public function testHttpsProxyFromServerVarsIsRejectedWhenCurlLacksSupport()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $this->withProxyEnvironment(['https_proxy' => 'https://127.0.0.1:8057'], [], false, function () use ($client) {
+            $this->expectException(TransportException::class);
+            $this->expectExceptionMessage(self::HTTPS_PROXY_ERROR);
+
+            $client->request('GET', 'https://127.0.0.1:8057/');
+        });
+    }
+
+    public function testProxyFromProcessEnvIsNotUsed()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        // Only curl reads the process environment, and it must not do so behind our back
+        $this->withProxyEnvironment([], ['http_proxy' => 'http://127.0.0.1:9'], true, function () use ($client) {
+            $response = $client->request('GET', 'http://127.0.0.1:8057/');
+
+            $this->assertSame(200, $response->getStatusCode());
+        });
+    }
+
+    public function testHttpsProxyIsRejectedOnRedirectWhenCurlLacksSupport()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $this->withProxyEnvironment(['https_proxy' => 'https://127.0.0.1:8057'], [], false, function () use ($client) {
+            $response = $client->request('GET', 'http://127.0.0.1:8057/302?location=https://127.0.0.1:8057/');
+
+            $this->expectException(TransportException::class);
+            $this->expectExceptionMessage(self::HTTPS_PROXY_ERROR);
+
+            $response->getStatusCode();
+        });
+    }
+
+    public function testHttpsProxyIsNotRejectedWhenNoProxyMatches()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $this->withProxyEnvironment([], [], false, function () use ($client) {
+            $response = $client->request('GET', 'http://127.0.0.1:8057/', [
+                'proxy' => 'https://127.0.0.1:8057',
+                'no_proxy' => '127.0.0.1',
+            ]);
+
+            $this->assertSame(200, $response->getStatusCode());
+        });
+    }
+
+    public function testHttpsProxyIsNotRejectedWhenCurlSupportsIt()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $this->withProxyEnvironment([], [], true, function () use ($client) {
+            $response = $client->request('GET', 'http://127.0.0.1:8057/', ['proxy' => 'https://127.0.0.1:8057']);
+            $response->cancel();
+
+            $this->addToAssertionCount(1);
+        });
+    }
+
+    public function testKeepAuthorizationHeaderOnRedirectToSameHostWithConfiguredHostToIpAddressMapping()
+    {
+        $httpClient = $this->getHttpClient(__FUNCTION__);
+        $response = $httpClient->request('POST', 'http://127.0.0.1:8057/301', [
+            'headers' => [
+                'Authorization' => 'Basic Zm9vOmJhcg==',
+            ],
+            'resolve' => [
+                'symfony.com' => '10.10.10.10',
+            ],
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('/302', $response->toArray()['REQUEST_URI'] ?? null);
+    }
+
+    public function testNtlmRequiresFreshConnectionStateIsEmptyByDefault()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertSame([], $state->ntlmRequiresFreshConnection);
+    }
+
+    public function testNtlmFreshConnectionForcedWhenOriginKnown()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+
+        $client->request('GET', 'http://127.0.0.1:8057/')->getContent();
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+        $state->ntlmRequiresFreshConnection['http://127.0.0.1:8057'] = true;
+
+        $response = $client->request('GET', 'http://127.0.0.1:8057/', [
+            'auth_ntlm' => 'user:pass',
+        ]);
+        $response->getStatusCode();
+
+        self::assertStringNotContainsString('Re-using existing connection', $response->getInfo('debug'));
+    }
+
+    public function testNtlmStateNotMutatedByNonNtlmRequest()
+    {
+        // A plain (non-NTLM) request must not touch the NTLM origin map. This guards against
+        // a regression where the detection logic fires on every CURLMSG_DONE event (e.g. an
+        // inverted condition guard) — which would silently mark every origin as needing a
+        // fresh NTLM connection.
+        $client = $this->getHttpClient(__FUNCTION__);
+        $client->request('GET', 'http://127.0.0.1:8057/json')->getContent();
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertSame([], $state->ntlmRequiresFreshConnection);
+    }
+
+    public function testNtlmStateNotMutatedByFreshConnectionNtlm401()
+    {
+        // A 401 + NTLM challenge that arrives on a fresh connection (NUM_CONNECTS != 0) is
+        // the legitimate first leg of libcurl's in-request handshake — not the cross-request
+        // de-auth case. Detection must NOT fire, and the origin must NOT be marked.
+        $client = $this->getHttpClient(__FUNCTION__);
+        $client->request('GET', 'http://127.0.0.1:8057/custom?'.http_build_query([
+            'status' => 401,
+            'headers' => ['WWW-Authenticate: NTLM TlRMTVNTUAACAAAAAwADADgAAAAGgokCB7m5ksVjjAsAAAAAAAAAAHYAdgA7AAAACgB8TwAAAA9QUkQ=', 'Content-Length: 0'],
+        ]), [
+            'auth_ntlm' => 'user:pass',
+        ])->getStatusCode();
+
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+
+        self::assertSame([], $state->ntlmRequiresFreshConnection);
+    }
+
+    public function testNoNtlmLogMessagesForNonNtlmRequest()
+    {
+        // The observable signal for "we discarded a connection" is a specific log line.
+        // A plain request must not produce that line — protects against bugs that cause
+        // the retry/discovery path to fire unconditionally.
+        $client = $this->getHttpClient(__FUNCTION__);
+        $logger = new TestLogger();
+        $client->setLogger($logger);
+
+        $client->request('GET', 'http://127.0.0.1:8057/json')->getContent();
+
+        $ntlmLogs = array_filter($logger->logs, static fn ($msg) => str_contains($msg, 'NTLM'));
+        self::assertSame([], $ntlmLogs);
+    }
+
+    public function testNtlmLoopGuardDoesNotRetryWhenOriginAlreadyKnown()
+    {
+        $client = $this->getHttpClient(__FUNCTION__);
+        $r = new \ReflectionProperty($client, 'multi');
+        $state = $r->getValue($client);
+        $state->ntlmRequiresFreshConnection['http://127.0.0.1:8057'] = true;
+
+        $response = $client->request('GET', 'http://127.0.0.1:8057/custom?'.http_build_query([
+            'status' => 401,
+            'headers' => ['WWW-Authenticate: NTLM TlRMTVNTUAACAAAAAwADADgAAAAGgokCB7m5ksVjjAsAAAAAAAAAAHYAdgA7AAAACgB8TwAAAA9QUkQ=', 'Content-Length: 0'],
+        ]), [
+            'auth_ntlm' => 'user:pass',
+        ]);
+
+        self::assertSame(401, $response->getStatusCode());
+    }
+
+    #[Group('integration')]
+    public function testMaxConnections()
+    {
+        foreach ($ports = [80, 8681, 8682, 8683, 8684] as $port) {
+            if (!($fp = @fsockopen('localhost', $port, $errorCode, $errorMessage, 2))) {
+                self::markTestSkipped('FrankenPHP is not running');
+            }
+            fclose($fp);
+        }
+
+        $httpClient = $this->getHttpClient(__FUNCTION__);
+
+        $expectedResults = [
+            [false, false, false, false, false],
+            [true, true, true, true, true],
+            [true, true, true, true, true],
+        ];
+
+        foreach ($expectedResults as $expectedResult) {
+            foreach ($ports as $i => $port) {
+                $response = $httpClient->request('GET', \sprintf('http://localhost:%s/http-client', $port));
+                $response->getContent();
+
+                self::assertSame($expectedResult[$i], str_contains($response->getInfo('debug'), 'Re-using existing connection'));
+            }
+        }
+    }
+
+    /**
+     * Runs $test with a controlled proxy environment and a curl that pretends to support HTTPS proxies or not.
+     */
+    private function withProxyEnvironment(array $server, array $env, bool $httpsProxySupport, \Closure $test): void
+    {
+        $backup = [];
+
+        foreach (['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'no_proxy', 'NO_PROXY'] as $name) {
+            $backup[$name] = [\array_key_exists($name, $_SERVER) ? $_SERVER[$name] : null, getenv($name, true)];
+            unset($_SERVER[$name]);
+            putenv($name);
+        }
+
+        foreach ($server as $name => $value) {
+            $_SERVER[$name] = $value;
+        }
+
+        foreach ($env as $name => $value) {
+            putenv($name.'='.$value);
+        }
+
+        $curlVersion = CurlClientState::$curlVersion ?? curl_version();
+        $httpsProxyFeature = \defined('CURL_VERSION_HTTPS_PROXY') ? \CURL_VERSION_HTTPS_PROXY : 1 << 21;
+        CurlClientState::$curlVersion = ['features' => $httpsProxySupport ? $curlVersion['features'] | $httpsProxyFeature : $curlVersion['features'] & ~$httpsProxyFeature] + $curlVersion;
+
+        try {
+            $test();
+        } finally {
+            CurlClientState::$curlVersion = $curlVersion;
+
+            foreach ($backup as $name => [$serverValue, $envValue]) {
+                if (null === $serverValue) {
+                    unset($_SERVER[$name]);
+                } else {
+                    $_SERVER[$name] = $serverValue;
+                }
+
+                false === $envValue ? putenv($name) : putenv($name.'='.$envValue);
+            }
+        }
     }
 }

@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\PropertyInfo;
 
+use Symfony\Component\TypeInfo\Type;
+
 /**
  * Type Extractor Interface.
  *
@@ -19,9 +21,8 @@ namespace Symfony\Component\PropertyInfo;
 interface PropertyTypeExtractorInterface
 {
     /**
-     * Gets types of a property.
-     *
-     * @return Type[]|null
+     * @param class-string         $class
+     * @param array<string, mixed> $context
      */
-    public function getTypes(string $class, string $property, array $context = []);
+    public function getType(string $class, string $property, array $context = []): ?Type;
 }

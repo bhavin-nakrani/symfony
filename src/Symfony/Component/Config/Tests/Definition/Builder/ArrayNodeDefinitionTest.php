@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Config\Tests\Definition\Builder;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\BooleanNodeDefinition;
@@ -39,9 +40,7 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertContains($child, $this->getField($parent, 'children'));
     }
 
-    /**
-     * @dataProvider providePrototypeNodeSpecificCalls
-     */
+    #[DataProvider('providePrototypeNodeSpecificCalls')]
     public function testPrototypeNodeSpecificOption(string $method, array $args)
     {
         $this->expectException(InvalidDefinitionException::class);
@@ -97,9 +96,7 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertEquals([[]], $tree->getDefaultValue());
     }
 
-    /**
-     * @dataProvider providePrototypedArrayNodeDefaults
-     */
+    #[DataProvider('providePrototypedArrayNodeDefaults')]
     public function testPrototypedArrayNodeDefault(int|array|string|null $args, bool $shouldThrowWhenUsingAttrAsKey, bool $shouldThrowWhenNotUsingAttrAsKey, array $defaults)
     {
         $node = new ArrayNodeDefinition('root');
@@ -170,9 +167,7 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertEquals(['enabled' => false, 'foo' => 'bar'], $node->getNode()->getDefaultValue());
     }
 
-    /**
-     * @dataProvider getEnableableNodeFixtures
-     */
+    #[DataProvider('getEnableableNodeFixtures')]
     public function testTrueEnableEnabledNode(array $expected, array $config, string $message)
     {
         $processor = new Processor();
@@ -188,6 +183,16 @@ class ArrayNodeDefinitionTest extends TestCase
             $processor->process($node->getNode(), $config),
             $message
         );
+    }
+
+    public function testCanBeEnabledWithInfo()
+    {
+        $node = new ArrayNodeDefinition('root');
+        $node->canBeEnabled('Some info about disabling this node');
+
+        $child = $this->getField($node, 'children')['enabled'];
+
+        $this->assertEquals('Some info about disabling this node', $this->getField($child, 'attributes')['info']);
     }
 
     public function testCanBeDisabled()
@@ -206,6 +211,16 @@ class ArrayNodeDefinitionTest extends TestCase
         $enabledNode = $nodeChildren['enabled'];
         $this->assertTrue($this->getField($enabledNode, 'default'));
         $this->assertTrue($this->getField($enabledNode, 'defaultValue'));
+    }
+
+    public function testCanBeDisabledWithInfo()
+    {
+        $node = new ArrayNodeDefinition('root');
+        $node->canBeDisabled('Some info about disabling this node');
+
+        $child = $this->getField($node, 'children')['enabled'];
+
+        $this->assertEquals('Some info about disabling this node', $this->getField($child, 'attributes')['info']);
     }
 
     public function testIgnoreExtraKeys()
@@ -239,7 +254,7 @@ class ArrayNodeDefinitionTest extends TestCase
             ->children()
                 ->scalarNode('value')
                     ->beforeNormalization()
-                        ->ifTrue(fn ($value) => empty($value))
+                        ->ifTrue(static fn ($value) => !$value)
                         ->thenUnset()
                     ->end()
                 ->end()
@@ -267,6 +282,12 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertEquals($node->prototype('boolean'), $node->booleanPrototype());
     }
 
+    public function testPrototypeString()
+    {
+        $node = new ArrayNodeDefinition('root');
+        $this->assertEquals($node->prototype('string'), $node->stringPrototype());
+    }
+
     public function testPrototypeInteger()
     {
         $node = new ArrayNodeDefinition('root');
@@ -285,6 +306,31 @@ class ArrayNodeDefinitionTest extends TestCase
         $this->assertEquals($node->prototype('array'), $node->arrayPrototype());
     }
 
+    public function testPrototypedArrayAllowsNullDefault()
+    {
+        $node = new ArrayNodeDefinition('root');
+        $node
+            ->defaultValue(null)
+            ->prototype('array')
+        ;
+
+        $tree = $node->getNode();
+        $this->assertNull($tree->getDefaultValue());
+    }
+
+    public function testPrototypedArrayRejectsNonArrayDefaultValue()
+    {
+        $node = new ArrayNodeDefinition('root');
+        $node
+            ->defaultValue('not-an-array')
+            ->prototype('array')
+        ;
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('the default value of an array node has to be an array or null');
+        $node->getNode();
+    }
+
     public function testPrototypeEnum()
     {
         $node = new ArrayNodeDefinition('root');
@@ -300,6 +346,53 @@ class ArrayNodeDefinitionTest extends TestCase
             [['enabled' => true, 'foo' => 'baz'], [['foo' => 'baz']], 'any configuration enables an enableable node'],
             [['enabled' => false, 'foo' => 'baz'], [['foo' => 'baz', 'enabled' => false]], 'An enableable node can be disabled'],
             [['enabled' => false, 'foo' => 'bar'], [false], 'false disables an enableable node'],
+        ];
+    }
+
+    #[DataProvider('provideEnabledStateAfterMerging')]
+    public function testEnabledStateIsPreservedAcrossMergedConfigs(array $firstConfig, array $expected, callable $nodeFactory)
+    {
+        $processor = new Processor();
+        $node = $nodeFactory();
+
+        $this->assertSame(
+            $expected,
+            $processor->process($node->getNode(), [
+                $firstConfig,
+                ['foo' => 'baz'],
+            ])
+        );
+    }
+
+    public static function provideEnabledStateAfterMerging(): array
+    {
+        $factory = static function (callable $builder) {
+            $node = new ArrayNodeDefinition('root');
+            $builder($node)
+                ->children()
+                    ->scalarNode('foo')->defaultValue('bar')->end()
+                ->end()
+            ;
+
+            return $node;
+        };
+
+        return [
+            'canBeEnabled keeps explicit true' => [
+                ['enabled' => true],
+                ['enabled' => true, 'foo' => 'baz'],
+                static fn () => $factory(static fn ($node) => $node->canBeEnabled()),
+            ],
+            'canBeDisabled keeps explicit false' => [
+                ['enabled' => false],
+                ['enabled' => false, 'foo' => 'baz'],
+                static fn () => $factory(static fn ($node) => $node->canBeDisabled()),
+            ],
+            'canBeDisabled keeps explicit true' => [
+                ['enabled' => true],
+                ['enabled' => true, 'foo' => 'baz'],
+                static fn () => $factory(static fn ($node) => $node->canBeDisabled()),
+            ],
         ];
     }
 

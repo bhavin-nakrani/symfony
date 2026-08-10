@@ -20,7 +20,7 @@ class SingleMessageReceiverTest extends TestCase
 {
     public function testItReceivesOnlyOneMessage()
     {
-        $innerReceiver = $this->createMock(ReceiverInterface::class);
+        $innerReceiver = $this->createStub(ReceiverInterface::class);
         $envelope = new Envelope(new \stdClass());
 
         $receiver = new SingleMessageReceiver($innerReceiver, $envelope);
@@ -28,7 +28,7 @@ class SingleMessageReceiverTest extends TestCase
         $this->assertCount(1, $received);
         $this->assertSame($received[0], $envelope);
 
-        $this->assertEmpty($receiver->get());
+        $this->assertSame([], $receiver->get());
     }
 
     public function testCallsAreForwarded()

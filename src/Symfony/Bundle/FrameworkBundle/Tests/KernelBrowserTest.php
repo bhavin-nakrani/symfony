@@ -14,6 +14,7 @@ namespace Symfony\Bundle\FrameworkBundle\Tests;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Tests\Functional\AbstractWebTestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\KernelInterface;
 
 class KernelBrowserTest extends AbstractWebTestCase
 {
@@ -61,6 +62,13 @@ class KernelBrowserTest extends AbstractWebTestCase
         $client->request('GET', '/');
     }
 
+    public function testGetProfileWithoutRequest()
+    {
+        $browser = new KernelBrowser($this->createStub(KernelInterface::class));
+
+        $this->assertFalse($browser->getProfile());
+    }
+
     private function getKernelMock()
     {
         $mock = $this->getMockBuilder($this->getKernelClass())
@@ -68,7 +76,7 @@ class KernelBrowserTest extends AbstractWebTestCase
             ->disableOriginalConstructor()
             ->getMock();
 
-        $mock->expects($this->any())->method('handle')->willReturn(new Response('foo'));
+        $mock->method('handle')->willReturn(new Response('foo'));
 
         return $mock;
     }

@@ -1,6 +1,27 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add `RateLimitExceededEvent`
+
+8.1
+---
+
+ * Add an optional `$anchorAt` argument to `FixedWindowLimiter` to align the window to a calendar reference datetime instead of the first hit
+
+7.3
+---
+
+ * Add `RateLimiterFactoryInterface`
+ * Add `CompoundRateLimiterFactory`
+
+6.4
+---
+
+ * Add `SlidingWindowLimiter::reserve()`
+
 6.2
 ---
 

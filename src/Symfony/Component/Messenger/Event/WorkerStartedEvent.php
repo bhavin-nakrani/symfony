@@ -20,15 +20,36 @@ use Symfony\Component\Messenger\Worker;
  */
 final class WorkerStartedEvent
 {
-    private Worker $worker;
-
-    public function __construct(Worker $worker)
-    {
-        $this->worker = $worker;
+    public function __construct(
+        private Worker $worker,
+        private ?float $deadline = null,
+        private int $idleTimeout = 1000000,
+    ) {
     }
 
     public function getWorker(): Worker
     {
         return $this->worker;
+    }
+
+    /**
+     * Returns the absolute time (as a microtime(true) float) at which the
+     * worker must stop, or null if no --time-limit was set.
+     */
+    public function getDeadline(): ?float
+    {
+        return $this->deadline;
+    }
+
+    /**
+     * Returns the duration in microseconds the worker sleeps between two
+     * idle polling cycles (i.e. when no messages are found).
+     *
+     * Defaults to 1 000 000 µs (1 second).  Corresponds to the
+     * --sleep option of messenger:consume.
+     */
+    public function getIdleTimeout(): int
+    {
+        return $this->idleTimeout;
     }
 }

@@ -32,9 +32,9 @@ class ExpressionLanguage
     protected array $functions = [];
 
     /**
-     * @param ExpressionFunctionProviderInterface[] $providers
+     * @param iterable<ExpressionFunctionProviderInterface> $providers
      */
-    public function __construct(CacheItemPoolInterface $cache = null, array $providers = [])
+    public function __construct(?CacheItemPoolInterface $cache = null, iterable $providers = [])
     {
         $this->cache = $cache ?? new ArrayAdapter();
         $this->registerFunctions();
@@ -61,8 +61,10 @@ class ExpressionLanguage
 
     /**
      * Parses an expression.
+     *
+     * @param int-mask-of<Parser::IGNORE_*> $flags
      */
-    public function parse(Expression|string $expression, array $names): ParsedExpression
+    public function parse(Expression|string $expression, array $names, int $flags = 0): ParsedExpression
     {
         if ($expression instanceof ParsedExpression) {
             return $expression;
@@ -78,7 +80,7 @@ class ExpressionLanguage
         $cacheItem = $this->cache->getItem(rawurlencode($expression.'//'.implode('|', $cacheKeyItems)));
 
         if (null === $parsedExpression = $cacheItem->get()) {
-            $nodes = $this->getParser()->parse($this->getLexer()->tokenize((string) $expression), $names);
+            $nodes = $this->getParser()->parse($this->getLexer()->tokenize((string) $expression), $names, $flags);
             $parsedExpression = new ParsedExpression((string) $expression, $nodes);
 
             $cacheItem->set($parsedExpression);
@@ -91,17 +93,18 @@ class ExpressionLanguage
     /**
      * Validates the syntax of an expression.
      *
-     * @param array|null $names The list of acceptable variable names in the expression, or null to accept any names
+     * @param array                         $names The list of acceptable variable names in the expression
+     * @param int-mask-of<Parser::IGNORE_*> $flags
      *
      * @throws SyntaxError When the passed expression is invalid
      */
-    public function lint(Expression|string $expression, ?array $names): void
+    public function lint(Expression|string $expression, array $names, int $flags = 0): void
     {
         if ($expression instanceof ParsedExpression) {
             return;
         }
 
-        $this->getParser()->lint($this->getLexer()->tokenize((string) $expression), $names);
+        $this->getParser()->lint($this->getLexer()->tokenize((string) $expression), $names, $flags);
     }
 
     /**
@@ -110,13 +113,11 @@ class ExpressionLanguage
      * @param callable $compiler  A callable able to compile the function
      * @param callable $evaluator A callable able to evaluate the function
      *
-     * @return void
-     *
      * @throws \LogicException when registering a function after calling evaluate(), compile() or parse()
      *
      * @see ExpressionFunction
      */
-    public function register(string $name, callable $compiler, callable $evaluator)
+    public function register(string $name, callable $compiler, callable $evaluator): void
     {
         if (isset($this->parser)) {
             throw new \LogicException('Registering functions after calling evaluate(), compile() or parse() is not supported.');
@@ -125,38 +126,32 @@ class ExpressionLanguage
         $this->functions[$name] = ['compiler' => $compiler, 'evaluator' => $evaluator];
     }
 
-    /**
-     * @return void
-     */
-    public function addFunction(ExpressionFunction $function)
+    public function addFunction(ExpressionFunction $function): void
     {
         $this->register($function->getName(), $function->getCompiler(), $function->getEvaluator());
     }
 
-    /**
-     * @return void
-     */
-    public function registerProvider(ExpressionFunctionProviderInterface $provider)
+    public function registerProvider(ExpressionFunctionProviderInterface $provider): void
     {
         foreach ($provider->getFunctions() as $function) {
             $this->addFunction($function);
         }
     }
 
-    /**
-     * @return void
-     */
-    protected function registerFunctions()
+    protected function registerFunctions(): void
     {
-        $this->addFunction(ExpressionFunction::fromPhp('constant'));
+        $basicPhpFunctions = ['constant', 'min', 'max', 'count'];
+        foreach ($basicPhpFunctions as $function) {
+            $this->addFunction(ExpressionFunction::fromPhp($function));
+        }
 
         $this->addFunction(new ExpressionFunction('enum',
-            static fn ($str): string => sprintf("(\constant(\$v = (%s))) instanceof \UnitEnum ? \constant(\$v) : throw new \TypeError(\sprintf('The string \"%%s\" is not the name of a valid enum case.', \$v))", $str),
+            static fn ($str): string => \sprintf("(\constant(\$v = (%s))) instanceof \UnitEnum ? \constant(\$v) : throw new \TypeError(\sprintf('The string \"%%s\" is not the name of a valid enum case.', \$v))", $str),
             static function ($arguments, $str): \UnitEnum {
                 $value = \constant($str);
 
                 if (!$value instanceof \UnitEnum) {
-                    throw new \TypeError(sprintf('The string "%s" is not the name of a valid enum case.', $str));
+                    throw new \TypeError(\sprintf('The string "%s" is not the name of a valid enum case.', $str));
                 }
 
                 return $value;

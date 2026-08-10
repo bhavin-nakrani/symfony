@@ -13,9 +13,9 @@ namespace Symfony\Component\Mailer\Bridge\Brevo\Webhook;
 
 use Symfony\Component\HttpFoundation\ChainRequestMatcher;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestMatcher\IpsRequestMatcher;
 use Symfony\Component\HttpFoundation\RequestMatcher\IsJsonRequestMatcher;
 use Symfony\Component\HttpFoundation\RequestMatcher\MethodRequestMatcher;
-use Symfony\Component\HttpFoundation\RequestMatcher\IpsRequestMatcher;
 use Symfony\Component\HttpFoundation\RequestMatcherInterface;
 use Symfony\Component\Mailer\Bridge\Brevo\RemoteEvent\BrevoPayloadConverter;
 use Symfony\Component\RemoteEvent\Event\Mailer\AbstractMailerEvent;
@@ -25,8 +25,12 @@ use Symfony\Component\Webhook\Exception\RejectWebhookException;
 
 final class BrevoRequestParser extends AbstractRequestParser
 {
+    // https://help.brevo.com/hc/en-us/articles/15127404548498-Brevo-IP-ranges-List-of-publicly-exposed-services
+    public const PROVIDER_IPS = ['1.179.112.0/20', '172.246.240.0/20'];
+
     public function __construct(
         private readonly BrevoPayloadConverter $converter,
+        private readonly array $allowedIPs = self::PROVIDER_IPS,
     ) {
     }
 
@@ -35,21 +39,22 @@ final class BrevoRequestParser extends AbstractRequestParser
         return new ChainRequestMatcher([
             new MethodRequestMatcher('POST'),
             new IsJsonRequestMatcher(),
-            // https://developers.brevo.com/docs/how-to-use-webhooks#securing-your-webhooks
-            // localhost is added for testing
-            new IpsRequestMatcher(['185.107.232.1/24', '1.179.112.1/20', '127.0.0.1']),
+            new IpsRequestMatcher($this->allowedIPs),
         ]);
     }
 
-    protected function doParse(Request $request, string $secret): ?AbstractMailerEvent
+    protected function doParse(Request $request, #[\SensitiveParameter] string $secret): ?AbstractMailerEvent
     {
+        if ($secret && !hash_equals('Basic '.base64_encode($secret), $request->headers->get('Authorization', ''))) {
+            throw new RejectWebhookException(403, 'Invalid credentials.');
+        }
+
         $content = $request->toArray();
         if (
             !isset($content['event'])
             || !isset($content['email'])
             || !isset($content['message-id'])
             || !isset($content['ts_event'])
-            || !isset($content['tags'])
         ) {
             throw new RejectWebhookException(406, 'Payload is malformed.');
         }

@@ -106,11 +106,15 @@ class UnicodeString extends AbstractUnicodeString
             return false;
         }
 
-        if ($this->ignoreCase) {
-            return 0 === mb_stripos(grapheme_extract($this->string, \strlen($suffix), \GRAPHEME_EXTR_MAXBYTES, \strlen($this->string) - \strlen($suffix)), $suffix, 0, 'UTF-8');
+        if (false === $grapheme = grapheme_extract($this->string, \strlen($suffix), \GRAPHEME_EXTR_MAXBYTES, \strlen($this->string) - \strlen($suffix))) {
+            $grapheme = '';
         }
 
-        return $suffix === grapheme_extract($this->string, \strlen($suffix), \GRAPHEME_EXTR_MAXBYTES, \strlen($this->string) - \strlen($suffix));
+        if ($this->ignoreCase) {
+            return 0 === mb_stripos($grapheme, $suffix, 0, 'UTF-8');
+        }
+
+        return $suffix === $grapheme;
     }
 
     public function equalsTo(string|iterable|AbstractString $string): bool
@@ -173,19 +177,25 @@ class UnicodeString extends AbstractUnicodeString
         $string = $this->string;
 
         if (0 > $offset) {
-            // workaround https://bugs.php.net/74264
+            // ICU's grapheme_strrpos() disagrees with mb_strrpos() for multi-grapheme needles at
+            // negative offsets: it truncates the haystack instead of bounding the match start, so
+            // overlapping matches resolve too far left. bugs.php.net/74264 only fixed the single-grapheme case
             if (0 > $offset += grapheme_strlen($needle)) {
                 $string = grapheme_substr($string, 0, $offset);
             }
             $offset = 0;
         }
 
-        $i = $this->ignoreCase ? grapheme_strripos($string, $needle, $offset) : grapheme_strrpos($string, $needle, $offset);
+        try {
+            $i = $this->ignoreCase ? grapheme_strripos($string, $needle, $offset) : grapheme_strrpos($string, $needle, $offset);
+        } catch (\ValueError) {
+            return null;
+        }
 
         return false === $i ? null : $i;
     }
 
-    public function join(array $strings, string $lastGlue = null): static
+    public function join(array $strings, ?string $lastGlue = null): static
     {
         $str = parent::join($strings, $lastGlue);
         normalizer_is_normalized($str->string) ?: $str->string = normalizer_normalize($str->string);
@@ -264,6 +274,9 @@ class UnicodeString extends AbstractUnicodeString
         return $str;
     }
 
+    /**
+     * @param-immediately-invoked-callable $to
+     */
     public function replaceMatches(string $fromRegexp, string|callable $to): static
     {
         $str = parent::replaceMatches($fromRegexp, $to);
@@ -272,7 +285,7 @@ class UnicodeString extends AbstractUnicodeString
         return $str;
     }
 
-    public function slice(int $start = 0, int $length = null): static
+    public function slice(int $start = 0, ?int $length = null): static
     {
         $str = clone $this;
 
@@ -281,12 +294,12 @@ class UnicodeString extends AbstractUnicodeString
         return $str;
     }
 
-    public function splice(string $replacement, int $start = 0, int $length = null): static
+    public function splice(string $replacement, int $start = 0, ?int $length = null): static
     {
         $str = clone $this;
 
         $start = $start ? \strlen(grapheme_substr($this->string, 0, $start)) : 0;
-        $length = $length ? \strlen(grapheme_substr($this->string, $start, $length ?? 2147483647)) : $length;
+        $length = $length ? \strlen(grapheme_substr(substr($this->string, $start), 0, $length)) : $length;
         $str->string = substr_replace($this->string, $replacement, $start, $length ?? 2147483647);
 
         if (normalizer_is_normalized($str->string)) {
@@ -302,7 +315,7 @@ class UnicodeString extends AbstractUnicodeString
         return $str;
     }
 
-    public function split(string $delimiter, int $limit = null, int $flags = null): array
+    public function split(string $delimiter, ?int $limit = null, ?int $flags = null): array
     {
         if (1 > $limit ??= 2147483647) {
             throw new InvalidArgumentException('Split limit must be a positive integer.');
@@ -355,18 +368,63 @@ class UnicodeString extends AbstractUnicodeString
             return false;
         }
 
-        if ($this->ignoreCase) {
-            return 0 === mb_stripos(grapheme_extract($this->string, \strlen($prefix), \GRAPHEME_EXTR_MAXBYTES), $prefix, 0, 'UTF-8');
+        if (false === $grapheme = grapheme_extract($this->string, \strlen($prefix), \GRAPHEME_EXTR_MAXBYTES)) {
+            $grapheme = '';
         }
 
-        return $prefix === grapheme_extract($this->string, \strlen($prefix), \GRAPHEME_EXTR_MAXBYTES);
+        if ($this->ignoreCase) {
+            return 0 === mb_stripos($grapheme, $prefix, 0, 'UTF-8');
+        }
+
+        return $prefix === $grapheme;
     }
 
-    /**
-     * @return void
-     */
-    public function __wakeup()
+    public function trimPrefix($prefix): static
     {
+        if (\is_array($prefix) || $prefix instanceof \Traversable) {
+            return parent::trimPrefix($prefix);
+        }
+
+        if ($prefix instanceof AbstractString) {
+            $prefix = $prefix->string;
+        } else {
+            $prefix = (string) $prefix;
+        }
+
+        if (!normalizer_is_normalized($prefix, \Normalizer::NFC)) {
+            $prefix = normalizer_normalize($prefix, \Normalizer::NFC);
+        }
+
+        return parent::trimPrefix($prefix);
+    }
+
+    public function trimSuffix($suffix): static
+    {
+        if (\is_array($suffix) || $suffix instanceof \Traversable) {
+            return parent::trimSuffix($suffix);
+        }
+
+        if ($suffix instanceof AbstractString) {
+            $suffix = $suffix->string;
+        } else {
+            $suffix = (string) $suffix;
+        }
+
+        if (!normalizer_is_normalized($suffix, \Normalizer::NFC)) {
+            $suffix = normalizer_normalize($suffix, \Normalizer::NFC);
+        }
+
+        return parent::trimSuffix($suffix);
+    }
+
+    public function __unserialize(array $data): void
+    {
+        if (($data['string'] ?? null) instanceof \Stringable || ($data["\0*\0string"] ?? null) instanceof \Stringable) {
+            throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
+        }
+
+        $this->string = $data['string'] ?? $data["\0*\0string"];
+
         if (!\is_string($this->string)) {
             throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
         }

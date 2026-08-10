@@ -96,7 +96,7 @@ return [
         ],
         'BYN' => [
             'BYN',
-            'Belarusiese roebel',
+            'Belarussiese roebel',
         ],
         'BYR' => [
             'BYR',
@@ -184,7 +184,7 @@ return [
         ],
         'EUR' => [
             '€',
-            'Euro',
+            'euro',
         ],
         'FJD' => [
             'FJD',
@@ -228,7 +228,7 @@ return [
         ],
         'GTQ' => [
             'GTQ',
-            'Guatemalaanse quetzal',
+            'Guatemalaanse kwetsal',
         ],
         'GYD' => [
             'GYD',
@@ -348,7 +348,7 @@ return [
         ],
         'LSL' => [
             'LSL',
-            'Lesotho loti',
+            'Lesotho-loti',
         ],
         'LTL' => [
             'LTL',
@@ -534,9 +534,13 @@ return [
             'SHP',
             'Sint Helena-pond',
         ],
+        'SLE' => [
+            'SLE',
+            'Sierra Leoniese leone',
+        ],
         'SLL' => [
             'SLL',
-            'Sierra Leoniese leone',
+            'Sierra Leoniese leone (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -654,6 +658,10 @@ return [
             'EC$',
             'Oos-Karibiese dollar',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karibiese gulde',
+        ],
         'XOF' => [
             'F CFA',
             'Wes-Afrikaanse CFA-frank',
@@ -681,6 +689,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Zimbabwiese dollar',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabwiese goud',
         ],
     ],
 ];

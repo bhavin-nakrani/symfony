@@ -11,13 +11,15 @@
 
 namespace Symfony\Component\HttpFoundation\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class ResponseTest extends ResponseTestCase
 {
     public function testToString()
@@ -63,7 +65,7 @@ class ResponseTest extends ResponseTestCase
     public function testGetCharset()
     {
         $response = new Response();
-        $charsetOrigin = 'UTF-8';
+        $charsetOrigin = 'utf-8';
         $response->setCharset($charsetOrigin);
         $charset = $response->getCharset();
         $this->assertEquals($charsetOrigin, $charset);
@@ -127,7 +129,7 @@ class ResponseTest extends ResponseTestCase
         ob_start();
         $modified->sendContent();
         $string = ob_get_clean();
-        $this->assertEmpty($string);
+        $this->assertSame('', $string);
     }
 
     public function testIsSuccessful()
@@ -181,7 +183,7 @@ class ResponseTest extends ResponseTestCase
         $etagTwo = 'randomly_generated_etag_2';
 
         $request = new Request();
-        $request->headers->set('If-None-Match', sprintf('%s, %s, %s', $etagOne, $etagTwo, 'etagThree'));
+        $request->headers->set('If-None-Match', \sprintf('%s, %s, %s', $etagOne, $etagTwo, 'etagThree'));
 
         $response = new Response();
 
@@ -235,7 +237,7 @@ class ResponseTest extends ResponseTestCase
         $etag = 'randomly_generated_etag';
 
         $request = new Request();
-        $request->headers->set('If-None-Match', sprintf('%s, %s', $etag, 'etagThree'));
+        $request->headers->set('If-None-Match', \sprintf('%s, %s', $etag, 'etagThree'));
         $request->headers->set('If-Modified-Since', $modified);
 
         $response = new Response();
@@ -259,7 +261,7 @@ class ResponseTest extends ResponseTestCase
         $etag = 'randomly_generated_etag';
 
         $request = new Request();
-        $request->headers->set('If-None-Match', sprintf('%s, %s', $etag, 'etagThree'));
+        $request->headers->set('If-None-Match', \sprintf('%s, %s', $etag, 'etagThree'));
         $request->headers->set('If-Modified-Since', $modified);
 
         $response = new Response();
@@ -534,7 +536,7 @@ class ResponseTest extends ResponseTestCase
         $response = new Response('foo');
         $response->prepare(new Request());
 
-        $this->assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertSame('text/html; charset=utf-8', $response->headers->get('Content-Type'));
     }
 
     public function testContentTypeCharset()
@@ -545,7 +547,7 @@ class ResponseTest extends ResponseTestCase
         // force fixContentType() to be called
         $response->prepare(new Request());
 
-        $this->assertEquals('text/css; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertEquals('text/css; charset=utf-8', $response->headers->get('Content-Type'));
     }
 
     public function testContentTypeIsNull()
@@ -565,7 +567,7 @@ class ResponseTest extends ResponseTestCase
 
         $response->prepare(new Request());
 
-        $this->assertEquals('text/plain; charset=UTF-8', $response->headers->get('content-type'));
+        $this->assertEquals('text/plain; charset=utf-8', $response->headers->get('content-type'));
     }
 
     public function testPrepareDoesNothingIfRequestFormatIsNotDefined()
@@ -574,7 +576,7 @@ class ResponseTest extends ResponseTestCase
 
         $response->prepare(new Request());
 
-        $this->assertEquals('text/html; charset=UTF-8', $response->headers->get('content-type'));
+        $this->assertEquals('text/html; charset=utf-8', $response->headers->get('content-type'));
     }
 
     /**
@@ -588,7 +590,7 @@ class ResponseTest extends ResponseTestCase
         $request->headers->set('Accept', 'application/json');
         $response->prepare($request);
 
-        $this->assertSame('text/html; charset=UTF-8', $response->headers->get('content-type'));
+        $this->assertSame('text/html; charset=utf-8', $response->headers->get('content-type'));
     }
 
     public function testPrepareSetContentType()
@@ -879,9 +881,7 @@ class ResponseTest extends ResponseTestCase
         $this->assertFalse($response->isInvalid());
     }
 
-    /**
-     * @dataProvider getStatusCodeFixtures
-     */
+    #[DataProvider('getStatusCodeFixtures')]
     public function testSetStatusCode($code, $text, $expectedText)
     {
         $response = new Response();
@@ -897,10 +897,10 @@ class ResponseTest extends ResponseTestCase
     {
         return [
             ['200', null, 'OK'],
-            ['200', false, ''],
+            ['200', '', ''],
             ['200', 'foo', 'foo'],
             ['199', null, 'unknown status'],
-            ['199', false, ''],
+            ['199', '', ''],
             ['199', 'foo', 'foo'],
         ];
     }
@@ -1005,9 +1005,7 @@ class ResponseTest extends ResponseTestCase
         $this->assertNull($response->headers->get('Etag'), '->setEtag() removes Etags when call with null');
     }
 
-    /**
-     * @dataProvider validContentProvider
-     */
+    #[DataProvider('validContentProvider')]
     public function testSetContent($content)
     {
         $response = new Response();
@@ -1021,7 +1019,7 @@ class ResponseTest extends ResponseTestCase
 
         $setters = [
             'setProtocolVersion' => '1.0',
-            'setCharset' => 'UTF-8',
+            'setCharset' => 'utf-8',
             'setPublic' => null,
             'setPrivate' => null,
             'setDate' => $this->createDateTimeNow(),
@@ -1040,7 +1038,7 @@ class ResponseTest extends ResponseTestCase
     public function testNoDeprecationsAreTriggered()
     {
         new DefaultResponse();
-        $this->createMock(Response::class);
+        new Response();
 
         // we just need to ensure that subclasses of Response can be created without any deprecations
         // being triggered if the subclass does not override any final methods
@@ -1128,9 +1126,7 @@ class ResponseTest extends ResponseTestCase
         return $ianaCodesReasonPhrases;
     }
 
-    /**
-     * @dataProvider ianaCodesReasonPhrasesProvider
-     */
+    #[DataProvider('ianaCodesReasonPhrasesProvider')]
     public function testReasonPhraseDefaultsAgainstIana($code, $reasonPhrase)
     {
         $this->assertEquals($reasonPhrase, Response::$statusTexts[$code]);
@@ -1152,6 +1148,28 @@ class ResponseTest extends ResponseTestCase
 
         $this->assertFalse($response->headers->has('Preference-Applied'));
         $this->assertSame('Prefer', $response->headers->get('Vary'));
+    }
+
+    #[Group('legacy')]
+    #[IgnoreDeprecations]
+    public function testDirectHeadersWriteIsDeprecated()
+    {
+        $response = new Response();
+
+        $this->expectUserDeprecationMessage('Since symfony/http-foundation 8.1: Directly setting property "headers" of "Symfony\Component\HttpFoundation\Response" is deprecated; pass the header bag as a constructor argument instead.');
+
+        $response->headers = new ResponseHeaderBag();
+    }
+
+    #[Group('legacy')]
+    #[IgnoreDeprecations]
+    public function testDirectHeadersWriteFromSubclassReportsSubclass()
+    {
+        $response = new DefaultResponse();
+
+        $this->expectUserDeprecationMessage('Since symfony/http-foundation 8.1: Directly setting property "headers" of "Symfony\Component\HttpFoundation\Tests\DefaultResponse" is deprecated; pass the header bag as a constructor argument instead.');
+
+        $response->headers = new ResponseHeaderBag();
     }
 }
 

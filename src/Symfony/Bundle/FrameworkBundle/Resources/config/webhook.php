@@ -17,6 +17,8 @@ use Symfony\Component\Webhook\Messenger\SendWebhookHandler;
 use Symfony\Component\Webhook\Server\HeadersConfigurator;
 use Symfony\Component\Webhook\Server\HeaderSignatureConfigurator;
 use Symfony\Component\Webhook\Server\JsonBodyConfigurator;
+use Symfony\Component\Webhook\Server\NativeJsonPayloadSerializer;
+use Symfony\Component\Webhook\Server\SerializerPayloadSerializer;
 use Symfony\Component\Webhook\Server\Transport;
 
 return static function (ContainerConfigurator $container) {
@@ -30,13 +32,28 @@ return static function (ContainerConfigurator $container) {
             ])
 
         ->set('webhook.headers_configurator', HeadersConfigurator::class)
+            ->args([
+                abstract_arg('event header name'),
+                abstract_arg('id header name'),
+            ])
 
         ->set('webhook.body_configurator.json', JsonBodyConfigurator::class)
+            ->args([
+                abstract_arg('payload serializer'),
+            ])
+
+        ->set('webhook.payload_serializer.json', NativeJsonPayloadSerializer::class)
+
+        ->set('webhook.payload_serializer.serializer', SerializerPayloadSerializer::class)
             ->args([
                 service('serializer'),
             ])
 
         ->set('webhook.signer', HeaderSignatureConfigurator::class)
+            ->args([
+                abstract_arg('signing algorithm'),
+                abstract_arg('signature header name'),
+            ])
 
         ->set('webhook.messenger.send_handler', SendWebhookHandler::class)
             ->args([

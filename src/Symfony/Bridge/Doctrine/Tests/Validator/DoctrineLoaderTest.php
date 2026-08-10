@@ -11,6 +11,7 @@
 
 namespace Symfony\Bridge\Doctrine\Tests\Validator;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Tests\DoctrineTestHelper;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\BaseUser;
@@ -39,7 +40,7 @@ class DoctrineLoaderTest extends TestCase
     public function testLoadClassMetadata()
     {
         $validator = Validation::createValidatorBuilder()
-            ->enableAnnotationMapping(true)
+            ->enableAttributeMapping()
             ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{^Symfony\\\\Bridge\\\\Doctrine\\\\Tests\\\\Fixtures\\\\DoctrineLoader}'))
             ->getValidator()
         ;
@@ -141,8 +142,7 @@ class DoctrineLoaderTest extends TestCase
     public function testExtractEnum()
     {
         $validator = Validation::createValidatorBuilder()
-            ->addMethodMapping('loadValidatorMetadata')
-            ->enableAnnotationMapping(true)
+            ->enableAttributeMapping()
             ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{^Symfony\\\\Bridge\\\\Doctrine\\\\Tests\\\\Fixtures\\\\DoctrineLoader}'))
             ->getValidator()
         ;
@@ -159,7 +159,7 @@ class DoctrineLoaderTest extends TestCase
     public function testFieldMappingsConfiguration()
     {
         $validator = Validation::createValidatorBuilder()
-            ->enableAnnotationMapping(true)
+            ->enableAttributeMapping()
             ->addXmlMappings([__DIR__.'/../Resources/validator/BaseUser.xml'])
             ->addLoader(
                 new DoctrineLoader(
@@ -176,10 +176,8 @@ class DoctrineLoaderTest extends TestCase
         $this->assertCount(0, $constraints);
     }
 
-    /**
-     * @dataProvider regexpProvider
-     */
-    public function testClassValidator(bool $expected, string $classValidatorRegexp = null)
+    #[DataProvider('regexpProvider')]
+    public function testClassValidator(bool $expected, ?string $classValidatorRegexp = null)
     {
         $doctrineLoader = new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), $classValidatorRegexp, false);
 
@@ -200,7 +198,7 @@ class DoctrineLoaderTest extends TestCase
     public function testClassNoAutoMapping()
     {
         $validator = Validation::createValidatorBuilder()
-            ->enableAnnotationMapping(true)
+            ->enableAttributeMapping()
             ->addLoader(new DoctrineLoader(DoctrineTestHelper::createTestEntityManager(), '{.*}'))
             ->getValidator();
 
@@ -211,11 +209,11 @@ class DoctrineLoaderTest extends TestCase
         $this->assertSame(AutoMappingStrategy::DISABLED, $classMetadata->getAutoMappingStrategy());
 
         $maxLengthMetadata = $classMetadata->getPropertyMetadata('maxLength');
-        $this->assertEmpty($maxLengthMetadata);
+        $this->assertSame([], $maxLengthMetadata);
 
         /** @var PropertyMetadata[] $autoMappingExplicitlyEnabledMetadata */
         $autoMappingExplicitlyEnabledMetadata = $classMetadata->getPropertyMetadata('autoMappingExplicitlyEnabled');
-        $this->assertCount(1, $autoMappingExplicitlyEnabledMetadata[0]->constraints);
+        $this->assertCount(1, $autoMappingExplicitlyEnabledMetadata[0]->getConstraints());
         $this->assertSame(AutoMappingStrategy::ENABLED, $autoMappingExplicitlyEnabledMetadata[0]->getAutoMappingStrategy());
     }
 }

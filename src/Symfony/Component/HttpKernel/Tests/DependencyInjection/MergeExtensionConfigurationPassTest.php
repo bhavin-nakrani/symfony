@@ -11,13 +11,17 @@
 
 namespace Symfony\Component\HttpKernel\Tests\DependencyInjection;
 
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
-use Symfony\Component\HttpKernel\DependencyInjection\Extension;
 use Symfony\Component\HttpKernel\DependencyInjection\MergeExtensionConfigurationPass;
 use Symfony\Component\HttpKernel\Tests\Fixtures\AcmeFooBundle\AcmeFooBundle;
 
+#[Group('legacy')]
+#[IgnoreDeprecations]
 class MergeExtensionConfigurationPassTest extends TestCase
 {
     public function testAutoloadMainExtension()
@@ -48,7 +52,7 @@ class MergeExtensionConfigurationPassTest extends TestCase
         $configPass = new MergeExtensionConfigurationPass(['loaded', 'acme_foo']);
         $configPass->process($container);
 
-        $this->assertSame([[], ['bar' => 'baz']], $container->getExtensionConfig('loaded'), '->prependExtension() prepends an extension config');
+        $this->assertSame([['bar' => 'baz'], []], $container->getExtensionConfig('loaded'), '->prependExtension() prepends an extension config');
         $this->assertTrue($container->hasDefinition('acme_foo.foo'), '->loadExtension() registers a service');
         $this->assertTrue($container->hasDefinition('acme_foo.bar'), '->loadExtension() imports a service');
         $this->assertTrue($container->hasParameter('acme_foo.config'), '->loadExtension() sets a parameter');

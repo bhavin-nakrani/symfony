@@ -11,15 +11,18 @@
 
 namespace Symfony\Bridge\Twig\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\AppVariable;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpFoundation\Session\Flash\FlashBag;
 use Symfony\Component\HttpFoundation\Session\Session;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Symfony\Component\Security\Core\Authentication\Token\NullToken;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Translation\LocaleSwitcher;
 
 class AppVariableTest extends TestCase
@@ -31,9 +34,7 @@ class AppVariableTest extends TestCase
         $this->appVariable = new AppVariable();
     }
 
-    /**
-     * @dataProvider debugDataProvider
-     */
+    #[DataProvider('debugDataProvider')]
     public function testDebug($debugFlag)
     {
         $this->appVariable->setDebug($debugFlag);
@@ -41,7 +42,7 @@ class AppVariableTest extends TestCase
         $this->assertEquals($debugFlag, $this->appVariable->getDebug());
     }
 
-    public static function debugDataProvider()
+    public static function debugDataProvider(): array
     {
         return [
             'debug on' => [true],
@@ -56,14 +57,12 @@ class AppVariableTest extends TestCase
         $this->assertEquals('dev', $this->appVariable->getEnvironment());
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testGetSession()
     {
-        $request = $this->createMock(Request::class);
-        $request->method('hasSession')->willReturn(true);
-        $request->method('getSession')->willReturn($session = new Session());
+        $session = new Session();
+        $request = new Request();
+        $request->setSession($session);
 
         $this->setRequestStack($request);
 
@@ -86,44 +85,46 @@ class AppVariableTest extends TestCase
 
     public function testGetToken()
     {
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage = new TokenStorage();
         $this->appVariable->setTokenStorage($tokenStorage);
 
-        $token = $this->createMock(TokenInterface::class);
-        $tokenStorage->method('getToken')->willReturn($token);
+        $token = new NullToken();
+        $tokenStorage->setToken($token);
 
         $this->assertEquals($token, $this->appVariable->getToken());
     }
 
     public function testGetUser()
     {
-        $this->setTokenStorage($user = $this->createMock(UserInterface::class));
+        $this->setTokenStorage($user = new InMemoryUser('john', 'password'));
 
         $this->assertEquals($user, $this->appVariable->getUser());
     }
 
     public function testGetLocale()
     {
-        $localeSwitcher = $this->createMock(LocaleSwitcher::class);
-        $this->appVariable->setLocaleSwitcher($localeSwitcher);
-
-        $localeSwitcher->method('getLocale')->willReturn('fr');
+        $this->appVariable->setLocaleSwitcher(new LocaleSwitcher('fr', []));
 
         self::assertEquals('fr', $this->appVariable->getLocale());
     }
 
+    public function testGetEnabledLocales()
+    {
+        $this->appVariable->setEnabledLocales(['en', 'fr']);
+
+        self::assertSame(['en', 'fr'], $this->appVariable->getEnabled_locales());
+    }
+
     public function testGetTokenWithNoToken()
     {
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
-        $this->appVariable->setTokenStorage($tokenStorage);
+        $this->appVariable->setTokenStorage(new TokenStorage());
 
         $this->assertNull($this->appVariable->getToken());
     }
 
     public function testGetUserWithNoToken()
     {
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
-        $this->appVariable->setTokenStorage($tokenStorage);
+        $this->appVariable->setTokenStorage(new TokenStorage());
 
         $this->assertNull($this->appVariable->getUser());
     }
@@ -171,6 +172,13 @@ class AppVariableTest extends TestCase
         $this->appVariable->getLocale();
     }
 
+    public function testGetEnabledLocalesWithEnabledLocalesNotSet()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('The "app.enabled_locales" variable is not available.');
+        $this->appVariable->getEnabled_locales();
+    }
+
     public function testGetFlashesWithNoRequest()
     {
         $this->setRequestStack(null);
@@ -178,18 +186,14 @@ class AppVariableTest extends TestCase
         $this->assertEquals([], $this->appVariable->getFlashes());
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testGetFlashesWithNoSessionStarted()
     {
         $flashMessages = $this->setFlashMessages(false);
         $this->assertEquals($flashMessages, $this->appVariable->getFlashes());
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testGetFlashes()
     {
         $flashMessages = $this->setFlashMessages();
@@ -245,7 +249,7 @@ class AppVariableTest extends TestCase
 
     public function testGetCurrentRoute()
     {
-        $this->setRequestStack(new Request(attributes: ['_route' => 'some_route']));
+        $this->setRequestStack(new Request([], [], ['_route' => 'some_route']));
 
         $this->assertSame('some_route', $this->appVariable->getCurrent_route());
     }
@@ -259,7 +263,7 @@ class AppVariableTest extends TestCase
     public function testGetCurrentRouteParameters()
     {
         $routeParams = ['some_param' => true];
-        $this->setRequestStack(new Request(attributes: ['_route_params' => $routeParams]));
+        $this->setRequestStack(new Request([], [], ['_route_params' => $routeParams]));
 
         $this->assertSame($routeParams, $this->appVariable->getCurrent_route_parameters());
     }
@@ -277,23 +281,40 @@ class AppVariableTest extends TestCase
         $this->appVariable->getCurrent_route_parameters();
     }
 
-    protected function setRequestStack($request)
+    protected function setRequestStack(?Request $request)
     {
-        $requestStackMock = $this->createMock(RequestStack::class);
-        $requestStackMock->method('getCurrentRequest')->willReturn($request);
+        $requestStack = new RequestStack();
 
-        $this->appVariable->setRequestStack($requestStackMock);
+        if (null !== $request) {
+            $requestStack->push($request);
+        }
+
+        $this->appVariable->setRequestStack($requestStack);
     }
 
     protected function setTokenStorage($user)
     {
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage = new TokenStorage();
         $this->appVariable->setTokenStorage($tokenStorage);
 
-        $token = $this->createMock(TokenInterface::class);
-        $tokenStorage->method('getToken')->willReturn($token);
+        $token = new UsernamePasswordToken($user, 'main');
+        $tokenStorage->setToken($token);
+    }
 
-        $token->method('getUser')->willReturn($user);
+    public function testSetEnabledLocalesFiltersEmptyValues()
+    {
+        $this->appVariable->setEnabledLocales(['en', '', 'fr', null, 'de']);
+
+        $enabledLocales = $this->appVariable->getEnabled_locales();
+
+        $this->assertSame(['en', 'fr', 'de'], $enabledLocales);
+    }
+
+    public function testSetEnabledLocalesPreservesNonEmptyStringValues()
+    {
+        $this->appVariable->setEnabledLocales(['en', '0', 'fr']);
+
+        $this->assertSame(['en', '0', 'fr'], $this->appVariable->getEnabled_locales());
     }
 
     private function setFlashMessages($sessionHasStarted = true)
@@ -303,16 +324,19 @@ class AppVariableTest extends TestCase
             'warning' => ['Warning #1 message'],
             'error' => ['Error #1 message', 'Error #2 message'],
         ];
-        $flashBag = new FlashBag();
-        $flashBag->initialize($flashMessages);
 
-        $session = $this->createMock(Session::class);
-        $session->method('isStarted')->willReturn($sessionHasStarted);
-        $session->method('getFlashBag')->willReturn($flashBag);
+        $storage = new MockArraySessionStorage();
+        $storage->setSessionData([
+            '_symfony_flashes' => $flashMessages,
+        ]);
+        $session = new Session($storage);
 
-        $request = $this->createMock(Request::class);
-        $request->method('hasSession')->willReturn(true);
-        $request->method('getSession')->willReturn($session);
+        if ($sessionHasStarted) {
+            $session->start();
+        }
+
+        $request = new Request();
+        $request->setSession($session);
         $this->setRequestStack($request);
 
         return $flashMessages;

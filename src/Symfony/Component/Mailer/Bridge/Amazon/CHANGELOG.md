@@ -1,6 +1,21 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Add support for configuring the port and tls options
+
+7.3
+---
+
+* Add support for custom headers in ses+api
+
+7.1
+---
+
+* Add support for `X-SES-LIST-MANAGEMENT-OPTIONS`
+
 6.1
 ---
 

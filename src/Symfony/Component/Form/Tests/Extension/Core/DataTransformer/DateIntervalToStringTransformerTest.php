@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\DataTransformer;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Form\Exception\TransformationFailedException;
 use Symfony\Component\Form\Exception\UnexpectedTypeException;
 use Symfony\Component\Form\Extension\Core\DataTransformer\DateIntervalToStringTransformer;
@@ -20,9 +21,9 @@ use Symfony\Component\Form\Extension\Core\DataTransformer\DateIntervalToStringTr
  */
 class DateIntervalToStringTransformerTest extends DateIntervalTestCase
 {
-    public static function dataProviderISO()
+    public static function dataProviderISO(): array
     {
-        $data = [
+        return [
             ['P%YY%MM%DDT%HH%IM%SS', 'P00Y00M00DT00H00M00S', 'PT0S'],
             ['P%yY%mM%dDT%hH%iM%sS', 'P0Y0M0DT0H0M0S', 'PT0S'],
             ['P%yY%mM%dDT%hH%iM%sS', 'P10Y2M3DT16H5M6S', 'P10Y2M3DT16H5M6S'],
@@ -30,13 +31,11 @@ class DateIntervalToStringTransformerTest extends DateIntervalTestCase
             ['P%yY%mM%dDT%hH', 'P10Y2M3DT16H', 'P10Y2M3DT16H'],
             ['P%yY%mM%dD', 'P10Y2M3D', 'P10Y2M3DT0H'],
         ];
-
-        return $data;
     }
 
-    public static function dataProviderDate()
+    public static function dataProviderDate(): array
     {
-        $data = [
+        return [
             [
                 '%y years %m months %d days %h hours %i minutes %s seconds',
                 '10 years 2 months 3 days 16 hours 5 minutes 6 seconds',
@@ -52,13 +51,9 @@ class DateIntervalToStringTransformerTest extends DateIntervalTestCase
             ['%y years %m months', '10 years 2 months', 'P10Y2M'],
             ['%y year', '1 year', 'P1Y'],
         ];
-
-        return $data;
     }
 
-    /**
-     * @dataProvider dataProviderISO
-     */
+    #[DataProvider('dataProviderISO')]
     public function testTransform($format, $output, $input)
     {
         $transformer = new DateIntervalToStringTransformer($format);
@@ -79,9 +74,7 @@ class DateIntervalToStringTransformerTest extends DateIntervalTestCase
         $transformer->transform('1234');
     }
 
-    /**
-     * @dataProvider dataProviderISO
-     */
+    #[DataProvider('dataProviderISO')]
     public function testReverseTransform($format, $input, $output)
     {
         $reverseTransformer = new DateIntervalToStringTransformer($format, true);
@@ -89,9 +82,7 @@ class DateIntervalToStringTransformerTest extends DateIntervalTestCase
         $this->assertDateIntervalEquals($interval, $reverseTransformer->reverseTransform($input));
     }
 
-    /**
-     * @dataProvider dataProviderDate
-     */
+    #[DataProvider('dataProviderDate')]
     public function testReverseTransformDateString($format, $input, $output)
     {
         $reverseTransformer = new DateIntervalToStringTransformer($format, true);

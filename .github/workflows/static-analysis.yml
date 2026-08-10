@@ -1,0 +1,145 @@
+name: Static Analysis
+
+on:
+  pull_request: ~
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  psalm:
+    name: Psalm
+    runs-on: ubuntu-24.04
+
+    env:
+      php-version: '8.4'
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.php-version }}
+          ini-values: memory_limit=-1,intl.default_locale=en,intl.error_level=0
+          coverage: none
+
+      - name: Checkout target branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.base_ref }}
+
+      - name: Install dependencies
+        run: |
+          COMPOSER_HOME="$(composer config home)"
+          ([ -d "$COMPOSER_HOME" ] || mkdir "$COMPOSER_HOME") && cp .github/composer-config.json "$COMPOSER_HOME/config.json"
+          export COMPOSER_ROOT_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | grep -P -o '[0-9]+\.[0-9]+').x-dev
+          composer remove --dev --no-update --no-interaction symfony/phpunit-bridge
+          composer require --no-progress --ansi --no-plugins psalm/phar:@stable phpunit/phpunit:^11.5 php-http/discovery psr/event-dispatcher mongodb/mongodb jetbrains/phpstorm-stubs
+
+      - name: Generate Psalm baseline
+        run: ./vendor/bin/psalm.phar --set-baseline=.github/sa-tools/psalm.baseline.xml --no-progress
+
+      - name: Switch to PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Credentials are not persisted by the checkout, so remote operations are given
+          # the job token explicitly. Public repositories would also accept anonymous reads,
+          # private forks do not.
+          git checkout composer.json
+          base_sha=$(git rev-parse HEAD)
+          git fetch --depth=1 "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" '+${{ github.event.pull_request.head.sha }}'
+          git checkout -m FETCH_HEAD
+
+          # update dependencies when the PR changes composer.json so that packages it adds are resolvable
+          if ! git diff --quiet "$base_sha" HEAD -- composer.json; then
+            export COMPOSER_ROOT_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | grep -P -o '[0-9]+\.[0-9]+').x-dev
+            composer remove --dev --no-update --no-interaction symfony/phpunit-bridge
+            composer require --no-progress --ansi --no-plugins psalm/phar:@stable phpunit/phpunit:^11.5 php-http/discovery psr/event-dispatcher mongodb/mongodb jetbrains/phpstorm-stubs
+          fi
+
+      - name: Psalm
+        run: ./vendor/bin/psalm.phar --no-progress || ./vendor/bin/psalm.phar --output-format=github --no-progress
+
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-24.04
+
+    env:
+      php-version: '8.4'
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.php-version }}
+          ini-values: memory_limit=-1,intl.default_locale=en,intl.error_level=0
+          coverage: none
+
+      - name: Checkout target branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.base_ref }}
+
+      - name: Install dependencies
+        run: |
+          COMPOSER_HOME="$(composer config home)"
+          ([ -d "$COMPOSER_HOME" ] || mkdir "$COMPOSER_HOME") && cp .github/composer-config.json "$COMPOSER_HOME/config.json"
+          export COMPOSER_ROOT_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | grep -P -o '[0-9]+\.[0-9]+').x-dev
+          composer remove --dev --no-update --no-interaction symfony/phpunit-bridge
+          composer require --no-progress --ansi --no-plugins phpstan/phpstan:@stable phpstan/phpstan-deprecation-rules:@stable phpunit/phpunit:^11.5 php-http/discovery psr/event-dispatcher mongodb/mongodb
+
+      - name: PHPStan on target branch
+        run: ./vendor/bin/phpstan analyse --error-format=json --no-progress --autoload-file='.github/sa-tools/rules/bootstrap.php' > .github/sa-tools/phpstan-base.json || true
+
+      - name: Switch to PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Credentials are not persisted by the checkout, so remote operations are given
+          # the job token explicitly. Public repositories would also accept anonymous reads,
+          # private forks do not.
+          git checkout composer.json
+          base_sha=$(git rev-parse HEAD)
+          git fetch --depth=1 "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" '+${{ github.event.pull_request.head.sha }}'
+          git checkout -m FETCH_HEAD
+
+          # update dependencies when the PR changes composer.json so that packages it adds are resolvable
+          if ! git diff --quiet "$base_sha" HEAD -- composer.json; then
+            export COMPOSER_ROOT_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | grep -P -o '[0-9]+\.[0-9]+').x-dev
+            composer remove --dev --no-update --no-interaction symfony/phpunit-bridge
+            composer require --no-progress --ansi --no-plugins phpstan/phpstan:@stable phpstan/phpstan-deprecation-rules:@stable phpunit/phpunit:^11.5 php-http/discovery psr/event-dispatcher mongodb/mongodb
+          fi
+
+      - name: PHPStan
+        run: |
+          ./vendor/bin/phpstan analyse --error-format=json --no-progress --autoload-file='.github/sa-tools/rules/bootstrap.php' > .github/sa-tools/phpstan-pr.json || true
+          php .github/sa-tools/phpstan-diff.php .github/sa-tools/phpstan-base.json .github/sa-tools/phpstan-pr.json
+
+  hardening-tests:
+    name: Hardening tests
+    runs-on: ubuntu-24.04
+
+    env:
+      php-version: '8.2'
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.php-version }}
+          coverage: none
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check hardening-test conventions
+        run: php .github/sa-tools/check-hardening-tests.php

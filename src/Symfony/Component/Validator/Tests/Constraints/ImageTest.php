@@ -14,30 +14,30 @@ namespace Symfony\Component\Validator\Tests\Constraints;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\Image;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
 
 class ImageTest extends TestCase
 {
     public function testAttributes()
     {
         $metadata = new ClassMetadata(ImageDummy::class);
-        $loader = new AnnotationLoader();
+        $loader = new AttributeLoader();
         self::assertTrue($loader->loadClassMetadata($metadata));
 
-        [$aConstraint] = $metadata->properties['a']->getConstraints();
+        [$aConstraint] = $metadata->getPropertyMetadata('a')[0]->getConstraints();
         self::assertNull($aConstraint->minWidth);
         self::assertNull($aConstraint->maxWidth);
         self::assertNull($aConstraint->minHeight);
         self::assertNull($aConstraint->maxHeight);
 
-        [$bConstraint] = $metadata->properties['b']->getConstraints();
+        [$bConstraint] = $metadata->getPropertyMetadata('b')[0]->getConstraints();
         self::assertSame(50, $bConstraint->minWidth);
         self::assertSame(200, $bConstraint->maxWidth);
         self::assertSame(50, $bConstraint->minHeight);
         self::assertSame(200, $bConstraint->maxHeight);
         self::assertSame(['Default', 'ImageDummy'], $bConstraint->groups);
 
-        [$cConstraint] = $metadata->properties['c']->getConstraints();
+        [$cConstraint] = $metadata->getPropertyMetadata('c')[0]->getConstraints();
         self::assertSame(100000, $cConstraint->maxSize);
         self::assertSame(['my_group'], $cConstraint->groups);
         self::assertSame('some attached data', $cConstraint->payload);

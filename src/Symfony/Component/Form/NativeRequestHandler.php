@@ -12,6 +12,7 @@
 namespace Symfony\Component\Form;
 
 use Symfony\Component\Form\Exception\UnexpectedTypeException;
+use Symfony\Component\Form\Util\FormUtil;
 use Symfony\Component\Form\Util\ServerParams;
 
 /**
@@ -22,29 +23,30 @@ use Symfony\Component\Form\Util\ServerParams;
 class NativeRequestHandler implements RequestHandlerInterface
 {
     private ServerParams $serverParams;
+    private MissingDataHandler $missingDataHandler;
 
     /**
      * The allowed keys of the $_FILES array.
      */
     private const FILE_KEYS = [
         'error',
+        'full_path',
         'name',
         'size',
         'tmp_name',
         'type',
     ];
 
-    public function __construct(ServerParams $params = null)
+    public function __construct(?ServerParams $params = null)
     {
         $this->serverParams = $params ?? new ServerParams();
+        $this->missingDataHandler = new MissingDataHandler();
     }
 
     /**
-     * @return void
-     *
-     * @throws Exception\UnexpectedTypeException If the $request is not null
+     * @throws UnexpectedTypeException If the $request is not null
      */
-    public function handleRequest(FormInterface $form, mixed $request = null)
+    public function handleRequest(FormInterface $form, mixed $request = null): void
     {
         if (null !== $request) {
             throw new UnexpectedTypeException($request, 'null');
@@ -52,6 +54,7 @@ class NativeRequestHandler implements RequestHandlerInterface
 
         $name = $form->getName();
         $method = $form->getConfig()->getMethod();
+        $missingData = $this->missingDataHandler->missingData;
 
         if ($method !== self::getRequestMethod()) {
             return;
@@ -63,13 +66,15 @@ class NativeRequestHandler implements RequestHandlerInterface
             if ('' === $name) {
                 $data = $_GET;
             } else {
-                // Don't submit GET requests if the form's name does not exist
-                // in the request
-                if (!isset($_GET[$name])) {
+                $queryData = $_GET[$name] ?? $missingData;
+
+                if ($missingData === $queryData) {
+                    // Don't submit GET requests if the form's name does not exist
+                    // in the request
                     return;
                 }
 
-                $data = $_GET[$name];
+                $data = $this->missingDataHandler->handle($form, $queryData);
             }
         } else {
             // Mark the form with an error if the uploaded size was too large
@@ -101,12 +106,21 @@ class NativeRequestHandler implements RequestHandlerInterface
                 $params = \array_key_exists($name, $_POST) ? $_POST[$name] : $default;
                 $files = \array_key_exists($name, $fixedFiles) ? $fixedFiles[$name] : $default;
             } else {
+                $params = $missingData;
+                $files = null;
+            }
+
+            if ($missingData === $params) {
                 // Don't submit the form if it is not present in the request
                 return;
             }
 
+            if ('PATCH' !== $method) {
+                $params = $this->missingDataHandler->handle($form, $params);
+            }
+
             if (\is_array($params) && \is_array($files)) {
-                $data = array_replace_recursive($params, $files);
+                $data = FormUtil::mergeParamsAndFiles($params, $files);
             } else {
                 $data = $params ?: $files;
             }
@@ -187,9 +201,7 @@ class NativeRequestHandler implements RequestHandlerInterface
             return $data;
         }
 
-        // Remove extra key added by PHP 8.1.
-        unset($data['full_path']);
-        $keys = array_keys($data);
+        $keys = array_keys($data + ['full_path' => null]);
         sort($keys);
 
         if (self::FILE_KEYS !== $keys || !isset($data['name']) || !\is_array($data['name'])) {
@@ -208,7 +220,9 @@ class NativeRequestHandler implements RequestHandlerInterface
                 'type' => $data['type'][$key],
                 'tmp_name' => $data['tmp_name'][$key],
                 'size' => $data['size'][$key],
-            ]);
+            ] + (isset($data['full_path'][$key]) ? [
+                'full_path' => $data['full_path'][$key],
+            ] : []));
         }
 
         return $files;
@@ -220,7 +234,7 @@ class NativeRequestHandler implements RequestHandlerInterface
             return $data;
         }
 
-        $keys = array_keys($data);
+        $keys = array_keys($data + ['full_path' => null]);
         sort($keys);
 
         if (self::FILE_KEYS === $keys) {

@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Process\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -25,9 +26,7 @@ class PhpSubprocessTest extends TestCase
         self::$phpBin = getenv('SYMFONY_PROCESS_PHP_TEST_BINARY') ?: ('phpdbg' === \PHP_SAPI ? 'php' : $phpBin->find());
     }
 
-    /**
-     * @dataProvider subprocessProvider
-     */
+    #[DataProvider('subprocessProvider')]
     public function testSubprocess(string $processClass, string $memoryLimit, string $expectedMemoryLimit)
     {
         $process = new Process([self::$phpBin,
@@ -47,7 +46,7 @@ class PhpSubprocessTest extends TestCase
         yield 'Process does ignore dynamic memory_limit' => [
             'Process',
             self::getRandomMemoryLimit(),
-            self::getCurrentMemoryLimit(),
+            self::getDefaultMemoryLimit(),
         ];
 
         yield 'PhpSubprocess does not ignore dynamic memory_limit' => [
@@ -57,16 +56,16 @@ class PhpSubprocessTest extends TestCase
         ];
     }
 
-    private static function getCurrentMemoryLimit(): string
+    private static function getDefaultMemoryLimit(): string
     {
-        return trim(\ini_get('memory_limit'));
+        return trim(ini_get_all()['memory_limit']['global_value']);
     }
 
     private static function getRandomMemoryLimit(): string
     {
         $memoryLimit = 123; // Take something that's really unlikely to be configured on a user system.
 
-        while (($formatted = $memoryLimit.'M') === self::getCurrentMemoryLimit()) {
+        while (($formatted = $memoryLimit.'M') === self::getDefaultMemoryLimit()) {
             ++$memoryLimit;
         }
 

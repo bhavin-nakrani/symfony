@@ -15,6 +15,8 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\LogicException;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Exception\TransportException;
+use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
+use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
 use Symfony\Component\Messenger\Transport\Receiver\QueueReceiverInterface;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
@@ -25,56 +27,101 @@ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
  *
  * @author Samuel Roze <samuel.roze@gmail.com>
  */
-class AmqpReceiver implements QueueReceiverInterface, MessageCountAwareInterface
+class AmqpReceiver implements QueueReceiverInterface, KeepaliveReceiverInterface, MessageCountAwareInterface
 {
     private SerializerInterface $serializer;
-    private Connection $connection;
 
-    public function __construct(Connection $connection, SerializerInterface $serializer = null)
-    {
-        $this->connection = $connection;
+    public function __construct(
+        private Connection $connection,
+        ?SerializerInterface $serializer = null,
+    ) {
         $this->serializer = $serializer ?? new PhpSerializer();
     }
 
-    public function get(): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function get(/* int $fetchSize = 1 */): iterable
     {
-        yield from $this->getFromQueues($this->connection->getQueueNames());
+        $fetchSize = \func_num_args() > 0 ? max(1, func_get_arg(0)) : 1;
+
+        yield from $this->getFromQueues($this->connection->getQueueNames(), $fetchSize);
     }
 
-    public function getFromQueues(array $queueNames): iterable
+    /**
+     * @param int $fetchSize
+     */
+    public function getFromQueues(array $queueNames/* , int $fetchSize = 1 */): iterable
     {
-        foreach ($queueNames as $queueName) {
-            yield from $this->getEnvelope($queueName);
+        $fetchSize = \func_num_args() > 1 ? max(1, func_get_arg(1)) : 1;
+        $remaining = $fetchSize;
+        $activeQueues = array_values($queueNames);
+        $firstRound = true;
+
+        while ($activeQueues && ($remaining > 0 || $firstRound)) {
+            $exhausted = [];
+
+            foreach ($activeQueues as $i => $queueName) {
+                if (null === $envelope = $this->getEnvelope($queueName)) {
+                    $exhausted[] = $i;
+                    continue;
+                }
+
+                yield $envelope;
+                --$remaining;
+
+                if ($remaining <= 0 && !$firstRound) {
+                    return;
+                }
+            }
+
+            $firstRound = false;
+
+            foreach (array_reverse($exhausted) as $i) {
+                array_splice($activeQueues, $i, 1);
+            }
         }
     }
 
-    private function getEnvelope(string $queueName): iterable
+    private function getEnvelope(string $queueName): ?Envelope
     {
         try {
             $amqpEnvelope = $this->connection->get($queueName);
-        } catch (\AMQPException $exception) {
-            throw new TransportException($exception->getMessage(), 0, $exception);
+        } catch (\AMQPConnectionException) {
+            // Try to reconnect once to accommodate need for one of the nodes in cluster needing to stop serving the
+            // traffic. This may happen for example when one of the nodes in cluster is going into maintenance node.
+            // see https://github.com/php-amqplib/php-amqplib/issues/1161
+            try {
+                $this->connection->queue($queueName)->getConnection()->reconnect();
+                $amqpEnvelope = $this->connection->get($queueName);
+            } catch (\AMQPException $e) {
+                throw new TransportException($e->getMessage(), 0, $e);
+            }
+        } catch (\AMQPException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
         }
 
         if (null === $amqpEnvelope) {
-            return;
+            return null;
         }
 
         $body = $amqpEnvelope->getBody();
+        $id = $amqpEnvelope->getMessageId();
+        $stamps = [
+            new AmqpReceivedStamp($amqpEnvelope, $queueName),
+            ...($id ? [new TransportMessageIdStamp($id)] : []),
+        ];
+
+        $data = [
+            'body' => false === $body ? '' : $body,
+            'headers' => $amqpEnvelope->getHeaders(),
+        ];
 
         try {
-            $envelope = $this->serializer->decode([
-                'body' => false === $body ? '' : $body, // workaround https://github.com/pdezwart/php-amqp/issues/351
-                'headers' => $amqpEnvelope->getHeaders(),
-            ]);
-        } catch (MessageDecodingFailedException $exception) {
-            // invalid message of some type
-            $this->rejectAmqpEnvelope($amqpEnvelope, $queueName);
-
-            throw $exception;
+            return $this->serializer->decode($data)->withoutAll(TransportMessageIdStamp::class)->with(...$stamps);
+        } catch (MessageDecodingFailedException $e) {
+            return MessageDecodingFailedException::wrap($data, $e->getMessage(), $e->getCode(), $e)->with(...$stamps);
         }
-
-        yield $envelope->with(new AmqpReceivedStamp($amqpEnvelope, $queueName));
     }
 
     public function ack(Envelope $envelope): void
@@ -82,12 +129,18 @@ class AmqpReceiver implements QueueReceiverInterface, MessageCountAwareInterface
         try {
             $stamp = $this->findAmqpStamp($envelope);
 
-            $this->connection->ack(
-                $stamp->getAmqpEnvelope(),
-                $stamp->getQueueName()
-            );
-        } catch (\AMQPException $exception) {
-            throw new TransportException($exception->getMessage(), 0, $exception);
+            $this->connection->ack($stamp->getAmqpEnvelope(), $stamp->getQueueName());
+        } catch (\AMQPConnectionException) {
+            try {
+                $stamp = $this->findAmqpStamp($envelope);
+
+                $this->connection->queue($stamp->getQueueName())->getConnection()->reconnect();
+                $this->connection->ack($stamp->getAmqpEnvelope(), $stamp->getQueueName());
+            } catch (\AMQPException $e) {
+                throw new TransportException($e->getMessage(), 0, $e);
+            }
+        } catch (\AMQPException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
         }
     }
 
@@ -101,12 +154,27 @@ class AmqpReceiver implements QueueReceiverInterface, MessageCountAwareInterface
         );
     }
 
+    /**
+     * AMQP has no per-message deadline to extend, so $seconds is not used: the
+     * frame sent here only tells the broker that the connection is still alive.
+     */
+    public function keepalive(Envelope $envelope, ?int $seconds = null): void
+    {
+        try {
+            $this->findAmqpStamp($envelope);
+
+            $this->connection->keepalive();
+        } catch (\AMQPException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
+        }
+    }
+
     public function getMessageCount(): int
     {
         try {
             return $this->connection->countMessagesInQueues();
-        } catch (\AMQPException $exception) {
-            throw new TransportException($exception->getMessage(), 0, $exception);
+        } catch (\AMQPException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
         }
     }
 
@@ -114,18 +182,20 @@ class AmqpReceiver implements QueueReceiverInterface, MessageCountAwareInterface
     {
         try {
             $this->connection->nack($amqpEnvelope, $queueName, \AMQP_NOPARAM);
-        } catch (\AMQPException $exception) {
-            throw new TransportException($exception->getMessage(), 0, $exception);
+        } catch (\AMQPConnectionException) {
+            try {
+                $this->connection->queue($queueName)->getConnection()->reconnect();
+                $this->connection->nack($amqpEnvelope, $queueName, \AMQP_NOPARAM);
+            } catch (\AMQPException $e) {
+                throw new TransportException($e->getMessage(), 0, $e);
+            }
+        } catch (\AMQPException $e) {
+            throw new TransportException($e->getMessage(), 0, $e);
         }
     }
 
     private function findAmqpStamp(Envelope $envelope): AmqpReceivedStamp
     {
-        $amqpReceivedStamp = $envelope->last(AmqpReceivedStamp::class);
-        if (null === $amqpReceivedStamp) {
-            throw new LogicException('No "AmqpReceivedStamp" stamp found on the Envelope.');
-        }
-
-        return $amqpReceivedStamp;
+        return $envelope->last(AmqpReceivedStamp::class) ?? throw new LogicException('No "AmqpReceivedStamp" stamp found on the Envelope.');
     }
 }

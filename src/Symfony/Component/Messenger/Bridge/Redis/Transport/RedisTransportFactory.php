@@ -18,6 +18,8 @@ use Symfony\Component\Messenger\Transport\TransportInterface;
 /**
  * @author Alexander Schranz <alexander@suluio>
  * @author Antoine Bluchet <soyuka@gmail.com>
+ *
+ * @implements TransportFactoryInterface<RedisTransport>
  */
 class RedisTransportFactory implements TransportFactoryInterface
 {
@@ -30,6 +32,6 @@ class RedisTransportFactory implements TransportFactoryInterface
 
     public function supports(#[\SensitiveParameter] string $dsn, array $options): bool
     {
-        return str_starts_with($dsn, 'redis://') || str_starts_with($dsn, 'rediss://');
+        return str_starts_with($dsn, 'redis:') || str_starts_with($dsn, 'rediss:') || str_starts_with($dsn, 'valkey:') || str_starts_with($dsn, 'valkeys:');
     }
 }

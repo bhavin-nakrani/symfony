@@ -24,21 +24,28 @@ class RememberMeTokenProviderDoctrineSchemaListener extends AbstractSchemaListen
     /**
      * @param iterable<mixed, RememberMeHandlerInterface> $rememberMeHandlers
      */
-    public function __construct(private iterable $rememberMeHandlers)
-    {
+    public function __construct(
+        private readonly iterable $rememberMeHandlers,
+    ) {
     }
 
     public function postGenerateSchema(GenerateSchemaEventArgs $event): void
     {
         $connection = $event->getEntityManager()->getConnection();
+        $schema = $event->getSchema();
 
         foreach ($this->rememberMeHandlers as $rememberMeHandler) {
             if (
                 $rememberMeHandler instanceof PersistentRememberMeHandler
                 && ($tokenProvider = $rememberMeHandler->getTokenProvider()) instanceof DoctrineTokenProvider
             ) {
-                $tokenProvider->configureSchema($event->getSchema(), $connection, $this->getIsSameDatabaseChecker($connection));
+                $isSameDatabaseChecker = $this->getIsSameDatabaseChecker($connection);
+                $schema = $this->filterSchemaChanges($schema, $connection, static fn () => $tokenProvider->configureSchema($schema, $connection, $isSameDatabaseChecker));
             }
+        }
+
+        if (method_exists($schema, 'edit') && method_exists($event, 'setSchema')) {
+            $event->setSchema($schema);
         }
     }
 }

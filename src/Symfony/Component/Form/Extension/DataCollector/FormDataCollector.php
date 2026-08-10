@@ -33,8 +33,6 @@ use Symfony\Component\VarDumper\Cloner\Stub;
  */
 class FormDataCollector extends DataCollector implements FormDataCollectorInterface
 {
-    private FormDataExtractorInterface $dataExtractor;
-
     /**
      * Stores the collected data per {@link FormInterface} instance.
      *
@@ -62,13 +60,12 @@ class FormDataCollector extends DataCollector implements FormDataCollectorInterf
      */
     private array $formsByView;
 
-    public function __construct(FormDataExtractorInterface $dataExtractor)
-    {
+    public function __construct(
+        private FormDataExtractorInterface $dataExtractor,
+    ) {
         if (!class_exists(ClassStub::class)) {
-            throw new \LogicException(sprintf('The VarDumper component is needed for using the "%s" class. Install symfony/var-dumper version 3.4 or above.', __CLASS__));
+            throw new \LogicException(\sprintf('The VarDumper component is needed for using the "%s" class. Install symfony/var-dumper version 3.4 or above.', __CLASS__));
         }
-
-        $this->dataExtractor = $dataExtractor;
 
         $this->reset();
     }
@@ -76,7 +73,7 @@ class FormDataCollector extends DataCollector implements FormDataCollectorInterf
     /**
      * Does nothing. The data is collected during the form event listeners.
      */
-    public function collect(Request $request, Response $response, \Throwable $exception = null): void
+    public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
     }
 
@@ -200,10 +197,7 @@ class FormDataCollector extends DataCollector implements FormDataCollectorInterf
         return $this->data;
     }
 
-    /**
-     * @internal
-     */
-    public function __sleep(): array
+    public function __serialize(): array
     {
         foreach ($this->data['forms_by_hash'] as &$form) {
             if (isset($form['type_class']) && !$form['type_class'] instanceof ClassStub) {
@@ -211,9 +205,7 @@ class FormDataCollector extends DataCollector implements FormDataCollectorInterf
             }
         }
 
-        $this->data = $this->cloneVar($this->data);
-
-        return parent::__sleep();
+        return ['data' => $this->data = $this->cloneVar($this->data)];
     }
 
     protected function getCasters(): array
@@ -259,7 +251,7 @@ class FormDataCollector extends DataCollector implements FormDataCollectorInterf
         return $output;
     }
 
-    private function &recursiveBuildFinalFormTree(FormInterface $form = null, FormView $view, array &$outputByHash): array
+    private function &recursiveBuildFinalFormTree(?FormInterface $form, FormView $view, array &$outputByHash): array
     {
         $viewHash = spl_object_hash($view);
         $formHash = null;

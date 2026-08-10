@@ -13,15 +13,16 @@ namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
  * Validates that a value is a valid CIDR notation.
  *
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * @see https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing
  *
  * @author Sorin Pop <popsorin15@gmail.com>
  * @author Calin Bolea <calin.bolea@gmail.com>
+ * @author Ninos Ego <me@ninosego.de>
  */
 #[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 class Cidr extends Constraint
@@ -35,51 +36,77 @@ class Cidr extends Constraint
     ];
 
     private const NET_MAXES = [
-        Ip::ALL => 128,
         Ip::V4 => 32,
         Ip::V6 => 128,
+        Ip::ALL => 128,
+
+        Ip::V4_NO_PUBLIC => 32,
+        Ip::V6_NO_PUBLIC => 128,
+        Ip::ALL_NO_PUBLIC => 128,
+
+        Ip::V4_NO_PRIVATE => 32,
+        Ip::V6_NO_PRIVATE => 128,
+        Ip::ALL_NO_PRIVATE => 128,
+
+        Ip::V4_NO_RESERVED => 32,
+        Ip::V6_NO_RESERVED => 128,
+        Ip::ALL_NO_RESERVED => 128,
+
+        Ip::V4_ONLY_PUBLIC => 32,
+        Ip::V6_ONLY_PUBLIC => 128,
+        Ip::ALL_ONLY_PUBLIC => 128,
+
+        Ip::V4_ONLY_PRIVATE => 32,
+        Ip::V6_ONLY_PRIVATE => 128,
+        Ip::ALL_ONLY_PRIVATE => 128,
+
+        Ip::V4_ONLY_RESERVED => 32,
+        Ip::V6_ONLY_RESERVED => 128,
+        Ip::ALL_ONLY_RESERVED => 128,
     ];
 
-    /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
-     */
-    protected static $errorNames = self::ERROR_NAMES;
+    public string $version = Ip::ALL;
+    public string $message = 'This value is not a valid CIDR notation.';
+    public string $netmaskRangeViolationMessage = 'The value of the netmask should be between {{ min }} and {{ max }}.';
+    public int $netmaskMin = 0;
+    public int $netmaskMax;
 
-    public $version = Ip::ALL;
-
-    public $message = 'This value is not a valid CIDR notation.';
-
-    public $netmaskRangeViolationMessage = 'The value of the netmask should be between {{ min }} and {{ max }}.';
-
-    public $netmaskMin = 0;
-
-    public $netmaskMax;
+    /** @var callable|null */
+    public $normalizer;
 
     public function __construct(
-        array $options = null,
-        string $version = null,
-        int $netmaskMin = null,
-        int $netmaskMax = null,
-        string $message = null,
-        array $groups = null,
-        $payload = null
+        ?array $options = null,
+        ?string $version = null,
+        ?int $netmaskMin = null,
+        ?int $netmaskMax = null,
+        ?string $message = null,
+        ?array $groups = null,
+        $payload = null,
+        ?callable $normalizer = null,
     ) {
-        $this->version = $version ?? $options['version'] ?? $this->version;
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        $this->version = $version ?? $this->version;
 
         if (!\array_key_exists($this->version, self::NET_MAXES)) {
-            throw new ConstraintDefinitionException(sprintf('The option "version" must be one of "%s".', implode('", "', array_keys(self::NET_MAXES))));
+            throw new ConstraintDefinitionException(\sprintf('The option "version" must be one of "%s".', implode('", "', array_keys(self::NET_MAXES))));
         }
 
-        $this->netmaskMin = $netmaskMin ?? $options['netmaskMin'] ?? $this->netmaskMin;
-        $this->netmaskMax = $netmaskMax ?? $options['netmaskMax'] ?? self::NET_MAXES[$this->version];
+        $this->netmaskMin = $netmaskMin ?? $this->netmaskMin;
+        $this->netmaskMax = $netmaskMax ?? self::NET_MAXES[$this->version];
         $this->message = $message ?? $this->message;
-
-        unset($options['netmaskMin'], $options['netmaskMax'], $options['version']);
+        $this->normalizer = $normalizer;
 
         if ($this->netmaskMin < 0 || $this->netmaskMax > self::NET_MAXES[$this->version] || $this->netmaskMin > $this->netmaskMax) {
-            throw new ConstraintDefinitionException(sprintf('The netmask range must be between 0 and %d.', self::NET_MAXES[$this->version]));
+            throw new ConstraintDefinitionException(\sprintf('The netmask range must be between 0 and %d.', self::NET_MAXES[$this->version]));
         }
 
-        parent::__construct($options, $groups, $payload);
+        if (null !== $this->normalizer && !\is_callable($this->normalizer)) {
+            throw new InvalidArgumentException(\sprintf('The "normalizer" option must be a valid callable ("%s" given).', get_debug_type($this->normalizer)));
+        }
+
+        parent::__construct(null, $groups, $payload);
     }
 }

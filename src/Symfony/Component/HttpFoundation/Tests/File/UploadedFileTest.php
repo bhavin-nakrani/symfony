@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\HttpFoundation\Tests\File;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\File\Exception\CannotWriteFileException;
 use Symfony\Component\HttpFoundation\File\Exception\ExtensionFileException;
@@ -119,6 +120,32 @@ class UploadedFileTest extends TestCase
         $this->assertEquals(\UPLOAD_ERR_OK, $file->getError());
     }
 
+    public function testInvalidFile()
+    {
+        $file = new UploadedFile(
+            __DIR__.'/Fixtures/test.gif',
+            'original.gif',
+            'image/gif',
+        );
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('The file "original.gif" was not uploaded due to an unknown error.');
+
+        $file->move(__DIR__.'/Fixtures/directory');
+    }
+
+    public function testNoErrorMessageIfErrorIsUploadErrOk()
+    {
+        $file = new UploadedFile(
+            __DIR__.'/Fixtures/test.gif',
+            'original.gif',
+            'image/gif',
+            null
+        );
+
+        $this->assertSame('', $file->getErrorMessage());
+    }
+
     public function testGetClientOriginalName()
     {
         $file = new UploadedFile(
@@ -168,9 +195,7 @@ class UploadedFileTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider failedUploadedFile
-     */
+    #[DataProvider('failedUploadedFile')]
     public function testMoveFailed(UploadedFile $file)
     {
         $exceptionClass = match ($file->getError()) {
@@ -268,9 +293,7 @@ class UploadedFileTest extends TestCase
         $this->assertTrue($file->isValid());
     }
 
-    /**
-     * @dataProvider uploadedFileErrorProvider
-     */
+    #[DataProvider('uploadedFileErrorProvider')]
     public function testIsInvalidOnUploadError($error)
     {
         $file = new UploadedFile(
@@ -321,5 +344,27 @@ class UploadedFileTest extends TestCase
         if (0 === (int) \ini_get('post_max_size') && 0 === (int) \ini_get('upload_max_filesize')) {
             $this->assertSame(\PHP_INT_MAX, $size);
         }
+    }
+
+    public function testgetClientOriginalPath()
+    {
+        $file = new UploadedFile(
+            __DIR__.'/Fixtures/test.gif',
+            'test.gif',
+            'image/gif'
+        );
+
+        $this->assertEquals('test.gif', $file->getClientOriginalPath());
+    }
+
+    public function testgetClientOriginalPathWebkitDirectory()
+    {
+        $file = new UploadedFile(
+            __DIR__.'/Fixtures/webkitdirectory/test.txt',
+            'webkitdirectory/test.txt',
+            'text/plain',
+        );
+
+        $this->assertEquals('webkitdirectory/test.txt', $file->getClientOriginalPath());
     }
 }

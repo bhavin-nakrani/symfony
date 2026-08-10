@@ -1,9 +1,8 @@
 <?php
 
 $container->loadFromExtension('framework', [
-    'annotations' => false,
-    'http_method_override' => false,
     'cache' => [
+        'default_valkey_provider' => 'valkey://valkey-host',
         'pools' => [
             'cache.foo' => [
                 'adapter' => 'cache.adapter.apcu',

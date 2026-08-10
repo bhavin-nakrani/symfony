@@ -11,8 +11,32 @@
 
 namespace Symfony\Component\Workflow\Event;
 
+use Symfony\Component\Workflow\Marking;
+use Symfony\Component\Workflow\Transition;
+use Symfony\Component\Workflow\WorkflowInterface;
+
+/**
+ * @template T of object
+ *
+ * @extends Event<T>
+ */
 final class TransitionEvent extends Event
 {
+    use EventNameTrait {
+        getNameForTransition as public getName;
+    }
+    use HasContextTrait;
+
+    /**
+     * @param T $subject
+     */
+    public function __construct(object $subject, Marking $marking, ?Transition $transition = null, ?WorkflowInterface $workflow = null, array $context = [])
+    {
+        parent::__construct($subject, $marking, $transition, $workflow);
+
+        $this->context = $context;
+    }
+
     public function setContext(array $context): void
     {
         $this->context = $context;

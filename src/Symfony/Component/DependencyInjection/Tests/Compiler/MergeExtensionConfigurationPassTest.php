@@ -18,6 +18,7 @@ use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationContainerBuilder;
 use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Exception\ParameterNotFoundException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
@@ -31,22 +32,16 @@ class MergeExtensionConfigurationPassTest extends TestCase
         $tmpProviders = [];
 
         $extension = $this->createMock(ExtensionInterface::class);
-        $extension->expects($this->any())
-            ->method('getXsdValidationBasePath')
-            ->willReturn(false);
-        $extension->expects($this->any())
-            ->method('getNamespace')
-            ->willReturn('http://example.org/schema/dic/foo');
-        $extension->expects($this->any())
+        $extension
             ->method('getAlias')
             ->willReturn('foo');
         $extension->expects($this->once())
             ->method('load')
-            ->willReturnCallback(function (array $config, ContainerBuilder $container) use (&$tmpProviders) {
+            ->willReturnCallback(static function (array $config, ContainerBuilder $container) use (&$tmpProviders) {
                 $tmpProviders = $container->getExpressionLanguageProviders();
             });
 
-        $provider = $this->createMock(ExpressionFunctionProviderInterface::class);
+        $provider = $this->createStub(ExpressionFunctionProviderInterface::class);
         $container = new ContainerBuilder(new ParameterBag());
         $container->registerExtension($extension);
         $container->prependExtensionConfig('foo', ['bar' => true]);
@@ -63,7 +58,7 @@ class MergeExtensionConfigurationPassTest extends TestCase
         $extension = $this->getMockBuilder(FooExtension::class)->onlyMethods(['load'])->getMock();
         $extension->expects($this->once())
             ->method('load')
-            ->with($this->isType('array'), $this->isInstanceOf(MergeExtensionConfigurationContainerBuilder::class))
+            ->with($this->isArray(), $this->isInstanceOf(MergeExtensionConfigurationContainerBuilder::class))
         ;
 
         $container = new ContainerBuilder(new ParameterBag());
@@ -127,9 +122,29 @@ class MergeExtensionConfigurationPassTest extends TestCase
             $pass->process($container);
             $this->fail('An exception should have been thrown.');
         } catch (\Exception $e) {
+            $this->assertSame('here', $e->getMessage());
         }
 
         $this->assertSame(['FOO'], array_keys($container->getParameterBag()->getEnvPlaceholders()));
+    }
+
+    public function testMissingParameterIncludesExtension()
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension(new FooExtension());
+        $container->prependExtensionConfig('foo', [
+            'foo' => '%missing_parameter%',
+        ]);
+
+        $pass = new MergeExtensionConfigurationPass();
+        try {
+            $pass = new MergeExtensionConfigurationPass();
+            $pass->process($container);
+            $this->fail('An exception should have been thrown.');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf(ParameterNotFoundException::class, $e);
+            $this->assertSame('You have requested a non-existent parameter "missing_parameter" while loading extension "foo".', $e->getMessage());
+        }
     }
 
     public function testReuseEnvPlaceholderGeneratedByPreviousExtension()
@@ -210,7 +225,7 @@ class ThrowingExtension extends Extension
 
     public function load(array $configs, ContainerBuilder $container): void
     {
-        throw new \Exception();
+        throw new \Exception('here');
     }
 }
 

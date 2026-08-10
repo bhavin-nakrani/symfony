@@ -12,10 +12,12 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that a value is a valid International Standard Serial Number (ISSN).
+ *
+ * @see https://en.wikipedia.org/wiki/ISSN
  *
  * @author Antonio J. García Lagar <aj@garcialagar.es>
  * @author Bernhard Schussek <bschussek@gmail.com>
@@ -39,24 +41,28 @@ class Issn extends Constraint
         self::CHECKSUM_FAILED_ERROR => 'CHECKSUM_FAILED_ERROR',
     ];
 
+    public string $message = 'This value is not a valid ISSN.';
+    public bool $caseSensitive = false;
+    public bool $requireHyphen = false;
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param bool|null     $caseSensitive Whether to allow the value to end with a lowercase character (defaults to false)
+     * @param bool|null     $requireHyphen Whether to require a hyphenated ISSN value (defaults to false)
+     * @param string[]|null $groups
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $message = 'This value is not a valid ISSN.';
-    public $caseSensitive = false;
-    public $requireHyphen = false;
-
     public function __construct(
-        array $options = null,
-        string $message = null,
-        bool $caseSensitive = null,
-        bool $requireHyphen = null,
-        array $groups = null,
-        mixed $payload = null
+        ?array $options = null,
+        ?string $message = null,
+        ?bool $caseSensitive = null,
+        ?bool $requireHyphen = null,
+        ?array $groups = null,
+        mixed $payload = null,
     ) {
-        parent::__construct($options, $groups, $payload);
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        parent::__construct(null, $groups, $payload);
 
         $this->message = $message ?? $this->message;
         $this->caseSensitive = $caseSensitive ?? $this->caseSensitive;

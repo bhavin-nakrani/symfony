@@ -11,9 +11,15 @@
 
 namespace Symfony\Component\Form\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\Extension\Core\DataMapper\DataMapper;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Form;
 use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\FormError;
@@ -22,6 +28,8 @@ use Symfony\Component\Form\FormRegistry;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\RequestHandlerInterface;
 use Symfony\Component\Form\ResolvedFormTypeFactory;
+use Symfony\Component\Form\Tests\Extension\Type\CheckboxCollectionEntryType;
+use Symfony\Component\Form\Tests\Extension\Type\ItemFileType;
 use Symfony\Component\Form\Util\ServerParams;
 
 /**
@@ -36,7 +44,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $this->serverParams = new class() extends ServerParams {
+        $this->serverParams = new class extends ServerParams {
             public ?int $contentLength = null;
             public string $postMaxSize = '';
 
@@ -56,7 +64,168 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->request = null;
     }
 
-    public static function methodExceptGetProvider()
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitCheckboxInCollectionFormWithEmptyData($method)
+    {
+        $form = $this->factory->create(CollectionType::class, [true, false, true], [
+            'entry_type' => CheckboxType::class,
+            'method' => $method,
+        ]);
+
+        $this->setRequestData($method, ['collection' => []]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertSame([false, false, false], $form->getData());
+    }
+
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitCheckboxInCollectionFormWithPartialData($method)
+    {
+        $form = $this->factory->create(CollectionType::class, [true, false, true], [
+            'entry_type' => CheckboxType::class,
+            'method' => $method,
+        ]);
+
+        $this->setRequestData($method, [
+            'collection' => [
+                1 => true,
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertSame([false, true, false], $form->getData());
+    }
+
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitCollectionFormWithAllowDeleteRemovesMissingEntries($method)
+    {
+        $form = $this->factory->create(CollectionType::class, [
+            ['name' => 'first', 'active' => true],
+            ['name' => 'second', 'active' => true],
+        ], [
+            'entry_type' => CheckboxCollectionEntryType::class,
+            'allow_delete' => true,
+            'method' => $method,
+        ]);
+
+        $this->setRequestData($method, [
+            'collection' => [
+                0 => ['name' => 'first', 'active' => '1'],
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertSame([0 => ['name' => 'first', 'active' => true]], $form->getData());
+    }
+
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitCheckboxFormWithEmptyData($method)
+    {
+        $form = $this->factory->create(FormType::class, ['subform' => ['checkbox' => true]], [
+            'method' => $method,
+        ])
+            ->add('subform', FormType::class, [
+                'compound' => true,
+            ]);
+
+        $form->get('subform')
+            ->add('checkbox', CheckboxType::class);
+
+        $this->setRequestData($method, ['form' => []]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertEquals(['subform' => ['checkbox' => false]], $form->getData());
+    }
+
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitExpandedMultipleChoiceWithPartialDataDoesNotEmitArrayFlipWarning($method)
+    {
+        $form = $this->factory->createNamed('roles', ChoiceType::class, null, [
+            'method' => $method,
+            'multiple' => true,
+            'expanded' => true,
+            'choices' => [
+                'User' => 'ROLE_USER',
+                'Admin' => 'ROLE_ADMIN',
+                'Super Admin' => 'ROLE_SUPER_ADMIN',
+            ],
+        ]);
+
+        $this->setRequestData($method, [
+            'roles' => ['ROLE_USER'],
+        ]);
+
+        $warnings = [];
+        set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
+            if (str_contains($message, 'array_flip')) {
+                $warnings[] = $message;
+
+                return true;
+            }
+
+            return false;
+        });
+
+        try {
+            $this->requestHandler->handleRequest($form, $this->request);
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame([], $warnings, 'No array_flip() warnings should be emitted when only some checkboxes are checked.');
+        $this->assertSame(['ROLE_USER'], $form->getData());
+    }
+
+    #[DataProvider('methodProvider')]
+    public function testDoNotSubmitAbsentNamedFormWithCheckboxesWhenRequestBodyContainsOtherData($method)
+    {
+        $form = $this->factory->createNamed('form', FormType::class, null, ['method' => $method])
+            ->add('displayedColumns', ChoiceType::class, [
+                'choices' => ['foo' => 'foo', 'bar' => 'bar'],
+                'expanded' => true,
+                'multiple' => true,
+            ]);
+
+        $this->setRequestData($method, ['other_field' => 'value']);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertFalse($form->isSubmitted());
+    }
+
+    #[DataProvider('methodExceptPatchProvider')]
+    public function testSubmitNamedFormWithMissingCheckboxesWhenFormKeyIsPresentInRequest($method)
+    {
+        $form = $this->factory->createNamed('form', FormType::class, null, ['method' => $method])
+            ->add('displayedColumns', ChoiceType::class, [
+                'choices' => ['foo' => 'foo', 'bar' => 'bar'],
+                'expanded' => true,
+                'multiple' => true,
+            ]);
+
+        $this->setRequestData($method, ['form' => []]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertTrue($form->isSubmitted());
+        $this->assertSame([], $form->get('displayedColumns')->getData());
+    }
+
+    public static function methodExceptPatchProvider(): array
+    {
+        return [
+            ['POST'],
+            ['PUT'],
+            ['DELETE'],
+            ['GET'],
+        ];
+    }
+
+    public static function methodExceptGetProvider(): array
     {
         return [
             ['POST'],
@@ -66,16 +235,14 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         ];
     }
 
-    public static function methodProvider()
+    public static function methodProvider(): array
     {
         return array_merge([
             ['GET'],
         ], self::methodExceptGetProvider());
     }
 
-    /**
-     * @dataProvider methodProvider
-     */
+    #[DataProvider('methodProvider')]
     public function testSubmitIfNameInRequest($method)
     {
         $form = $this->createForm('param1', $method);
@@ -90,9 +257,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame('DATA', $form->getData());
     }
 
-    /**
-     * @dataProvider methodProvider
-     */
+    #[DataProvider('methodProvider')]
     public function testDoNotSubmitIfWrongRequestMethod($method)
     {
         $form = $this->createForm('param1', $method);
@@ -108,9 +273,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertFalse($form->isSubmitted());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    #[DataProvider('methodExceptGetProvider')]
     public function testDoNoSubmitSimpleFormIfNameNotInRequestAndNotGetRequest($method)
     {
         $form = $this->createForm('param1', $method, false);
@@ -124,9 +287,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertFalse($form->isSubmitted());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    #[DataProvider('methodExceptGetProvider')]
     public function testDoNotSubmitCompoundFormIfNameNotInRequestAndNotGetRequest($method)
     {
         $form = $this->createForm('param1', $method, true);
@@ -153,9 +314,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertFalse($form->isSubmitted());
     }
 
-    /**
-     * @dataProvider methodProvider
-     */
+    #[DataProvider('methodProvider')]
     public function testSubmitFormWithEmptyNameIfAtLeastOneFieldInRequest($method)
     {
         $form = $this->createForm('', $method, true);
@@ -182,9 +341,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertNull($form->get('param2')->getData());
     }
 
-    /**
-     * @dataProvider methodProvider
-     */
+    #[DataProvider('methodProvider')]
     public function testDoNotSubmitFormWithEmptyNameIfNoFieldInRequest($method)
     {
         $form = $this->createForm('', $method, true);
@@ -200,9 +357,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertFalse($form->isSubmitted());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    #[DataProvider('methodExceptGetProvider')]
     public function testMergeParamsAndFiles($method)
     {
         $form = $this->createForm('param1', $method, true);
@@ -227,9 +382,59 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame($file, $form->get('field2')->getData());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    public function testIntegerChildren()
+    {
+        $form = $this->createForm('root', 'POST', true);
+        $form->add('0', TextType::class);
+        $form->add('1', TextType::class);
+
+        $this->setRequestData('POST', [
+            'root' => [
+                '1' => 'bar',
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $this->assertNull($form->get('0')->getData());
+        $this->assertSame('bar', $form->get('1')->getData());
+    }
+
+    #[DataProvider('methodExceptGetProvider')]
+    public function testMergeParamsAndFilesMultiple($method)
+    {
+        $form = $this->createForm('param1', $method, true);
+        $form->add($this->createBuilder('field1', false, ['allow_file_upload' => true, 'multiple' => true])->getForm());
+        $file1 = $this->getUploadedFile();
+        $file2 = $this->getUploadedFile();
+
+        $this->setRequestData($method, [
+            'param1' => [
+                'field1' => [
+                    'foo',
+                    'bar',
+                    'baz',
+                ],
+            ],
+        ], [
+            'param1' => [
+                'field1' => [
+                    $file1,
+                    $file2,
+                ],
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+        $data = $form->get('field1')->getData();
+
+        $this->assertTrue($form->isSubmitted());
+        $this->assertIsArray($data);
+        $this->assertCount(5, $data);
+        $this->assertSame(['foo', 'bar', 'baz', $file1, $file2], $data);
+    }
+
+    #[DataProvider('methodExceptGetProvider')]
     public function testParamTakesPrecedenceOverFile($method)
     {
         $form = $this->createForm('param1', $method);
@@ -247,9 +452,98 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame('DATA', $form->getData());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    public function testMergeZeroIndexedCollection()
+    {
+        $form = $this->createForm('root', 'POST', true);
+        $form->add('items', CollectionType::class, [
+            'entry_type' => ItemFileType::class,
+            'allow_add' => true,
+        ]);
+
+        $file = $this->getUploadedFile();
+
+        $this->setRequestData('POST', [
+            'root' => [
+                'items' => [
+                    0 => [
+                        'item' => 'test',
+                    ],
+                ],
+            ],
+        ], [
+            'root' => [
+                'items' => [
+                    0 => [
+                        'file' => $file,
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $itemsForm = $form->get('items');
+
+        $this->assertTrue($form->isSubmitted());
+        $this->assertTrue($form->isValid());
+
+        $this->assertTrue($itemsForm->has('0'));
+        $this->assertFalse($itemsForm->has('1'));
+
+        $this->assertEquals('test', $itemsForm->get('0')->get('item')->getData());
+        $this->assertNotNull($itemsForm->get('0')->get('file')->getData());
+    }
+
+    public function testMergePartialDataFromCollection()
+    {
+        $form = $this->createForm('root', 'POST', true);
+        $form->add('items', CollectionType::class, [
+            'entry_type' => ItemFileType::class,
+            'allow_add' => true,
+        ]);
+
+        $file = $this->getUploadedFile();
+        $file2 = $this->getUploadedFile();
+
+        $this->setRequestData('POST', [
+            'root' => [
+                'items' => [
+                    1 => [
+                        'item' => 'test',
+                    ],
+                ],
+            ],
+        ], [
+            'root' => [
+                'items' => [
+                    0 => [
+                        'file' => $file,
+                    ],
+                    1 => [
+                        'file' => $file2,
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->requestHandler->handleRequest($form, $this->request);
+
+        $itemsForm = $form->get('items');
+        $data = $itemsForm->getData();
+        $this->assertTrue($form->isSubmitted());
+        $this->assertTrue($form->isValid());
+
+        $this->assertCount(2, $data);
+        $this->assertArrayHasKey(0, $data);
+        $this->assertArrayHasKey(1, $data);
+
+        $this->assertNull($itemsForm->get('0')->get('item')->getData());
+        $this->assertNotNull($itemsForm->get('0')->get('file')->getData());
+        $this->assertEquals('test', $itemsForm->get('1')->get('item')->getData());
+        $this->assertNotNull($itemsForm->get('1')->get('file')->getData());
+    }
+
+    #[DataProvider('methodExceptGetProvider')]
     public function testSubmitFileIfNoParam($method)
     {
         $form = $this->createBuilder('param1', false, ['allow_file_upload' => true])
@@ -269,9 +563,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame($file, $form->getData());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    #[DataProvider('methodExceptGetProvider')]
     public function testSubmitMultipleFiles($method)
     {
         $form = $this->createBuilder('param1', false, ['allow_file_upload' => true])
@@ -293,9 +585,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame($file, $form->getData());
     }
 
-    /**
-     * @dataProvider methodExceptGetProvider
-     */
+    #[DataProvider('methodExceptGetProvider')]
     public function testSubmitFileWithNamelessForm($method)
     {
         $form = $this->createForm('', $method, true);
@@ -313,9 +603,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertSame($file, $fileForm->getData());
     }
 
-    /**
-     * @dataProvider getPostMaxSizeFixtures
-     */
+    #[DataProvider('getPostMaxSizeFixtures')]
     public function testAddFormErrorIfPostMaxSizeExceeded(?int $contentLength, string $iniMax, bool $shouldFail, array $errorParams = [])
     {
         $this->serverParams->contentLength = $contentLength;
@@ -364,9 +652,7 @@ abstract class AbstractRequestHandlerTestCase extends TestCase
         $this->assertFalse($this->requestHandler->isFileUpload($this->getInvalidFile()));
     }
 
-    /**
-     * @dataProvider uploadFileErrorCodes
-     */
+    #[DataProvider('uploadFileErrorCodes')]
     public function testFailedFileUploadIsTurnedIntoFormError($errorCode, $expectedErrorCode)
     {
         $this->assertSame($expectedErrorCode, $this->requestHandler->getUploadFileError($this->getFailedUploadedFile($errorCode)));

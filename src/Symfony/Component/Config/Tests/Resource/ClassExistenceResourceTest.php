@@ -39,12 +39,12 @@ class ClassExistenceResourceTest extends TestCase
         $this->assertTrue($res->isFresh(time()));
 
         eval(<<<EOF
-namespace Symfony\Component\Config\Tests\Fixtures;
+            namespace Symfony\Component\Config\Tests\Fixtures;
 
-class BarClass
-{
-}
-EOF
+            class BarClass
+            {
+            }
+            EOF
         );
 
         $this->assertFalse($res->isFresh(time()));
@@ -59,7 +59,7 @@ EOF
 
     public function testExistsKo()
     {
-        spl_autoload_register($autoloader = function ($class) use (&$loadedClass) { $loadedClass = $class; });
+        spl_autoload_register($autoloader = static function ($class) use (&$loadedClass) { $loadedClass = $class; });
 
         try {
             $res = new ClassExistenceResource('MissingFooClass');
@@ -85,28 +85,31 @@ EOF
 
     public function testBadParentWithNoTimestamp()
     {
+        $res = new ClassExistenceResource(BadParent::class, false);
+
         $this->expectException(\ReflectionException::class);
         $this->expectExceptionMessage('Class "Symfony\Component\Config\Tests\Fixtures\MissingParent" not found while loading "Symfony\Component\Config\Tests\Fixtures\BadParent".');
 
-        $res = new ClassExistenceResource(BadParent::class, false);
         $res->isFresh(0);
     }
 
     public function testBadFileName()
     {
+        $res = new ClassExistenceResource(BadFileName::class, false);
+
         $this->expectException(\ReflectionException::class);
         $this->expectExceptionMessage('Mismatch between file name and class name.');
 
-        $res = new ClassExistenceResource(BadFileName::class, false);
         $res->isFresh(0);
     }
 
     public function testBadFileNameBis()
     {
+        $res = new ClassExistenceResource(BadFileName::class, false);
+
         $this->expectException(\ReflectionException::class);
         $this->expectExceptionMessage('Mismatch between file name and class name.');
 
-        $res = new ClassExistenceResource(BadFileName::class, false);
         $res->isFresh(0);
     }
 
@@ -119,9 +122,10 @@ EOF
 
     public function testParseError()
     {
+        $res = new ClassExistenceResource(ParseError::class, false);
+
         $this->expectException(\ParseError::class);
 
-        $res = new ClassExistenceResource(ParseError::class, false);
         $res->isFresh(0);
     }
 }

@@ -87,6 +87,41 @@ trait WorkflowBuilderTrait
         // +---+     +----+     +---+     +----+     +---+
     }
 
+    private static function createWorkflowWithMetadataEdgeCases(): Definition
+    {
+        $places = range('a', 'd');
+
+        $transitions = [];
+        $transitions[] = new Transition('t1', 'a', 'b');
+        $transitions[] = new Transition('t2', 'b', 'c');
+        $transitionWithDescription = new Transition('t3', 'c', 'd');
+        $transitions[] = $transitionWithDescription;
+
+        $placesMetadata = [];
+        // bg_color only, no description
+        $placesMetadata['b'] = [
+            'bg_color' => 'Orange',
+        ];
+        // description only, no bg_color
+        $placesMetadata['c'] = [
+            'description' => 'A <bold> description with "special" chars & entities',
+        ];
+        // multiline description with bg_color
+        $placesMetadata['d'] = [
+            'bg_color' => 'Lime',
+            'description' => "First line\nSecond line",
+        ];
+
+        $transitionsMetadata = new \SplObjectStorage();
+        $transitionsMetadata[$transitionWithDescription] = [
+            'bg_color' => 'LightCoral',
+            'description' => 'Transition description',
+        ];
+        $inMemoryMetadataStore = new InMemoryMetadataStore([], $placesMetadata, $transitionsMetadata);
+
+        return new Definition($places, $transitions, null, $inMemoryMetadataStore);
+    }
+
     private static function createWorkflowWithSameNameTransition(): Definition
     {
         $places = range('a', 'c');
@@ -129,9 +164,9 @@ trait WorkflowBuilderTrait
         $transitionsMetadata = new \SplObjectStorage();
         // PHP 7.2 doesn't allow this heredoc syntax in an array, use a dedicated variable instead
         $label = <<<'EOTXT'
-My custom transition
-label 3
-EOTXT;
+            My custom transition
+            label 3
+            EOTXT;
         $transitionsMetadata[$transitionWithMetadataDumpStyle] = [
             'label' => $label,
             'color' => 'Grey',
@@ -157,5 +192,44 @@ EOTXT;
         //             +-----+              |
         //             |  d  | -------------+
         //             +-----+
+    }
+
+    private static function createWorkflowWithSameNameBackTransition(): Definition
+    {
+        $places = range('a', 'c');
+
+        $transitions = [];
+        $transitions[] = new Transition('a_to_bc', 'a', ['b', 'c']);
+        $transitions[] = new Transition('back1', 'b', 'a');
+        $transitions[] = new Transition('back1', 'c', 'b');
+        $transitions[] = new Transition('back2', 'c', 'b');
+        $transitions[] = new Transition('back2', 'b', 'a');
+        $transitions[] = new Transition('c_to_cb', 'c', ['b', 'c']);
+
+        return new Definition($places, $transitions);
+
+        // The graph looks like:
+        //   +-----------------------------------------------------------------+
+        //   |                                                                 |
+        //   |                                                                 |
+        //   |         +---------------------------------------------+         |
+        //   v         |                                             v         |
+        // +---+     +---------+     +-------+     +---------+     +---+     +-------+
+        // | a | --> | a_to_bc | --> |       | --> |  back2  | --> |   | --> | back2 |
+        // +---+     +---------+     |       |     +---------+     |   |     +-------+
+        //   ^                       |       |                     |   |
+        //   |                       |   c   | <-----+             | b |
+        //   |                       |       |       |             |   |
+        //   |                       |       |     +---------+     |   |     +-------+
+        //   |                       |       | --> | c_to_cb | --> |   | --> | back1 |
+        //   |                       +-------+     +---------+     +---+     +-------+
+        //   |                         |                             ^         |
+        //   |                         |                             |         |
+        //   |                         v                             |         |
+        //   |                       +-------+                       |         |
+        //   |                       | back1 | ----------------------+         |
+        //   |                       +-------+                                 |
+        //   |                                                                 |
+        //   +-----------------------------------------------------------------+
     }
 }

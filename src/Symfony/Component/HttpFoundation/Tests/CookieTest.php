@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\HttpFoundation\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Cookie;
 
@@ -19,9 +21,8 @@ use Symfony\Component\HttpFoundation\Cookie;
  *
  * @author John Kary <john@johnkary.net>
  * @author Hugo Hamon <hugo.hamon@sensio.com>
- *
- * @group time-sensitive
  */
+#[Group('time-sensitive')]
 class CookieTest extends TestCase
 {
     public static function namesWithSpecialCharacters()
@@ -38,27 +39,21 @@ class CookieTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider namesWithSpecialCharacters
-     */
+    #[DataProvider('namesWithSpecialCharacters')]
     public function testInstantiationThrowsExceptionIfRawCookieNameContainsSpecialCharacters($name)
     {
         $this->expectException(\InvalidArgumentException::class);
         Cookie::create($name, null, 0, null, null, null, false, true);
     }
 
-    /**
-     * @dataProvider namesWithSpecialCharacters
-     */
+    #[DataProvider('namesWithSpecialCharacters')]
     public function testWithRawThrowsExceptionIfCookieNameContainsSpecialCharacters($name)
     {
         $this->expectException(\InvalidArgumentException::class);
         Cookie::create($name)->withRaw();
     }
 
-    /**
-     * @dataProvider namesWithSpecialCharacters
-     */
+    #[DataProvider('namesWithSpecialCharacters')]
     public function testInstantiationSucceedNonRawCookieNameContainsSpecialCharacters($name)
     {
         $this->assertInstanceOf(Cookie::class, Cookie::create($name));
@@ -68,6 +63,207 @@ class CookieTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Cookie::create('');
+    }
+
+    public static function pathsAndDomainsWithSpecialCharacters()
+    {
+        return [
+            ['/p,q'],
+            ['/p;q'],
+            ['/p q'],
+            ["/p\tq"],
+            ["/p\rq"],
+            ["/p\nq"],
+            ["/p\013q"],
+            ["/p\014q"],
+            ['/p; SameSite=None; Secure'],
+            ['victim.com; secure'],
+        ];
+    }
+
+    #[DataProvider('pathsAndDomainsWithSpecialCharacters')]
+    public function testInstantiationThrowsExceptionIfPathContainsSpecialCharacters($path)
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Cookie::create('MyCookie', 'MyValue', 0, $path);
+    }
+
+    #[DataProvider('pathsAndDomainsWithSpecialCharacters')]
+    public function testInstantiationThrowsExceptionIfDomainContainsSpecialCharacters($domain)
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Cookie::create('MyCookie', 'MyValue', 0, '/', $domain);
+    }
+
+    #[DataProvider('pathsAndDomainsWithSpecialCharacters')]
+    public function testWithPathThrowsExceptionIfPathContainsSpecialCharacters($path)
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Cookie::create('MyCookie')->withPath($path);
+    }
+
+    #[DataProvider('pathsAndDomainsWithSpecialCharacters')]
+    public function testWithDomainThrowsExceptionIfDomainContainsSpecialCharacters($domain)
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Cookie::create('MyCookie')->withDomain($domain);
+    }
+
+    public function testFromStringThrowsExceptionIfPathContainsSpecialCharacters()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Cookie::fromString('foo=bar; path="/p; SameSite=None"');
+    }
+
+    public static function validPathsAndDomains()
+    {
+        return [
+            ['/'],
+            ['/foo'],
+            ['/foo/bar'],
+            ['/foo=bar'],
+            ['/foo%20bar'],
+            ['.myfoodomain.com'],
+            ['myfoodomain.com'],
+        ];
+    }
+
+    #[DataProvider('validPathsAndDomains')]
+    public function testOrdinaryPathsAndDomainsAreAccepted($value)
+    {
+        $cookie = Cookie::create('MyCookie', 'MyValue', 0, $value, $value);
+
+        $this->assertSame($value, $cookie->getPath());
+        $this->assertSame($value, $cookie->getDomain());
+
+        $cookie = Cookie::create('MyCookie')->withPath($value)->withDomain($value);
+
+        $this->assertSame($value, $cookie->getPath());
+        $this->assertSame($value, $cookie->getDomain());
+    }
+
+    public function testNullAndEmptyPathsAndDomainsAreAccepted()
+    {
+        $cookie = Cookie::create('MyCookie', 'MyValue', 0, null, null);
+
+        $this->assertSame('/', $cookie->getPath());
+        $this->assertNull($cookie->getDomain());
+
+        $cookie = Cookie::create('MyCookie', 'MyValue', 0, '', null)->withDomain(null);
+
+        $this->assertSame('/', $cookie->getPath());
+        $this->assertNull($cookie->getDomain());
+    }
+
+    public function testInstantiationThrowsExceptionIfHostPrefixedNameHasDomain()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The cookie name "__Host-foo" uses the "__Host-" prefix, which requires the cookie to have no "domain" attribute.');
+        Cookie::create('__Host-foo', 'bar', 0, '/', 'example.com');
+    }
+
+    public function testInstantiationThrowsExceptionIfHostPrefixedNameHasNonRootPath()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The cookie name "__Host-foo" uses the "__Host-" prefix, which requires the cookie path to be "/".');
+        Cookie::create('__Host-foo', 'bar', 0, '/admin');
+    }
+
+    public function testWithDomainThrowsExceptionIfHostPrefixedNameGetsADomain()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The cookie name "__Host-foo" uses the "__Host-" prefix, which requires the cookie to have no "domain" attribute.');
+        Cookie::create('__Host-foo', 'bar')->withDomain('example.com');
+    }
+
+    public function testWithPathThrowsExceptionIfHostPrefixedNameGetsANonRootPath()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The cookie name "__Host-foo" uses the "__Host-" prefix, which requires the cookie path to be "/".');
+        Cookie::create('__Host-foo', 'bar')->withPath('/admin');
+    }
+
+    public function testHostPrefixedNameIsAcceptedWithoutDomainAndOnRootPath()
+    {
+        $cookie = Cookie::create('__Host-foo', 'bar');
+
+        $this->assertNull($cookie->getDomain());
+        $this->assertSame('/', $cookie->getPath());
+
+        $cookie = Cookie::create('__Host-foo', 'bar', 0, '', '');
+
+        $this->assertSame('', $cookie->getDomain());
+        $this->assertSame('/', $cookie->getPath());
+
+        $cookie = Cookie::create('__Host-foo', 'bar')->withDomain('')->withPath('');
+
+        $this->assertSame('', $cookie->getDomain());
+        $this->assertSame('/', $cookie->getPath());
+    }
+
+    public function testSecurePrefixedNameIsNotConstrainedToADomainOrAPath()
+    {
+        $cookie = Cookie::create('__Secure-foo', 'bar', 0, '/admin', 'example.com');
+
+        $this->assertSame('example.com', $cookie->getDomain());
+        $this->assertSame('/admin', $cookie->getPath());
+    }
+
+    public function testInstantiationThrowsExceptionIfPrefixedNameIsExplicitlyInsecure()
+    {
+        foreach (['__Secure-foo', '__Host-foo'] as $name) {
+            try {
+                Cookie::create($name, 'bar', 0, '/', null, false);
+                $this->fail(\sprintf('Expected an exception for "%s".', $name));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertSame(\sprintf('The cookie name "%s" uses a reserved prefix, which requires the "secure" flag to be enabled.', $name), $e->getMessage());
+            }
+        }
+    }
+
+    public function testWithSecureThrowsExceptionIfPrefixedNameIsMadeInsecure()
+    {
+        foreach (['__Secure-foo', '__Host-foo'] as $name) {
+            try {
+                Cookie::create($name, 'bar', 0, '/', null, true)->withSecure(false);
+                $this->fail(\sprintf('Expected an exception for "%s".', $name));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertSame(\sprintf('The cookie name "%s" uses a reserved prefix, which requires the "secure" flag to be enabled.', $name), $e->getMessage());
+            }
+        }
+    }
+
+    public function testPrefixedNameWithNullSecureIsAccepted()
+    {
+        foreach (['__Secure-foo', '__Host-foo'] as $name) {
+            $cookie = Cookie::create($name, 'bar', 0, '/', null, null);
+
+            $this->assertFalse($cookie->isSecure());
+
+            $cookie->setSecureDefault(true);
+
+            $this->assertTrue($cookie->isSecure());
+        }
+    }
+
+    public function testHostPrefixedNameIsParsedFromAValidHeader()
+    {
+        $cookie = Cookie::fromString('__Host-foo=bar; path=/; secure');
+
+        $this->assertSame('__Host-foo', $cookie->getName());
+        $this->assertNull($cookie->getDomain());
+        $this->assertSame('/', $cookie->getPath());
+    }
+
+    public function testParsingAHeaderWithoutSecureDefersInsteadOfFailing()
+    {
+        $cookie = Cookie::fromString('__Host-foo=bar');
+
+        $this->assertFalse($cookie->isSecure());
+
+        $cookie->setSecureDefault(true);
+
+        $this->assertTrue($cookie->isSecure());
     }
 
     public function testInvalidExpiration()
@@ -85,6 +281,19 @@ class CookieTest extends TestCase
         $cookie = Cookie::create('foo', 'bar')->withExpires(-100);
 
         $this->assertSame(0, $cookie->getExpiresTime());
+    }
+
+    public function testMinimalParameters()
+    {
+        $constructedCookie = new Cookie('foo');
+
+        $createdCookie = Cookie::create('foo');
+
+        $cookie = new Cookie('foo', null, 0, '/', null, null, true, false, 'lax');
+
+        $this->assertEquals($constructedCookie, $cookie);
+
+        $this->assertEquals($createdCookie, $cookie);
     }
 
     public function testGetValue()
@@ -187,6 +396,17 @@ class CookieTest extends TestCase
         $this->assertTrue($cookie->isHttpOnly(), '->isHttpOnly() returns whether the cookie is only transmitted over HTTP');
     }
 
+    public function testIsPartitioned()
+    {
+        $cookie = new Cookie('foo', 'bar', 0, '/', '.myfoodomain.com', true, true, false, 'Lax', true);
+
+        $this->assertTrue($cookie->isPartitioned());
+
+        $cookie = Cookie::create('foo')->withPartitioned(true);
+
+        $this->assertTrue($cookie->isPartitioned());
+    }
+
     public function testCookieIsNotCleared()
     {
         $cookie = Cookie::create('foo', 'bar', time() + 3600 * 24);
@@ -262,6 +482,20 @@ class CookieTest extends TestCase
             ->withSameSite(null);
         $this->assertEquals($expected, (string) $cookie, '->__toString() returns string representation of a cleared cookie if value is NULL');
 
+        $expected = 'foo=deleted; expires='.gmdate('D, d M Y H:i:s T', $expire = time() - 31536001).'; Max-Age=0; path=/admin/; domain=.myfoodomain.com; secure; httponly; samesite=none; partitioned';
+        $cookie = new Cookie('foo', null, 1, '/admin/', '.myfoodomain.com', true, true, false, 'none', true);
+        $this->assertEquals($expected, (string) $cookie, '->__toString() returns string representation of a cleared cookie if value is NULL');
+
+        $cookie = Cookie::create('foo')
+            ->withExpires(1)
+            ->withPath('/admin/')
+            ->withDomain('.myfoodomain.com')
+            ->withSecure(true)
+            ->withHttpOnly(true)
+            ->withSameSite('none')
+            ->withPartitioned(true);
+        $this->assertEquals($expected, (string) $cookie, '->__toString() returns string representation of a cleared cookie if value is NULL');
+
         $expected = 'foo=bar; path=/; httponly; samesite=lax';
         $cookie = Cookie::create('foo', 'bar');
         $this->assertEquals($expected, (string) $cookie);
@@ -313,6 +547,9 @@ class CookieTest extends TestCase
         $cookie = Cookie::fromString('foo=bar', true);
         $this->assertEquals(Cookie::create('foo', 'bar', 0, '/', null, false, false, false, null), $cookie);
 
+        $cookie = Cookie::fromString('foo=bar=', true);
+        $this->assertEquals(Cookie::create('foo', 'bar=', 0, '/', null, false, false, false, null), $cookie);
+
         $cookie = Cookie::fromString('foo', true);
         $this->assertEquals(Cookie::create('foo', null, 0, '/', null, false, false, false, null), $cookie);
 
@@ -321,6 +558,9 @@ class CookieTest extends TestCase
 
         $cookie = Cookie::fromString('foo_cookie=foo==; expires=Tue, 22 Sep 2020 06:27:09 GMT; path=/');
         $this->assertEquals(Cookie::create('foo_cookie', 'foo==', strtotime('Tue, 22 Sep 2020 06:27:09 GMT'), '/', null, false, false, true, null), $cookie);
+
+        $cookie = Cookie::fromString('foo_cookie=foo==; expires=Tue, 22 Sep 2020 06:27:09 GMT; path=/; secure; httponly; samesite=none; partitioned');
+        $this->assertEquals(new Cookie('foo_cookie', 'foo==', strtotime('Tue, 22 Sep 2020 06:27:09 GMT'), '/', null, true, true, true, 'none', true), $cookie);
     }
 
     public function testFromStringWithHttpOnly()

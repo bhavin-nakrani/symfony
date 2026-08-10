@@ -22,26 +22,41 @@ use Symfony\Component\Webhook\Exception\RejectWebhookException;
  */
 abstract class AbstractRequestParser implements RequestParserInterface
 {
-    public function parse(Request $request, string $secret): ?RemoteEvent
+    public function parse(Request $request, #[\SensitiveParameter] string $secret): RemoteEvent|array|null
     {
         $this->validate($request);
 
         return $this->doParse($request, $secret);
     }
 
-    public function createSuccessfulResponse(): Response
+    public function createSuccessfulResponse(?Request $request = null): Response
     {
         return new Response('', 202);
     }
 
-    public function createRejectedResponse(string $reason): Response
+    public function createRejectedResponse(string $reason, ?Request $request = null): Response
     {
         return new Response($reason, 406);
     }
 
     abstract protected function getRequestMatcher(): RequestMatcherInterface;
 
-    abstract protected function doParse(Request $request, string $secret): ?RemoteEvent;
+    /**
+     * Parses and authenticates the request, returning the resulting RemoteEvent(s).
+     *
+     * When the protocol requires it, implementations are responsible for verifying
+     * the request's authenticity (typically by comparing an HMAC of the raw body
+     * against a header value using hash_equals()) and for any replay protection
+     * (e.g. timestamp window). They must throw RejectWebhookException on any
+     * verification failure.
+     *
+     * The $request argument has already been matched by getRequestMatcher().
+     *
+     * @return RemoteEvent|RemoteEvent[]|null Returns null when the webhook must be ignored
+     *
+     * @throws RejectWebhookException On signature mismatch, malformed payload, replay, or unsupported event
+     */
+    abstract protected function doParse(Request $request, #[\SensitiveParameter] string $secret): RemoteEvent|array|null;
 
     protected function validate(Request $request): void
     {

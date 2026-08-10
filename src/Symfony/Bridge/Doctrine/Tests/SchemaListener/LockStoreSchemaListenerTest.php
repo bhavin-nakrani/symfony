@@ -11,8 +11,11 @@
 
 namespace Symfony\Bridge\Doctrine\Tests\SchemaListener;
 
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use PHPUnit\Framework\TestCase;
@@ -24,7 +27,8 @@ class LockStoreSchemaListenerTest extends TestCase
     public function testPostGenerateSchemaLockPdo()
     {
         $schema = new Schema();
-        $dbalConnection = $this->createMock(Connection::class);
+        $dbalConnection = $this->createStub(Connection::class);
+        $dbalConnection->method('getConfiguration')->willReturn(new Configuration());
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->expects($this->once())
             ->method('getConnection')
@@ -34,9 +38,46 @@ class LockStoreSchemaListenerTest extends TestCase
         $lockStore = $this->createMock(DoctrineDbalStore::class);
         $lockStore->expects($this->once())
             ->method('configureSchema')
-            ->with($schema, fn () => true);
+            ->with($schema, $this->callback(static fn () => true));
 
-        $subscriber = new LockStoreSchemaListener([$lockStore]);
+        $subscriber = new LockStoreSchemaListener((static fn () => yield $lockStore)());
         $subscriber->postGenerateSchema($event);
+    }
+
+    public function testPostGenerateSchemaRespectsSchemaFilter()
+    {
+        $schema = new Schema();
+
+        $configuration = new Configuration();
+        $configuration->setSchemaAssetsFilter(static fn (string $tableName) => 'lock_keys' !== $tableName);
+
+        $dbalConnection = $this->createStub(Connection::class);
+        $dbalConnection->method('getConfiguration')->willReturn($configuration);
+
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager->method('getConnection')->willReturn($dbalConnection);
+        $event = new GenerateSchemaEventArgs($entityManager, $schema);
+
+        $lockStore = $this->createStub(DoctrineDbalStore::class);
+        $lockStore->method('configureSchema')
+            ->willReturnCallback(static function (Schema $schema) {
+                if (method_exists($schema, 'edit')) {
+                    $table = Table::editor()
+                        ->setUnquotedName('lock_keys')
+                        ->addColumn(Column::editor()->setUnquotedName('key_id')->setTypeName('string')->create())
+                        ->create();
+
+                    return $schema->edit()->addTable($table)->create();
+                }
+
+                $schema->createTable('lock_keys')->addColumn('key_id', 'string');
+
+                return $schema;
+            });
+
+        $listener = new LockStoreSchemaListener([$lockStore]);
+        $listener->postGenerateSchema($event);
+
+        $this->assertFalse($event->getSchema()->hasTable('lock_keys'));
     }
 }

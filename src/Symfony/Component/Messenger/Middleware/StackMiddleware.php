@@ -24,7 +24,7 @@ class StackMiddleware implements MiddlewareInterface, StackInterface
     /**
      * @param iterable<mixed, MiddlewareInterface>|MiddlewareInterface|null $middlewareIterator
      */
-    public function __construct(iterable|MiddlewareInterface $middlewareIterator = null)
+    public function __construct(iterable|MiddlewareInterface|null $middlewareIterator = null)
     {
         $this->stack = new MiddlewareStack();
 
@@ -37,7 +37,7 @@ class StackMiddleware implements MiddlewareInterface, StackInterface
         } elseif ($middlewareIterator instanceof MiddlewareInterface) {
             $this->stack->stack[] = $middlewareIterator;
         } else {
-            $this->stack->iterator = (function () use ($middlewareIterator) {
+            $this->stack->iterator = (static function () use ($middlewareIterator) {
                 yield from $middlewareIterator;
             })();
         }

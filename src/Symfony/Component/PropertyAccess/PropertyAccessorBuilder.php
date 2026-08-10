@@ -128,7 +128,7 @@ class PropertyAccessorBuilder
      */
     public function isMagicCallEnabled(): bool
     {
-        return (bool) ($this->magicMethods & PropertyAccessor::MAGIC_CALL);
+        return $this->magicMethods & PropertyAccessor::MAGIC_CALL;
     }
 
     /**
@@ -226,11 +226,8 @@ class PropertyAccessorBuilder
      *
      * @return $this
      */
-    public function setCacheItemPool(CacheItemPoolInterface $cacheItemPool = null): static
+    public function setCacheItemPool(?CacheItemPoolInterface $cacheItemPool): static
     {
-        if (1 > \func_num_args()) {
-            trigger_deprecation('symfony/property-access', '6.2', 'Calling "%s()" without any arguments is deprecated, pass null explicitly instead.', __METHOD__);
-        }
         $this->cacheItemPool = $cacheItemPool;
 
         return $this;

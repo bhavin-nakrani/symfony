@@ -11,8 +11,9 @@
 
 namespace Symfony\Component\Notifier\Bridge\SpotHit\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
-use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Notifier\Bridge\SpotHit\SpotHitTransport;
 use Symfony\Component\Notifier\Message\ChatMessage;
 use Symfony\Component\Notifier\Message\SmsMessage;
@@ -22,7 +23,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final class SpotHitTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): SpotHitTransport
+    public static function createTransport(?HttpClientInterface $client = null): SpotHitTransport
     {
         return (new SpotHitTransport('api_token', 'MyCompany', $client ?? new MockHttpClient()))->setHost('host.test');
     }
@@ -55,10 +56,10 @@ final class SpotHitTransportTest extends TransportTestCase
                 $this->assertSame('https://www.spot-hit.fr/api/envoyer/sms', $url);
                 $this->assertSame('key=&destinataires=0611223344&type=premium&message=Hello%21&expediteur=', $options['body']);
 
-                return new MockResponse(json_encode([
+                return new JsonMockResponse([
                     'resultat' => ['success' => 'true'],
                     'id' => '???',
-                ], \JSON_THROW_ON_ERROR));
+                ]);
             },
         ];
 
@@ -67,45 +68,43 @@ final class SpotHitTransportTest extends TransportTestCase
         $transport->send(new SmsMessage('0611223344', 'Hello!'));
     }
 
-    public function argumentsProvider(): \Generator
+    public static function argumentsProvider(): \Generator
     {
         yield [
-            function (SpotHitTransport $transport) { $transport->setSmsLong(true); },
-            function (array $bodyArguments) { $this->assertSame('1', $bodyArguments['smslong']); },
+            static function (SpotHitTransport $transport) { $transport->setSmsLong(true); },
+            static function (array $bodyArguments) { self::assertSame('1', $bodyArguments['smslong']); },
         ];
 
         yield [
-            function (SpotHitTransport $transport) { $transport->setLongNBr(3); },
-            function (array $bodyArguments) { $this->assertSame('3', $bodyArguments['smslongnbr']); },
+            static function (SpotHitTransport $transport) { $transport->setLongNBr(3); },
+            static function (array $bodyArguments) { self::assertSame('3', $bodyArguments['smslongnbr']); },
         ];
 
         yield [
-            function (SpotHitTransport $transport) {
+            static function (SpotHitTransport $transport) {
                 $transport->setSmsLong(true);
                 $transport->setLongNBr(3);
             },
-            function (array $bodyArguments) {
-                $this->assertSame('1', $bodyArguments['smslong']);
-                $this->assertSame('3', $bodyArguments['smslongnbr']);
+            static function (array $bodyArguments) {
+                self::assertSame('1', $bodyArguments['smslong']);
+                self::assertSame('3', $bodyArguments['smslongnbr']);
             },
         ];
     }
 
-    /**
-     * @dataProvider argumentsProvider
-     */
+    #[DataProvider('argumentsProvider')]
     public function testShouldForwardArgumentToRequest($setupTransport, $assertions)
     {
         $expectedRequest = [
-            function ($method, $url, $options) use ($assertions) {
+            static function ($method, $url, $options) use ($assertions) {
                 $bodyFields = [];
                 parse_str($options['body'], $bodyFields);
                 $assertions($bodyFields);
 
-                return new MockResponse(json_encode([
+                return new JsonMockResponse([
                     'resultat' => ['success' => 'true'],
                     'id' => '???',
-                ], \JSON_THROW_ON_ERROR));
+                ]);
             },
         ];
 

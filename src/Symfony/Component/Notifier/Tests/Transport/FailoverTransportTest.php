@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Notifier\Tests\Transport;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Notifier\Exception\LogicException;
 use Symfony\Component\Notifier\Exception\RuntimeException;
@@ -19,9 +20,7 @@ use Symfony\Component\Notifier\Message\SentMessage;
 use Symfony\Component\Notifier\Transport\FailoverTransport;
 use Symfony\Component\Notifier\Transport\TransportInterface;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class FailoverTransportTest extends TestCase
 {
     public function testSendNoTransports()
@@ -46,8 +45,8 @@ class FailoverTransportTest extends TestCase
 
     public function testSendMessageNotSupportedByAnyTransport()
     {
-        $t1 = $this->createMock(TransportInterface::class);
-        $t2 = $this->createMock(TransportInterface::class);
+        $t1 = $this->createStub(TransportInterface::class);
+        $t2 = $this->createStub(TransportInterface::class);
 
         $t = new FailoverTransport([$t1, $t2]);
 
@@ -61,7 +60,9 @@ class FailoverTransportTest extends TestCase
         $message = new DummyMessage();
 
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('supports')->with($message)->willReturn(true);
+        $t1->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
         $t1->expects($this->exactly(3))->method('send')->with($message)->willReturn(new SentMessage($message, 'test'));
 
         $t2 = $this->createMock(TransportInterface::class);
@@ -79,12 +80,16 @@ class FailoverTransportTest extends TestCase
         $message = new DummyMessage();
 
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('supports')->with($message)->willReturn(true);
-        $t1->expects($this->once())->method('send')->with($message)->will($this->throwException($this->createMock(TransportExceptionInterface::class)));
+        $t1->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+        $t1->expects($this->once())->method('send')->with($message)->willThrowException($this->createStub(TransportExceptionInterface::class));
 
         $t2 = $this->createMock(TransportInterface::class);
-        $t2->method('supports')->with($message)->willReturn(true);
-        $t2->expects($this->once())->method('send')->with($message)->will($this->throwException($this->createMock(TransportExceptionInterface::class)));
+        $t2->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+        $t2->expects($this->once())->method('send')->with($message)->willThrowException($this->createStub(TransportExceptionInterface::class));
 
         $t = new FailoverTransport([$t1, $t2]);
 
@@ -99,11 +104,15 @@ class FailoverTransportTest extends TestCase
         $message = new DummyMessage();
 
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('supports')->with($message)->willReturn(true);
-        $t1->expects($this->once())->method('send')->will($this->throwException($this->createMock(TransportExceptionInterface::class)));
+        $t1->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+        $t1->expects($this->once())->method('send')->willThrowException($this->createStub(TransportExceptionInterface::class));
 
         $t2 = $this->createMock(TransportInterface::class);
-        $t2->method('supports')->with($message)->willReturn(true);
+        $t2->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
         $t2->expects($this->exactly(1))->method('send')->with($message)->willReturn(new SentMessage($message, 'test'));
 
         $t = new FailoverTransport([$t1, $t2]);
@@ -116,18 +125,27 @@ class FailoverTransportTest extends TestCase
         $message = new DummyMessage();
 
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('supports')->with($message)->willReturn(true);
-        $t1->method('send')->will($this->throwException($this->createMock(TransportExceptionInterface::class)));
+        $t1->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+        $t1->method('send')->willThrowException($this->createStub(TransportExceptionInterface::class));
         $t1->expects($this->once())->method('send');
         $t2 = $this->createMock(TransportInterface::class);
-        $t2->method('supports')->with($message)->willReturn(true);
+        $t2->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+
         $t2->expects($this->exactly(3))
             ->method('send')
-            ->willReturnOnConsecutiveCalls(
-                new SentMessage($message, 't2'),
-                new SentMessage($message, 't2'),
-                $this->throwException($this->createMock(TransportExceptionInterface::class))
-            );
+            ->willReturnCallback(function () use ($message) {
+                static $call = 0;
+
+                if (3 === ++$call) {
+                    throw $this->createStub(TransportExceptionInterface::class);
+                }
+
+                return new SentMessage($message, 't2');
+            });
         $t = new FailoverTransport([$t1, $t2], 40);
         $t->send($message);
         sleep(4);
@@ -145,17 +163,34 @@ class FailoverTransportTest extends TestCase
         $message = new DummyMessage();
 
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('supports')->with($message)->willReturn(true);
-        $t1->expects($this->exactly(2))->method('send')->willReturnOnConsecutiveCalls(
-            $this->throwException($this->createMock(TransportExceptionInterface::class)),
-            new SentMessage($message, 't1')
-        );
+        $t1->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+
+        $t1->expects($this->exactly(2))->method('send')
+            ->willReturnCallback(function () use ($message) {
+                static $call = 0;
+
+                if (1 === ++$call) {
+                    throw $this->createStub(TransportExceptionInterface::class);
+                }
+
+                return new SentMessage($message, 't1');
+            });
         $t2 = $this->createMock(TransportInterface::class);
-        $t2->method('supports')->with($message)->willReturn(true);
-        $t2->expects($this->exactly(2))->method('send')->willReturnOnConsecutiveCalls(
-            new SentMessage($message, 't2'),
-            $this->throwException($this->createMock(TransportExceptionInterface::class))
-        );
+        $t2->method('supports')->willReturnMap([
+            [$message, true],
+        ]);
+
+        $t2->expects($this->exactly(2))->method('send')->willReturnCallback(function () use ($message) {
+            static $call = 0;
+
+            if (1 === ++$call) {
+                return new SentMessage($message, 't1');
+            }
+
+            throw $this->createStub(TransportExceptionInterface::class);
+        });
 
         $t = new FailoverTransport([$t1, $t2], 1);
 

@@ -18,14 +18,14 @@ use Symfony\Component\Messenger\Transport\TransportInterface;
 
 /**
  * @author Ryan Weaver <ryan@symfonycasts.com>
+ *
+ * @implements TransportFactoryInterface<SyncTransport>
  */
 class SyncTransportFactory implements TransportFactoryInterface
 {
-    private MessageBusInterface $messageBus;
-
-    public function __construct(MessageBusInterface $messageBus)
-    {
-        $this->messageBus = $messageBus;
+    public function __construct(
+        private MessageBusInterface $messageBus,
+    ) {
     }
 
     public function createTransport(#[\SensitiveParameter] string $dsn, array $options, SerializerInterface $serializer): TransportInterface

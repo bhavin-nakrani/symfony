@@ -814,9 +814,13 @@ return [
             'SKK',
             'Slovak Korunası',
         ],
+        'SLE' => [
+            'SLE',
+            'Sierra Leon Leonu',
+        ],
         'SLL' => [
             'SLL',
-            'Sierra Leon Leonu',
+            'Sierra Leon Leonu (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -986,6 +990,10 @@ return [
             'EC$',
             'Şərqi Karib Dolları',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karib gilderi',
+        ],
         'XFO' => [
             'XFO',
             'Fransız Gızıl Frankı',
@@ -1049,6 +1057,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Zimbabve Dolları (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabve Qızılı',
         ],
         'ZWL' => [
             'ZWL',

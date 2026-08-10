@@ -12,14 +12,15 @@
 namespace Symfony\Component\HttpFoundation\Tests\Session\Storage\Handler;
 
 use Doctrine\DBAL\Schema\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
-/**
- * @requires extension pdo_sqlite
- *
- * @group time-sensitive
- */
+#[RequiresPhpExtension('pdo_sqlite')]
+#[Group('time-sensitive')]
 class PdoSessionHandlerTest extends TestCase
 {
     private ?string $dbFile = null;
@@ -30,7 +31,6 @@ class PdoSessionHandlerTest extends TestCase
         if ($this->dbFile) {
             @unlink($this->dbFile);
         }
-        parent::tearDown();
     }
 
     protected function getPersistentSqliteDsn()
@@ -157,19 +157,19 @@ class PdoSessionHandlerTest extends TestCase
         $selectStmt = $this->createMock(\PDOStatement::class);
         $insertStmt = $this->createMock(\PDOStatement::class);
 
-        $pdo->prepareResult = fn ($statement) => str_starts_with($statement, 'INSERT') ? $insertStmt : $selectStmt;
+        $pdo->prepareResult = static fn ($statement) => str_starts_with($statement, 'INSERT') ? $insertStmt : $selectStmt;
 
         $content = 'foobar';
         $stream = $this->createStream($content);
         $exception = null;
 
         $selectStmt->expects($this->atLeast(2))->method('fetchAll')
-            ->willReturnCallback(function () use (&$exception, $stream) {
+            ->willReturnCallback(static function () use (&$exception, $stream) {
                 return $exception ? [[$stream, time() + 42]] : [];
             });
 
         $insertStmt->expects($this->once())->method('execute')
-            ->willReturnCallback(function () use (&$exception) {
+            ->willReturnCallback(static function () use (&$exception) {
                 throw $exception = new \PDOException('', '23');
             });
 
@@ -224,6 +224,7 @@ class PdoSessionHandlerTest extends TestCase
     {
         // wrong method sequence that should no happen, but still works
         $storage = new PdoSessionHandler($this->getMemorySqlitePdo());
+        $storage->open('', 'sid');
         $storage->write('id', 'data');
         $storage->write('other_id', 'other_data');
         $storage->destroy('inexistent');
@@ -259,9 +260,7 @@ class PdoSessionHandlerTest extends TestCase
         $this->assertSame('', $data, 'Destroyed session returns empty string');
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testSessionGC()
     {
         $previousLifeTime = ini_set('session.gc_maxlifetime', 1000);
@@ -309,9 +308,7 @@ class PdoSessionHandlerTest extends TestCase
         $this->assertInstanceOf(\PDO::class, $method->invoke($storage));
     }
 
-    /**
-     * @dataProvider provideUrlDsnPairs
-     */
+    #[DataProvider('provideUrlDsnPairs')]
     public function testUrlDsn($url, $expectedDsn, $expectedUser = null, $expectedPassword = null)
     {
         $storage = new PdoSessionHandler($url);
@@ -328,31 +325,31 @@ class PdoSessionHandlerTest extends TestCase
 
     public function testConfigureSchemaDifferentDatabase()
     {
-        $schema = new Schema();
-
         $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
-        $pdoSessionHandler->configureSchema($schema, fn () => false);
+        $schema = $pdoSessionHandler->configureSchema(new Schema(), static fn () => false);
         $this->assertFalse($schema->hasTable('sessions'));
     }
 
     public function testConfigureSchemaSameDatabase()
     {
-        $schema = new Schema();
-
         $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
-        $pdoSessionHandler->configureSchema($schema, fn () => true);
+        $schema = $pdoSessionHandler->configureSchema(new Schema(), static fn () => true);
         $this->assertTrue($schema->hasTable('sessions'));
     }
 
     public function testConfigureSchemaTableExistsPdo()
     {
-        $schema = new Schema();
-        $schema->createTable('sessions');
+        if (method_exists(Schema::class, 'edit')) {
+            $schema = (new Schema())->edit()->addTable(new \Doctrine\DBAL\Schema\Table('sessions'))->create();
+        } else {
+            $schema = new Schema();
+            $schema->createTable('sessions');
+        }
 
         $pdoSessionHandler = new PdoSessionHandler($this->getMemorySqlitePdo());
-        $pdoSessionHandler->configureSchema($schema, fn () => true);
+        $schema = $pdoSessionHandler->configureSchema($schema, static fn () => true);
         $table = $schema->getTable('sessions');
-        $this->assertEmpty($table->getColumns(), 'The table was not overwritten');
+        $this->assertSame([], $table->getColumns(), 'The table was not overwritten');
     }
 
     public static function provideUrlDsnPairs()
@@ -376,7 +373,7 @@ class PdoSessionHandlerTest extends TestCase
 
     public function testTtl()
     {
-        foreach ([60, fn () => 60] as $ttl) {
+        foreach ([60, static fn () => 60] as $ttl) {
             $pdo = $this->getMemorySqlitePdo();
             $storage = new PdoSessionHandler($pdo, ['ttl' => $ttl]);
 
@@ -387,6 +384,46 @@ class PdoSessionHandlerTest extends TestCase
 
             $this->assertEqualsWithDelta(time() + 60, $pdo->query('SELECT sess_lifetime FROM sessions')->fetchColumn(), 5);
         }
+    }
+
+    public function testSqlsrvDataBindingUsesStream()
+    {
+        $pdo = new MockPdo('sqlsrv', null, '10');
+        $boundData = [];
+
+        $mergeStmt = $this->createStub(\PDOStatement::class);
+        $selectStmt = $this->createStub(\PDOStatement::class);
+        $selectStmt->method('fetchAll')->willReturn([]);
+
+        $mergeStmt->method('bindParam')
+            ->willReturnCallback(static function ($param, $data, $type = null) use (&$boundData) {
+                $boundData[$param] = ['data' => $data, 'type' => $type];
+
+                return true;
+            });
+
+        $mergeStmt->method('bindValue')->willReturn(true);
+        $mergeStmt->method('execute')->willReturn(true);
+
+        $pdo->prepareResult = static fn ($statement) => str_starts_with($statement, 'MERGE') ? $mergeStmt : $selectStmt;
+
+        $storage = new PdoSessionHandler($pdo, ['lock_mode' => PdoSessionHandler::LOCK_NONE]);
+        $storage->open('', 'sid');
+        $storage->read('id');
+        $storage->write('id', 'test_data');
+        $storage->close();
+
+        $this->assertArrayHasKey(3, $boundData);
+        $this->assertIsResource($boundData[3]['data']);
+        $this->assertSame(\PDO::PARAM_LOB, $boundData[3]['type']);
+        rewind($boundData[3]['data']);
+        $this->assertSame('test_data', stream_get_contents($boundData[3]['data']));
+
+        $this->assertArrayHasKey(6, $boundData);
+        $this->assertIsResource($boundData[6]['data']);
+        $this->assertSame(\PDO::PARAM_LOB, $boundData[6]['type']);
+        rewind($boundData[6]['data']);
+        $this->assertSame('test_data', stream_get_contents($boundData[6]['data']));
     }
 
     /**
@@ -407,11 +444,13 @@ class MockPdo extends \PDO
     public \Closure|\PDOStatement|false $prepareResult;
     private ?string $driverName;
     private bool|int $errorMode;
+    private ?string $serverVersion;
 
-    public function __construct(string $driverName = null, int $errorMode = null)
+    public function __construct(?string $driverName = null, ?int $errorMode = null, ?string $serverVersion = null)
     {
         $this->driverName = $driverName;
         $this->errorMode = null !== $errorMode ?: \PDO::ERRMODE_EXCEPTION;
+        $this->serverVersion = $serverVersion;
     }
 
     public function getAttribute($attribute): mixed
@@ -422,6 +461,10 @@ class MockPdo extends \PDO
 
         if (\PDO::ATTR_DRIVER_NAME === $attribute) {
             return $this->driverName;
+        }
+
+        if (\PDO::ATTR_SERVER_VERSION === $attribute) {
+            return $this->serverVersion;
         }
 
         return parent::getAttribute($attribute);

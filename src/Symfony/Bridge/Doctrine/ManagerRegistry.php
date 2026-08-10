@@ -12,8 +12,6 @@
 namespace Symfony\Bridge\Doctrine;
 
 use Doctrine\Persistence\AbstractManagerRegistry;
-use ProxyManager\Proxy\GhostObjectInterface;
-use ProxyManager\Proxy\LazyLoadingInterface;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\VarExporter\LazyObjectInterface;
 
@@ -24,10 +22,7 @@ use Symfony\Component\VarExporter\LazyObjectInterface;
  */
 abstract class ManagerRegistry extends AbstractManagerRegistry
 {
-    /**
-     * @var Container
-     */
-    protected $container;
+    protected Container $container;
 
     protected function getService($name): object
     {
@@ -43,34 +38,53 @@ abstract class ManagerRegistry extends AbstractManagerRegistry
 
         if ($manager instanceof LazyObjectInterface) {
             if (!$manager->resetLazyObject()) {
-                throw new \LogicException(sprintf('Resetting a non-lazy manager service is not supported. Declare the "%s" service as lazy.', $name));
+                throw new \LogicException(\sprintf('Resetting a non-lazy manager service is not supported. Declare the "%s" service as lazy.', $name));
             }
 
             return;
         }
-        if (!$manager instanceof LazyLoadingInterface) {
-            throw new \LogicException(sprintf('Resetting a non-lazy manager service is not supported. Declare the "%s" service as lazy.', $name));
+
+        $r = new \ReflectionClass($manager);
+
+        if ($r->isUninitializedLazyObject($manager)) {
+            return;
         }
-        if ($manager instanceof GhostObjectInterface) {
-            throw new \LogicException('Resetting a lazy-ghost-object manager service is not supported.');
-        }
-        $manager->setProxyInitializer(\Closure::bind(
-            function (&$wrappedInstance, LazyLoadingInterface $manager) use ($name) {
-                if (isset($this->aliases[$name])) {
-                    $name = $this->aliases[$name];
-                }
-                if (isset($this->fileMap[$name])) {
-                    $wrappedInstance = $this->load($this->fileMap[$name], false);
-                } else {
-                    $wrappedInstance = $this->{$this->methodMap[$name]}(false);
+
+        $asProxy = $r->initializeLazyObject($manager) !== $manager;
+        $initializer = \Closure::bind(
+            function ($manager) use ($name, $asProxy) {
+                $name = $this->aliases[$name] ?? $name;
+                if ($asProxy) {
+                    $manager = false;
                 }
 
-                $manager->setProxyInitializer(null);
+                $manager = match (true) {
+                    isset($this->fileMap[$name]) => $this->load($this->fileMap[$name], $manager),
+                    !$method = $this->methodMap[$name] ?? null => throw new \LogicException(\sprintf('The "%s" service is synthetic and cannot be reset.', $name)),
+                    (new \ReflectionMethod($this, $method))->isStatic() => $this->{$method}($this, $manager),
+                    default => $this->{$method}($manager),
+                };
 
-                return true;
+                if ($asProxy) {
+                    return $manager;
+                }
             },
             $this->container,
             Container::class
-        ));
+        );
+
+        try {
+            if ($asProxy) {
+                $r->resetAsLazyProxy($manager, $initializer);
+            } else {
+                $r->resetAsLazyGhost($manager, $initializer);
+            }
+        } catch (\Error $e) {
+            if (__FILE__ !== $e->getFile()) {
+                throw $e;
+            }
+
+            throw new \LogicException(\sprintf('Resetting a non-lazy manager service is not supported. Declare the "%s" service as lazy.', $name), 0, $e);
+        }
     }
 }

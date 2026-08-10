@@ -11,9 +11,9 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Validator\ViolationMapper;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Exception\TransformationFailedException;
 use Symfony\Component\Form\Extension\Core\DataMapper\DataMapper;
@@ -28,6 +28,9 @@ use Symfony\Component\Form\Tests\Extension\Validator\ViolationMapper\Fixtures\Is
 use Symfony\Component\Form\Tests\Fixtures\DummyFormRendererEngine;
 use Symfony\Component\Form\Tests\Fixtures\FixedTranslator;
 use Symfony\Component\PropertyAccess\PropertyPath;
+use Symfony\Component\Translation\Loader\ArrayLoader;
+use Symfony\Component\Translation\TranslatableMessage;
+use Symfony\Component\Translation\Translator;
 use Symfony\Component\Validator\Constraints\File;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationInterface;
@@ -787,9 +790,7 @@ class ViolationMapperTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideDefaultTests
-     */
+    #[DataProvider('provideDefaultTests')]
     public function testDefaultErrorMapping($target, $childName, $childPath, $grandChildName, $grandChildPath, $violationPath)
     {
         $violation = $this->getConstraintViolation($violationPath);
@@ -1242,9 +1243,7 @@ class ViolationMapperTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideCustomDataErrorTests
-     */
+    #[DataProvider('provideCustomDataErrorTests')]
     public function testCustomDataErrorMapping($target, $mapFrom, $mapTo, $childName, $childPath, $grandChildName, $grandChildPath, $violationPath)
     {
         $violation = $this->getConstraintViolation($violationPath);
@@ -1442,9 +1441,7 @@ class ViolationMapperTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideCustomFormErrorTests
-     */
+    #[DataProvider('provideCustomFormErrorTests')]
     public function testCustomFormErrorMapping($target, $mapFrom, $mapTo, $errorName, $errorPath, $childName, $childPath, $grandChildName, $grandChildPath, $violationPath)
     {
         $violation = $this->getConstraintViolation($violationPath);
@@ -1509,9 +1506,7 @@ class ViolationMapperTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideErrorTestsForFormInheritingParentData
-     */
+    #[DataProvider('provideErrorTestsForFormInheritingParentData')]
     public function testErrorMappingForFormInheritingParentData($target, $childName, $childPath, $grandChildName, $grandChildPath, $violationPath)
     {
         $violation = $this->getConstraintViolation($violationPath);
@@ -1636,6 +1631,44 @@ class ViolationMapperTest extends TestCase
         }
     }
 
+    public function testMessageWithTranslatableLabel()
+    {
+        $translator = new Translator('en');
+        $translator->addLoader('array', new ArrayLoader());
+        $translator->addResource('array', ['options_label' => 'Translated %what% Label'], 'en', 'custom_domain');
+
+        $this->mapper = new ViolationMapper(null, $translator);
+
+        $parent = $this->getForm('parent');
+
+        $config = new FormConfigBuilder('name', null, $this->dispatcher, [
+            'error_mapping' => [],
+            'label' => new TranslatableMessage('options_label', ['%what%' => 'Custom'], 'custom_domain'),
+        ]);
+        $config->setMapped(true);
+        $config->setInheritData(false);
+        $config->setPropertyPath('name');
+        $config->setCompound(true);
+        $config->setDataMapper(new DataMapper());
+
+        $child = new Form($config);
+        $parent->add($child);
+
+        $parent->submit([]);
+
+        $violation = new ConstraintViolation('Message {{ label }}', null, [], null, 'data.name', null);
+        $this->mapper->mapViolation($violation, $parent);
+
+        $this->assertCount(1, $child->getErrors(), $child->getName().' should have an error, but has none');
+
+        $errors = iterator_to_array($child->getErrors());
+        if (isset($errors[0])) {
+            /** @var FormError $error */
+            $error = $errors[0];
+            $this->assertSame('Message Translated Custom Label', $error->getMessage());
+        }
+    }
+
     public function testMessageWithLabelFormat1()
     {
         $this->mapper = new ViolationMapper(null, new FixedTranslator(['form.custom' => 'Translated 1st Custom Label']));
@@ -1723,13 +1756,9 @@ class ViolationMapperTest extends TestCase
 
     public function testLabelPlaceholderTranslatedWithTranslationDomainDefinedByParentType()
     {
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())
-            ->method('trans')
-            ->with('foo', [], 'domain')
-            ->willReturn('translated foo label')
-        ;
-        $this->mapper = new ViolationMapper(null, $translator);
+        $this->mapper = new ViolationMapper(null, new FixedTranslator([
+            'foo' => 'translated foo label',
+        ]));
 
         $form = $this->getForm('', null, null, [], false, true, [
             'translation_domain' => 'domain',
@@ -1750,17 +1779,9 @@ class ViolationMapperTest extends TestCase
 
     public function testLabelPlaceholderTranslatedWithTranslationParametersMergedFromParentForm()
     {
-        $translator = $this->createMock(TranslatorInterface::class);
-        $translator->expects($this->any())
-            ->method('trans')
-            ->with('foo', [
-                '{{ param_defined_in_parent }}' => 'param defined in parent value',
-                '{{ param_defined_in_child }}' => 'param defined in child value',
-                '{{ param_defined_in_parent_overridden_in_child }}' => 'param defined in parent overridden in child child value',
-            ])
-            ->willReturn('translated foo label')
-        ;
-        $this->mapper = new ViolationMapper(null, $translator);
+        $this->mapper = new ViolationMapper(null, new FixedTranslator([
+            'foo' => 'translated foo label',
+        ]));
 
         $form = $this->getForm('', null, null, [], false, true, [
             'label_translation_parameters' => [

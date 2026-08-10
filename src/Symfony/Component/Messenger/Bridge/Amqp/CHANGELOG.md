@@ -1,6 +1,33 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Implement the `KeepaliveReceiverInterface` to enable asynchronously notifying AMQP that the job is still being processed, in order to avoid timeouts
+
+8.1
+---
+
+ * Allow setting `queues` to `false` to skip binding the default `messages` queue
+ * Add option `delay[daily_delay_queues]` in the transport definition
+
+7.3
+---
+
+ * Add default exchange support
+
+7.1
+---
+
+ * Implement the `CloseableTransportInterface` to allow closing the AMQP connection
+ * Add option `delay[arguments]` in the transport definition
+
+6.4
+---
+
+ * Add option `delay[daily_delay_queues]` in the transport definition
+
 6.0
 ---
 

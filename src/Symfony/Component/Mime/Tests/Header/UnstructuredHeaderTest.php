@@ -114,7 +114,7 @@ class UnstructuredHeaderTest extends TestCase
         $nonPrintableBytes = array_merge(range(0x00, 0x08), range(0x10, 0x19), [0x7F]);
         foreach ($nonPrintableBytes as $byte) {
             $char = pack('C', $byte);
-            $encodedChar = sprintf('=%02X', $byte);
+            $encodedChar = \sprintf('=%02X', $byte);
             $header = new UnstructuredHeader('X-A', $char);
             $header->setCharset('iso-8859-1');
             $this->assertEquals('X-A: =?'.$header->getCharset().'?Q?'.$encodedChar.'?=', $header->toString(), 'Non-printable ascii should be encoded');
@@ -125,7 +125,7 @@ class UnstructuredHeaderTest extends TestCase
     {
         foreach (range(0x80, 0xFF) as $byte) {
             $char = pack('C', $byte);
-            $encodedChar = sprintf('=%02X', $byte);
+            $encodedChar = \sprintf('=%02X', $byte);
             $header = new UnstructuredHeader('X-A', $char);
             $header->setCharset('iso-8859-1');
             $this->assertEquals('X-A: =?'.$header->getCharset().'?Q?'.$encodedChar.'?=', $header->toString(), '8-bit octets should be encoded');
@@ -202,6 +202,17 @@ class UnstructuredHeaderTest extends TestCase
             'w=8Frd?=', $header->toString(),
             'Adjacent encoded words should appear grouped with WSP encoded'
         );
+    }
+
+    public function testWhitespaceRunsBetweenEncodedWordsAreEncodedTogether()
+    {
+        // decoders ignore linear whitespace between two adjacent encoded words (RFC 2047 section 6.2),
+        // so whitespace runs of any length must be folded into the encoded words themselves
+        $header = new UnstructuredHeader('Subject', 'Fabïen  Pötencier  Länge');
+        $this->assertSame('=?utf-8?Q?Fab=C3=AFen__P=C3=B6tencier__L=C3=A4nge?=', $header->getBodyAsString());
+
+        $header = new UnstructuredHeader('Subject', "Fabïen \t Pötencier");
+        $this->assertSame('=?utf-8?Q?Fab=C3=AFen_=09_P=C3=B6tencier?=', $header->getBodyAsString());
     }
 
     public function testLanguageInformationAppearsInEncodedWords()

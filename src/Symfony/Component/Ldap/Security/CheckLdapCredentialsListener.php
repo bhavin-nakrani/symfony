@@ -29,17 +29,13 @@ use Symfony\Component\Security\Http\Event\CheckPassportEvent;
  */
 class CheckLdapCredentialsListener implements EventSubscriberInterface
 {
-    private ContainerInterface $ldapLocator;
-
-    public function __construct(ContainerInterface $ldapLocator)
-    {
-        $this->ldapLocator = $ldapLocator;
+    public function __construct(
+        private ContainerInterface $ldapLocator,
+        private bool $ldapUsersOnly = false,
+    ) {
     }
 
-    /**
-     * @return void
-     */
-    public function onCheckPassport(CheckPassportEvent $event)
+    public function onCheckPassport(CheckPassportEvent $event): void
     {
         $passport = $event->getPassport();
         if (!$passport->hasBadge(LdapBadge::class)) {
@@ -53,7 +49,7 @@ class CheckLdapCredentialsListener implements EventSubscriberInterface
         }
 
         if (!$passport->hasBadge(PasswordCredentials::class)) {
-            throw new \LogicException(sprintf('LDAP authentication requires a passport containing password credentials, authenticator "%s" does not fulfill these requirements.', $event->getAuthenticator()::class));
+            throw new \LogicException(\sprintf('LDAP authentication requires a passport containing password credentials, authenticator "%s" does not fulfill these requirements.', $event->getAuthenticator()::class));
         }
 
         /** @var PasswordCredentials $passwordCredentials */
@@ -62,8 +58,16 @@ class CheckLdapCredentialsListener implements EventSubscriberInterface
             throw new \LogicException('LDAP authentication password verification cannot be completed because something else has already resolved the PasswordCredentials.');
         }
 
+        if ($this->ldapUsersOnly && !$passport->getUser() instanceof LdapUser) {
+            // the user comes from another provider of the chain, leave the password credentials
+            // for CheckCredentialsListener while still reporting that this listener has run
+            $ldapBadge->markResolved();
+
+            return;
+        }
+
         if (!$this->ldapLocator->has($ldapBadge->getLdapServiceId())) {
-            throw new \LogicException(sprintf('Cannot check credentials using the "%s" ldap service, as such service is not found. Did you maybe forget to add the "ldap" service tag to this service?', $ldapBadge->getLdapServiceId()));
+            throw new \LogicException(\sprintf('Cannot check credentials using the "%s" ldap service, as such service is not found. Did you maybe forget to add the "ldap" service tag to this service?', $ldapBadge->getLdapServiceId()));
         }
 
         $presentedPassword = $passwordCredentials->getPassword();

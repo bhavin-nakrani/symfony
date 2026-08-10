@@ -29,7 +29,7 @@ SLACK_DSN=slack://xoxb-......@default?channel=fabien
 Adding Interactions to a Message
 --------------------------------
 
-With a Slack message, you can use the `SlackOptions` class to add some 
+With a Slack message, you can use the `SlackOptions` class to add some
 interactive options called [Block elements](https://api.slack.com/reference/block-kit/block-elements).
 
 ```php
@@ -52,8 +52,16 @@ $contributeToSymfonyBlocks = (new SlackActionsBlock())
     ->button(
         'Report bugs',
         'https://symfony.com/doc/current/contributing/code/bugs.html',
-        'danger'
-    );
+        'danger',
+        'reportBugs'
+        [
+            'title' => ['type' => 'plain_text', 'text' => 'Report a bug'],
+            'text' => ['type' => 'plain_text', 'text' => 'By proceeding I confirm I\'ve read the guidelines.'],
+            'confirm' => ['type' => 'plain_text', 'text' => 'Proceed'],
+            'deny' => ['type' => 'plain_text', 'text' => 'Go back to reading']
+        ]
+    )
+    ->id('contribute_block);
 
 $slackOptions = (new SlackOptions())
     ->block((new SlackSectionBlock())
@@ -67,6 +75,46 @@ $slackOptions = (new SlackOptions())
     )
     ->block(new SlackDividerBlock())
     ->block($contributeToSymfonyBlocks);
+
+// Add the custom options to the chat message and send the message
+$chatMessage->options($slackOptions);
+
+$chatter->send($chatMessage);
+```
+
+Alternatively, a single button can be added to a section using the `accessory()` method and the `SlackButtonBlockElement` class.
+
+```php
+use Symfony\Component\Notifier\Bridge\Slack\Block\SlackButtonBlockElement;
+use Symfony\Component\Notifier\Bridge\Slack\Block\SlackDividerBlock;
+use Symfony\Component\Notifier\Bridge\Slack\Block\SlackSectionBlock;
+use Symfony\Component\Notifier\Bridge\Slack\SlackOptions;
+use Symfony\Component\Notifier\Message\ChatMessage;
+
+$chatMessage = new ChatMessage('Contribute To Symfony');
+
+$slackOptions = (new SlackOptions())
+    ->block((new SlackSectionBlock())
+        ->text('Symfony Framework')
+        ->accessory(
+            new SlackButtonBlockElement(
+                'Report bugs',
+                'https://symfony.com/doc/current/contributing/code/bugs.html',
+                'danger'
+            )
+        )
+    )
+    ->block(new SlackDividerBlock())
+    ->block((new SlackSectionBlock())
+        ->text('Symfony Documentation')
+        ->accessory(
+            new SlackButtonBlockElement(
+                'Improve Documentation',
+                'https://symfony.com/doc/current/contributing/documentation/standards.html',
+                'primary'
+            )
+        )
+    );
 
 // Add the custom options to the chat message and send the message
 $chatMessage->options($slackOptions);
@@ -103,6 +151,34 @@ $chatMessage->options($options);
 
 $chatter->send($chatMessage);
 ```
+
+Define text objects properties
+------------------------------
+
+[Text objects properties](https://api.slack.com/reference/block-kit/composition-objects#text) can be set on any `text()` or `field()` method :
+
+```php
+use Symfony\Component\Notifier\Bridge\Slack\Block\SlackSectionBlock;
+use Symfony\Component\Notifier\Bridge\Slack\SlackOptions;
+use Symfony\Component\Notifier\Message\ChatMessage;
+
+$chatMessage = new ChatMessage('Slack Notifier');
+
+$options = (new SlackOptions())
+    ->block(
+        (new SlackSectionBlock())
+            ->field('My **Markdown** content with clickable URL : symfony.com') // Markdown content (default)
+            ->field('*Plain text content*', markdown: false) // Plain text content
+            ->field('Not clickable URL : symfony.com', verbatim: true) // Only for markdown content
+            ->field('Thumbs up emoji code is :thumbsup: ', emoji: false) // Only for plain text content
+    );
+
+// Add the custom options to the chat message and send the message
+$chatMessage->options($options);
+
+$chatter->send($chatMessage);
+```
+
 
 Adding a Header to a Message
 ----------------------------
@@ -177,7 +253,7 @@ $chatter->send($chatMessage);
 Sending a Message as a Reply
 ----------------------------
 
-To send your slack message as a reply in a thread use the `threadTs()` method.
+To send your Slack message as a reply in a thread use the `threadTs()` method.
 
 ```php
 use Symfony\Component\Notifier\Bridge\Slack\Block\SlackSectionBlock;
@@ -226,6 +302,30 @@ $options = new UpdateMessageSlackOptions($channelId, $messageId);
 $chatter->send(new ChatMessage('Updated message', $options));
 ```
 
+Scheduling a Slack Message
+--------------------------
+
+To schedule a message to be sent at a later time, use the `postAt()` method:
+
+```php
+use Symfony\Component\Notifier\Bridge\Slack\SlackOptions;
+use Symfony\Component\Notifier\Message\ChatMessage;
+
+$options = (new SlackOptions())->postAt(new \DateTime('+1 day'));
+
+$chatMessage = new ChatMessage('Symfony Feature');
+$chatMessage->options($options);
+
+$chatter->send($chatMessage);
+```
+
+Sponsor
+-------
+
+This package is looking for a [backer][1].
+
+Help Symfony by [sponsoring][3] its development!
+
 Resources
 ---------
 
@@ -233,3 +333,6 @@ Resources
  * [Report issues](https://github.com/symfony/symfony/issues) and
    [send Pull Requests](https://github.com/symfony/symfony/pulls)
    in the [main Symfony repository](https://github.com/symfony/symfony)
+
+[1]: https://symfony.com/backers
+[3]: https://symfony.com/sponsor

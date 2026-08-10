@@ -11,14 +11,26 @@
 
 namespace Symfony\Component\HttpKernel\Attribute;
 
+use Symfony\Component\ExpressionLanguage\Expression;
+use Symfony\Component\HttpFoundation\Request;
+
 /**
  * Describes the default HTTP cache headers on controllers.
+ * Headers defined in the Cache attribute are ignored if they are already set
+ * by the controller.
+ *
+ * @see https://symfony.com/doc/current/http_cache.html#making-your-responses-http-cacheable
  *
  * @author Fabien Potencier <fabien@symfony.com>
  */
-#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD | \Attribute::TARGET_FUNCTION)]
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD | \Attribute::TARGET_FUNCTION | \Attribute::IS_REPEATABLE)]
 final class Cache
 {
+    /**
+     * @internal
+     */
+    public public(set) readonly array $variables;
+
     public function __construct(
         /**
          * The expiration date as a valid date for the strtotime() function.
@@ -38,29 +50,52 @@ final class Cache
         public int|string|null $smaxage = null,
 
         /**
-         * Whether the response is public or not.
+         * If true, the contents will be stored in a public cache and served to all
+         * the next requests.
          */
         public ?bool $public = null,
 
         /**
-         * Whether or not the response must be revalidated.
+         * If true, the response is not served stale by a cache in any circumstance
+         * without first revalidating with the origin.
          */
         public bool $mustRevalidate = false,
 
         /**
-         * Additional "Vary:"-headers.
+         * Set "Vary" header.
+         *
+         * Example:
+         * ['Accept-Encoding', 'User-Agent']
+         *
+         * @see https://symfony.com/doc/current/http_cache/cache_vary.html
+         *
+         * @var string[]
          */
         public array $vary = [],
 
         /**
-         * An expression to compute the Last-Modified HTTP header.
+         * A value evaluated to compute the Last-Modified HTTP header.
+         *
+         * The value may be either an ExpressionLanguage expression or a Closure and
+         * receives all the request attributes and the resolved controller arguments.
+         *
+         * The result must be an instance of \DateTimeInterface.
+         *
+         * @var \DateTimeInterface|string|Expression|\Closure(array<string, mixed>, Request, ?object):\DateTimeInterface|null
          */
-        public ?string $lastModified = null,
+        public \DateTimeInterface|string|Expression|\Closure|null $lastModified = null,
 
         /**
-         * An expression to compute the ETag HTTP header.
+         * A value evaluated to compute the ETag HTTP header.
+         *
+         * The value may be either an ExpressionLanguage expression or a Closure and
+         * receives all the request attributes and the resolved controller arguments.
+         *
+         * The result must be a string that will be hashed.
+         *
+         * @var string|Expression|\Closure(array<string, mixed>, Request, ?object):string|null
          */
-        public ?string $etag = null,
+        public string|Expression|\Closure|null $etag = null,
 
         /**
          * max-stale Cache-Control header
@@ -79,6 +114,30 @@ final class Cache
          * It can be expressed in seconds or with a relative time format (1 day, 2 weeks, ...).
          */
         public int|string|null $staleIfError = null,
+
+        /**
+         * Add the "no-store" Cache-Control directive when set to true.
+         *
+         * This directive indicates that no part of the response can be cached
+         * in any cache (not in a shared cache, nor in a private cache).
+         *
+         * Supersedes the "$public" and "$smaxage" values.
+         *
+         * @see https://datatracker.ietf.org/doc/html/rfc7234#section-5.2.2.3
+         */
+        public ?bool $noStore = null,
+
+        /**
+         * A value evaluated to determine whether the cache attribute should be applied.
+         *
+         * The value may be either an ExpressionLanguage expression or a Closure and
+         * receives all the request attributes and the resolved controller arguments.
+         *
+         * The result must be a boolean. If true the attribute is applied, if false it is ignored.
+         *
+         * @var bool|string|Expression|\Closure(array<string, mixed>, Request, ?object):bool
+         */
+        public bool|string|Expression|\Closure $if = true,
     ) {
     }
 }

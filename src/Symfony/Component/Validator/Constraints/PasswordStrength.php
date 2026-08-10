@@ -13,11 +13,10 @@ namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
- * @Annotation
- *
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates that the given password has reached a minimum strength.
  *
  * @author Florent Morselli <florent.morselli@spomky-labs.com>
  */
@@ -40,17 +39,25 @@ final class PasswordStrength extends Constraint
 
     public int $minScore;
 
-    public function __construct(array $options = null, int $minScore = null, array $groups = null, mixed $payload = null, string $message = null)
+    /**
+     * @param self::STRENGTH_*|null $minScore The minimum required strength of the password (defaults to {@see PasswordStrength::STRENGTH_MEDIUM})
+     * @param string[]|null         $groups
+     */
+    public function __construct(?array $options = null, ?int $minScore = null, ?array $groups = null, mixed $payload = null, ?string $message = null)
     {
-        $options['minScore'] ??= self::STRENGTH_MEDIUM;
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
 
-        parent::__construct($options, $groups, $payload);
+        $minScore ??= self::STRENGTH_MEDIUM;
 
-        $this->minScore = $minScore ?? $this->minScore;
+        parent::__construct(null, $groups, $payload);
+
+        $this->minScore = $minScore;
         $this->message = $message ?? $this->message;
 
         if ($this->minScore < 1 || 4 < $this->minScore) {
-            throw new ConstraintDefinitionException(sprintf('The parameter "minScore" of the "%s" constraint must be an integer between 1 and 4.', self::class));
+            throw new ConstraintDefinitionException(\sprintf('The parameter "minScore" of the "%s" constraint must be an integer between 1 and 4.', self::class));
         }
     }
 }

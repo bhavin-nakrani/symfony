@@ -50,13 +50,13 @@
             </div>
         {% endset %}
 
-        {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', { link: profiler_url, status: status_color }) }}
+        {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', {link: profiler_url, status: status_color}) }}
     {% endif %}
 {% endblock %}
 
 {% block menu %}
     <span class="label {{- collector.violationsCount ? ' label-status-error' }} {{ collector.calls is empty ? 'disabled' }}">
-        <span class="icon">{{ source('@WebProfiler/Icon/validator.svg') }}</span>
+        <span class="icon" aria-hidden="true">{{ source('@WebProfiler/Icon/validator.svg') }}</span>
         <strong>Validator</strong>
         {% if collector.violationsCount > 0 %}
             <span class="count">
@@ -92,13 +92,13 @@
                         '#DD0000': 'var(--highlight-string)',
                         '#007700': 'var(--highlight-keyword)',
                         '#0000BB': 'var(--highlight-default)',
-                        '#FF8000': 'var(--highlight-comment)'
+                        '#FF8000': 'var(--highlight-comment)',
                     })|raw }}
                 </div>
             </div>
 
             <div class="sf-validator-compact hidden sf-validator-context" id="sf-context-{{ loop.index0 }}">
-                {{ profiler_dump(call.context, maxDepth=1) }}
+                {{ profiler_dump(call.context, maxDepth: 1) }}
             </div>
 
             {% if call.violations|length %}
@@ -121,12 +121,14 @@
                     {% endfor %}
                 </table>
             {% else %}
-                No violations
+                <div class="empty">
+                    <p>No violations</p>
+                </div>
             {% endif %}
         </div>
     {% else %}
         <div class="empty empty-panel">
-            <p>No calls to the validator were collected during this request.</p>
+            <p>No calls to the validator were collected.</p>
         </div>
     {% endfor %}
 {% endblock %}

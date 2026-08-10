@@ -11,15 +11,14 @@
 
 namespace Symfony\Component\Translation\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Translation\IdentityTranslator;
 use Symfony\Component\Translation\PseudoLocalizationTranslator;
 
 final class PseudoLocalizationTranslatorTest extends TestCase
 {
-    /**
-     * @dataProvider provideTrans
-     */
+    #[DataProvider('provideTrans')]
     public function testTrans(string $expected, string $input, array $options = [])
     {
         mt_srand(987);
@@ -44,12 +43,11 @@ final class PseudoLocalizationTranslatorTest extends TestCase
             ['<p data-foo="ccc&quot;&quot;">ƀåŕ</p>', '<p data-foo="ccc&quot;&quot;">bar</p>', self::getIsolatedOptions(['parse_html' => true, 'accents' => true])],
             ['<p>″≤″</p>', '<p>&quot;&lt;&quot;</p>', self::getIsolatedOptions(['parse_html' => true, 'accents' => true])],
             ['Symfony is an Open Source, community-driven project with thousands of contributors. ~~~~~~~ ~~ ~~~~ ~~~~~~~ ~~~~~~~ ~~ ~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~ ~~ ~~~', 'Symfony is an Open Source, community-driven project with thousands of contributors.', self::getIsolatedOptions(['expansion_factor' => 2.0])],
+            ['<p>👇👇👇👇👇👇👇</p>', '<p>👇👇👇👇👇👇👇</p>', self::getIsolatedOptions(['parse_html' => true])],
         ];
     }
 
-    /**
-     * @dataProvider provideInvalidExpansionFactor
-     */
+    #[DataProvider('provideInvalidExpansionFactor')]
     public function testInvalidExpansionFactor(float $expansionFactor)
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -79,4 +77,28 @@ final class PseudoLocalizationTranslatorTest extends TestCase
             'brackets' => false,
         ], $options);
     }
+
+    public function testTransDoesNotResolveExternalEntities()
+    {
+        $networkLoads = [];
+        libxml_set_external_entity_loader(static function (?string $public, string $system, array $context) use (&$networkLoads) {
+            if (preg_match('#^(?:https?|ftp)://#i', $system)) {
+                $networkLoads[] = $system;
+            }
+
+            return null;
+        });
+
+        try {
+            $translator = new PseudoLocalizationTranslator(new IdentityTranslator(), ['parse_html' => true]);
+            $output = $translator->trans('<!DOCTYPE html SYSTEM "http://127.0.0.1:1/payload.dtd"><p>hi</p>');
+        } finally {
+            libxml_set_external_entity_loader(null);
+        }
+
+        $this->assertSame([], $networkLoads, 'PseudoLocalizationTranslator must not resolve external entities over the network.');
+        $this->assertIsString($output);
+    }
 }
+
+// @php-cs-fixer-ignore random_api_migration As logic is coupled with mt_rand() in src

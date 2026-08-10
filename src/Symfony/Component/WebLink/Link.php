@@ -98,6 +98,12 @@ class Link implements EvolvableLinkInterface
     public const REL_PREDECESSOR_VERSION = 'predecessor-version';
     public const REL_PREFETCH = 'prefetch';
     public const REL_PRELOAD = 'preload';
+
+    /**
+     * This feature is deprecated and superseded by the Speculation Rules API.
+     *
+     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/prerender
+     */
     public const REL_PRERENDER = 'prerender';
     public const REL_PREV = 'prev';
     public const REL_PREVIEW = 'preview';
@@ -117,7 +123,7 @@ class Link implements EvolvableLinkInterface
     public const REL_SERVICE_DESC = 'service-desc';
     public const REL_SERVICE_DOC = 'service-doc';
     public const REL_SERVICE_META = 'service-meta';
-    public const REL_SIPTRUNKINGCAPABILITY= 'siptrunkingcapability';
+    public const REL_SIPTRUNKINGCAPABILITY = 'siptrunkingcapability';
     public const REL_SPONSORED = 'sponsored';
     public const REL_START = 'start';
     public const REL_STATUS = 'status';
@@ -141,7 +147,27 @@ class Link implements EvolvableLinkInterface
     // Extra relations
     public const REL_MERCURE = 'mercure';
 
-    private string $href = '';
+    // `as` attributes for `REL_PRELOAD` only
+    // @see https://html.spec.whatwg.org/multipage/links.html#preload-destination
+    public const AS_FETCH = 'fetch';
+    public const AS_FONT = 'font';
+    public const AS_IMAGE = 'image';
+    public const AS_TRACK = 'track';
+
+    // `as` attributes for both `REL_PRELOAD` and `REL_MODULEPRELOAD`
+    public const AS_SCRIPT = 'script';
+    public const AS_STYLE = 'style';
+
+    // `as` attributes for `REL_MODULEPRELOAD` only
+    // @see https://html.spec.whatwg.org/multipage/links.html#module-preload-destination
+    // @see https://fetch.spec.whatwg.org/#request-destination-script-like
+    public const AS_AUDIOWORKLET = 'audioworklet';
+    public const AS_JSON = 'json';
+    public const AS_PAINTWORKLET = 'paintworklet';
+    public const AS_SERVICEWORKER = 'serviceworker';
+    public const AS_SHAREDWORKER = 'sharedworker';
+    public const AS_TEXT = 'text';
+    public const AS_WORKER = 'worker';
 
     /**
      * @var string[]
@@ -149,16 +175,17 @@ class Link implements EvolvableLinkInterface
     private array $rel = [];
 
     /**
-     * @var array<string, string|bool|string[]>
+     * @var array<string, scalar|\Stringable|list<scalar|\Stringable>>
      */
     private array $attributes = [];
 
-    public function __construct(string $rel = null, string $href = '')
-    {
+    public function __construct(
+        ?string $rel = null,
+        private string $href = '',
+    ) {
         if (null !== $rel) {
             $this->rel[$rel] = $rel;
         }
-        $this->href = $href;
     }
 
     public function getHref(): string
@@ -176,6 +203,11 @@ class Link implements EvolvableLinkInterface
         return array_values($this->rel);
     }
 
+    /**
+     * Returns a list of attributes that describe the target URI.
+     *
+     * @return array<string, scalar|\Stringable|list<scalar|\Stringable>>
+     */
     public function getAttributes(): array
     {
         return $this->attributes;
@@ -205,6 +237,14 @@ class Link implements EvolvableLinkInterface
         return $that;
     }
 
+    /**
+     * Returns an instance with the specified attribute added.
+     *
+     * If the specified attribute is already present, it will be overwritten
+     * with the new value.
+     *
+     * @param scalar|\Stringable|list<scalar|\Stringable> $value
+     */
     public function withAttribute(string $attribute, string|\Stringable|int|float|bool|array $value): static
     {
         $that = clone $this;

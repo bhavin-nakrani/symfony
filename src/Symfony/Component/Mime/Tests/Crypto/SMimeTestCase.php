@@ -20,20 +20,30 @@ abstract class SMimeTestCase extends TestCase
 {
     protected string $samplesDir;
 
+    private array $tmpFiles = [];
+
     protected function setUp(): void
     {
         $this->samplesDir = str_replace('\\', '/', realpath(__DIR__.'/../').'/_data/');
     }
 
+    protected function tearDown(): void
+    {
+        foreach ($this->tmpFiles as $file) {
+            @unlink($file);
+        }
+        $this->tmpFiles = [];
+    }
+
     protected function generateTmpFilename(): string
     {
-        return stream_get_meta_data(tmpfile())['uri'];
+        return $this->tmpFiles[] = tempnam(sys_get_temp_dir(), 'sf_mime_');
     }
 
     protected function normalizeFilePath(string $path): string
     {
         if (!file_exists($path)) {
-            throw new RuntimeException(sprintf('File does not exist: "%s"', $path));
+            throw new RuntimeException(\sprintf('File does not exist: "%s"', $path));
         }
 
         return str_replace('\\', '/', realpath($path));

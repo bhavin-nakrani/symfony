@@ -12,12 +12,10 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\MissingOptionsException;
 
 /**
- * Metadata for the CardSchemeValidator.
- *
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates a credit card number for a given credit card company.
  *
  * @author Tim Nagel <t.nagel@infinite.net.au>
  * @author Bernhard Schussek <bschussek@gmail.com>
@@ -46,34 +44,22 @@ class CardScheme extends Constraint
         self::INVALID_FORMAT_ERROR => 'INVALID_FORMAT_ERROR',
     ];
 
+    public string $message = 'Unsupported card type or invalid card number.';
+    public array|string|null $schemes = null;
+
     /**
-     * @deprecated since Symfony 6.1, use const ERROR_NAMES instead
+     * @param non-empty-string|non-empty-string[]|null $schemes Name(s) of the number scheme(s) used to validate the credit card number
+     * @param string[]|null                            $groups
      */
-    protected static $errorNames = self::ERROR_NAMES;
-
-    public $message = 'Unsupported card type or invalid card number.';
-    public $schemes;
-
-    public function __construct(array|string|null $schemes, string $message = null, array $groups = null, mixed $payload = null, array $options = [])
+    public function __construct(array|string|null $schemes, ?string $message = null, ?array $groups = null, mixed $payload = null)
     {
-        if (\is_array($schemes) && \is_string(key($schemes))) {
-            $options = array_merge($schemes, $options);
-        } else {
-            $options['value'] = $schemes;
+        if (null === $schemes) {
+            throw new MissingOptionsException(\sprintf('The options "schemes" must be set for constraint "%s".', self::class), ['schemes']);
         }
 
-        parent::__construct($options, $groups, $payload);
+        parent::__construct(null, $groups, $payload);
 
+        $this->schemes = $schemes;
         $this->message = $message ?? $this->message;
-    }
-
-    public function getDefaultOption(): ?string
-    {
-        return 'schemes';
-    }
-
-    public function getRequiredOptions(): array
-    {
-        return ['schemes'];
     }
 }

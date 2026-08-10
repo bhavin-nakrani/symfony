@@ -12,23 +12,36 @@
 namespace Symfony\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Exception\InvalidArgumentException;
 
 /**
- * @Annotation
- * @Target({"PROPERTY", "METHOD", "ANNOTATION"})
+ * Validates an object embedded in an object's property.
  *
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
 #[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 class Valid extends Constraint
 {
-    public $traverse = true;
+    public bool $traverse = true;
+    public bool $restrictGroups = true;
 
-    public function __construct(array $options = null, array $groups = null, $payload = null, bool $traverse = null)
+    /**
+     * @param string[]|null $groups
+     * @param bool|null     $traverse       Whether to validate {@see \Traversable} objects (defaults to true)
+     * @param bool|null     $restrictGroups Whether $groups also restrict the groups the nested object is validated
+     *                                      against; when false they only decide when to cascade, and the nested
+     *                                      object is validated against the groups being validated (defaults to true)
+     */
+    public function __construct(?array $options = null, ?array $groups = null, $payload = null, ?bool $traverse = null, ?bool $restrictGroups = null)
     {
-        parent::__construct($options ?? [], $groups, $payload);
+        if (null !== $options) {
+            throw new InvalidArgumentException(\sprintf('Passing an array of options to configure the "%s" constraint is no longer supported.', static::class));
+        }
+
+        parent::__construct(null, $groups, $payload);
 
         $this->traverse = $traverse ?? $this->traverse;
+        $this->restrictGroups = $restrictGroups ?? $this->restrictGroups;
     }
 
     public function __get(string $option): mixed
@@ -41,10 +54,7 @@ class Valid extends Constraint
         return parent::__get($option);
     }
 
-    /**
-     * @return void
-     */
-    public function addImplicitGroupName(string $group)
+    public function addImplicitGroupName(string $group): void
     {
         if (null !== $this->groups) {
             parent::addImplicitGroupName($group);

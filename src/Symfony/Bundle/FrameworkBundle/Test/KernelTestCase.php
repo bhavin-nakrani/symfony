@@ -12,9 +12,11 @@
 namespace Symfony\Bundle\FrameworkBundle\Test;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Config\Resource\SelfCheckingResourceChecker;
 use Symfony\Component\DependencyInjection\Container;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -25,19 +27,25 @@ use Symfony\Contracts\Service\ResetInterface;
  */
 abstract class KernelTestCase extends TestCase
 {
+    use ConsoleCommandAssertionsTrait;
     use MailerAssertionsTrait;
     use NotificationAssertionsTrait;
 
-    protected static $class;
+    protected static ?string $class = null;
+    protected static ?KernelInterface $kernel = null;
+    protected static bool $booted = false;
 
-    /**
-     * @var KernelInterface
-     */
-    protected static $kernel;
-
-    protected static $booted = false;
+    private static bool $kernelHasBeenRebooted = false;
 
     protected function tearDown(): void
+    {
+        static::ensureKernelShutdown();
+        static::$class = null;
+        static::$kernel = null;
+        static::$booted = false;
+    }
+
+    public static function tearDownAfterClass(): void
     {
         static::ensureKernelShutdown();
         static::$class = null;
@@ -52,11 +60,11 @@ abstract class KernelTestCase extends TestCase
     protected static function getKernelClass(): string
     {
         if (!isset($_SERVER['KERNEL_CLASS']) && !isset($_ENV['KERNEL_CLASS'])) {
-            throw new \LogicException(sprintf('You must set the KERNEL_CLASS environment variable to the fully-qualified class name of your Kernel in phpunit.xml / phpunit.xml.dist or override the "%1$s::createKernel()" or "%1$s::getKernelClass()" method.', static::class));
+            throw new \LogicException(\sprintf('You must set the KERNEL_CLASS environment variable to the fully-qualified class name of your Kernel in phpunit.xml / phpunit.xml.dist or override the "%1$s::createKernel()" or "%1$s::getKernelClass()" method.', static::class));
         }
 
         if (!class_exists($class = $_ENV['KERNEL_CLASS'] ?? $_SERVER['KERNEL_CLASS'])) {
-            throw new \RuntimeException(sprintf('Class "%s" doesn\'t exist or cannot be autoloaded. Check that the KERNEL_CLASS value in phpunit.xml matches the fully-qualified class name of your Kernel or override the "%s::createKernel()" method.', $class, static::class));
+            throw new \RuntimeException(\sprintf('Class "%s" doesn\'t exist or cannot be autoloaded. Check that the KERNEL_CLASS value in phpunit.xml matches the fully-qualified class name of your Kernel or override the "%s::createKernel()" method.', $class, static::class));
         }
 
         return $class;
@@ -74,6 +82,19 @@ abstract class KernelTestCase extends TestCase
         static::$kernel = $kernel;
         static::$booted = true;
 
+        // If the cache warmer is registered, it means that the cache has been
+        // warmed up, so the current container is not fresh anymore. Let's
+        // reboot a fresh one.
+        if ($kernel->getContainer()->initialized('cache_warmer')) {
+            static::ensureKernelShutdown();
+            self::$kernelHasBeenRebooted = true;
+
+            $kernel = static::createKernel($options);
+            $kernel->boot();
+            static::$kernel = $kernel;
+            static::$booted = true;
+        }
+
         return static::$kernel;
     }
 
@@ -84,10 +105,8 @@ abstract class KernelTestCase extends TestCase
      * used by other services.
      *
      * Using this method is the best way to get a container from your test code.
-     *
-     * @return Container
      */
-    protected static function getContainer(): ContainerInterface
+    protected static function getContainer(): Container
     {
         if (!static::$booted) {
             static::bootKernel();
@@ -112,25 +131,8 @@ abstract class KernelTestCase extends TestCase
     {
         static::$class ??= static::getKernelClass();
 
-        if (isset($options['environment'])) {
-            $env = $options['environment'];
-        } elseif (isset($_ENV['APP_ENV'])) {
-            $env = $_ENV['APP_ENV'];
-        } elseif (isset($_SERVER['APP_ENV'])) {
-            $env = $_SERVER['APP_ENV'];
-        } else {
-            $env = 'test';
-        }
-
-        if (isset($options['debug'])) {
-            $debug = $options['debug'];
-        } elseif (isset($_ENV['APP_DEBUG'])) {
-            $debug = $_ENV['APP_DEBUG'];
-        } elseif (isset($_SERVER['APP_DEBUG'])) {
-            $debug = $_SERVER['APP_DEBUG'];
-        } else {
-            $debug = true;
-        }
+        $env = $options['environment'] ?? $_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? 'test';
+        $debug = $options['debug'] ?? $_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? true;
 
         return new static::$class($env, $debug);
     }
@@ -143,11 +145,40 @@ abstract class KernelTestCase extends TestCase
         if (null !== static::$kernel) {
             static::$kernel->boot();
             $container = static::$kernel->getContainer();
+
+            $httpCacheDir = null;
+            if ($container->has('http_cache')) {
+                $httpCacheDir = static::$kernel->getShareDir().'/http_cache';
+            }
+
+            if ($container->has('services_resetter')) {
+                // Instantiate the service because Container::reset() only resets services that have been used
+                $container->get('services_resetter');
+            }
+
             static::$kernel->shutdown();
             static::$booted = false;
 
+            if (self::$kernelHasBeenRebooted) {
+                self::$kernelHasBeenRebooted = false;
+                try {
+                    (new \ReflectionProperty(Kernel::class, 'freshCache'))->setValue(null, []);
+                } catch (\ReflectionException) {
+                    // ignore if the property doesn't exist
+                }
+                try {
+                    (new \ReflectionProperty(SelfCheckingResourceChecker::class, 'cache'))->setValue(null, []);
+                } catch (\ReflectionException) {
+                    // ignore if the property doesn't exist
+                }
+            }
+
             if ($container instanceof ResetInterface) {
                 $container->reset();
+            }
+
+            if (null !== $httpCacheDir && is_dir($httpCacheDir)) {
+                (new Filesystem())->remove($httpCacheDir);
             }
         }
     }

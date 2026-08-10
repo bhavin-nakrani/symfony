@@ -12,9 +12,9 @@ PLIVO_DSN=plivo://AUTH_ID:AUTH_TOKEN@default?from=FROM
 
 where:
 
-- `AUTH_ID` is your Plivo Auth ID
-- `AUTH_TOKEN` is your Plivo Auth Token
-- `FROM` is your sender
+ - `AUTH_ID` is your Plivo Auth ID
+ - `AUTH_TOKEN` is your Plivo Auth Token
+ - `FROM` is your sender
 
 Adding Options to a Message
 ---------------------------
@@ -45,10 +45,20 @@ $sms->options($options);
 $texter->send($sms);
 ```
 
+Sponsor
+-------
+
+This package is looking for a [backer][1].
+
+Help Symfony by [sponsoring][3] its development!
+
 Resources
 ---------
 
-* [Contributing](https://symfony.com/doc/current/contributing/index.html)
-* [Report issues](https://github.com/symfony/symfony/issues) and
-  [send Pull Requests](https://github.com/symfony/symfony/pulls)
-  in the [main Symfony repository](https://github.com/symfony/symfony)
+ * [Contributing](https://symfony.com/doc/current/contributing/index.html)
+ * [Report issues](https://github.com/symfony/symfony/issues) and
+   [send Pull Requests](https://github.com/symfony/symfony/pulls)
+   in the [main Symfony repository](https://github.com/symfony/symfony)
+
+[1]: https://symfony.com/backers
+[3]: https://symfony.com/sponsor

@@ -1,0 +1,4 @@
+# Schema mutator deprecations triggered by doctrine/orm's SchemaTool on DBAL 4.5+.
+# These are vendor-internal: ORM has not yet migrated SchemaTool to the DBAL
+# Schema/Table editor API. Symfony's own schema code already uses the editor API.
+%^Doctrine\\DBAL\\Schema\\(Table|Schema)::\w+\(?\)? is deprecated%

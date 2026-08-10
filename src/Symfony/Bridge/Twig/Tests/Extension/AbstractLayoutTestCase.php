@@ -11,24 +11,23 @@
 
 namespace Symfony\Bridge\Twig\Tests\Extension;
 
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\MockObject\Stub;
+use Symfony\Bridge\Twig\Test\FormLayoutTestCase;
 use Symfony\Component\Form\Extension\Core\Type\PercentType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Csrf\CsrfExtension;
 use Symfony\Component\Form\FormError;
+use Symfony\Component\Form\FormExtensionInterface;
 use Symfony\Component\Form\FormView;
-use Symfony\Component\Form\Test\FormIntegrationTestCase;
-use Symfony\Component\Form\Tests\VersionAwareTest;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Contracts\Translation\TranslatableInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
+abstract class AbstractLayoutTestCase extends FormLayoutTestCase
 {
-    use VersionAwareTest;
-
-    protected MockObject&CsrfTokenManagerInterface $csrfTokenManager;
+    protected Stub&CsrfTokenManagerInterface $csrfTokenManager;
     protected array $testableFeatures = [];
 
     private string $defaultLocale;
@@ -42,12 +41,15 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         $this->defaultLocale = \Locale::getDefault();
         \Locale::setDefault('en');
 
-        $this->csrfTokenManager = $this->createMock(CsrfTokenManagerInterface::class);
+        $this->csrfTokenManager = $this->createStub(CsrfTokenManagerInterface::class);
 
         parent::setUp();
     }
 
-    protected function getExtensions()
+    /**
+     * @return FormExtensionInterface[]
+     */
+    protected function getExtensions(): array
     {
         return [
             new CsrfExtension($this->csrfTokenManager),
@@ -56,52 +58,24 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     protected function tearDown(): void
     {
-        \Locale::setDefault($this->defaultLocale);
-
-        parent::tearDown();
+        if (isset($this->defaultLocale)) {
+            \Locale::setDefault($this->defaultLocale);
+        }
     }
 
-    protected function assertXpathNodeValue(\DOMElement $element, $expression, $nodeValue)
+    /**
+     * The "hidden" placeholder_attr default of required ChoiceType fields depends
+     * on the installed symfony/form version (the default was introduced in 8.1).
+     */
+    protected function isRequiredPlaceholderHiddenByDefault(): bool
     {
-        $xpath = new \DOMXPath($element->ownerDocument);
-        $nodeList = $xpath->evaluate($expression);
-        $this->assertEquals(1, $nodeList->length);
-        $this->assertEquals($nodeValue, $nodeList->item(0)->nodeValue);
-    }
+        $view = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', null, [
+            'choices' => [],
+            'required' => true,
+            'placeholder' => 'placeholder',
+        ])->createView();
 
-    protected function assertMatchesXpath($html, $expression, $count = 1)
-    {
-        $dom = new \DOMDocument('UTF-8');
-
-        $html = preg_replace('/(<input [^>]+)(?<!\/)>/', '$1/>', $html);
-
-        try {
-            // Wrap in <root> node so we can load HTML with multiple tags at
-            // the top level
-            $dom->loadXML('<root>'.$html.'</root>');
-        } catch (\Exception $e) {
-            $this->fail(sprintf(
-                "Failed loading HTML:\n\n%s\n\nError: %s",
-                $html,
-                $e->getMessage()
-            ));
-        }
-        $xpath = new \DOMXPath($dom);
-        $nodeList = $xpath->evaluate('/root'.$expression);
-
-        if ($nodeList->length != $count) {
-            $dom->formatOutput = true;
-            $this->fail(sprintf(
-                "Failed asserting that \n\n%s\n\nmatches exactly %s. Matches %s in \n\n%s",
-                $expression,
-                1 == $count ? 'once' : $count.' times',
-                1 == $nodeList->length ? 'once' : $nodeList->length.' times',
-                // strip away <root> and </root>
-                substr($dom->saveHTML(), 6, -8)
-            ));
-        } else {
-            $this->addToAssertionCount(1);
-        }
+        return (bool) ($view->vars['placeholder_attr']['hidden'] ?? false);
     }
 
     protected function assertWidgetMatchesXpath(FormView $view, array $vars, $xpath)
@@ -124,29 +98,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
         $this->assertMatchesXpath($html, $xpath);
     }
-
-    abstract protected function renderForm(FormView $view, array $vars = []);
-
-    abstract protected function renderLabel(FormView $view, $label = null, array $vars = []);
-
-    protected function renderHelp(FormView $view)
-    {
-        $this->markTestSkipped(sprintf('%s::renderHelp() is not implemented.', static::class));
-    }
-
-    abstract protected function renderErrors(FormView $view);
-
-    abstract protected function renderWidget(FormView $view, array $vars = []);
-
-    abstract protected function renderRow(FormView $view, array $vars = []);
-
-    abstract protected function renderRest(FormView $view, array $vars = []);
-
-    abstract protected function renderStart(FormView $view, array $vars = []);
-
-    abstract protected function renderEnd(FormView $view, array $vars = []);
-
-    abstract protected function setTheme(FormView $view, array $themes, $useDefaultThemes = true);
 
     public function testLabel()
     {
@@ -379,8 +330,8 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
     public function testLabelWithoutTranslationOnButton()
     {
         $form = $this->factory->createNamedBuilder('myform', 'Symfony\Component\Form\Extension\Core\Type\FormType', null, [
-                'translation_domain' => false,
-            ])
+            'translation_domain' => false,
+        ])
             ->add('mybutton', 'Symfony\Component\Form\Extension\Core\Type\ButtonType')
             ->getForm();
         $view = $form->get('mybutton')->createView();
@@ -738,8 +689,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testSingleChoiceWithPreferred()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', '&a', [
             'choices' => ['Choice&A' => '&a', 'Choice&B' => '&b'],
             'preferred_choices' => ['&b'],
@@ -764,8 +713,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testSingleChoiceWithPreferredAndNoSeparator()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', '&a', [
             'choices' => ['Choice&A' => '&a', 'Choice&B' => '&b'],
             'preferred_choices' => ['&b'],
@@ -789,8 +736,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testSingleChoiceWithPreferredAndBlankSeparator()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', '&a', [
             'choices' => ['Choice&A' => '&a', 'Choice&B' => '&b'],
             'preferred_choices' => ['&b'],
@@ -815,8 +760,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testChoiceWithOnlyPreferred()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\ChoiceType', '&a', [
             'choices' => ['Choice&A' => '&a', 'Choice&B' => '&b'],
             'preferred_choices' => ['&a', '&b'],
@@ -892,7 +835,7 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
     [@name="name"]
     [not(@required)]
     [
-        ./option[@value=""][not(@selected)][not(@disabled)][.="[trans]Select&Anything&Not&Me[/trans]"]
+        ./option[@value=""][not(@selected)][not(@disabled)][not(@hidden)][.="[trans]Select&Anything&Not&Me[/trans]"]
         /following-sibling::option[@value="&a"][@selected="selected"][.="[trans]Choice&A[/trans]"]
         /following-sibling::option[@value="&b"][not(@selected)][.="[trans]Choice&B[/trans]"]
     ]
@@ -914,12 +857,13 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         // The "disabled" attribute was removed again due to a bug in the
         // BlackBerry 10 browser.
         // See https://github.com/symfony/symfony/pull/7678
+        $placeholderHidden = $this->isRequiredPlaceholderHiddenByDefault() ? '[@hidden="hidden"]' : '[not(@hidden)]';
         $this->assertWidgetMatchesXpath($form->createView(), [],
             '/select
     [@name="name"]
     [@required="required"]
     [
-        ./option[@value=""][not(@selected)][not(@disabled)][.="[trans]Test&Me[/trans]"]
+        ./option[@value=""][not(@selected)][not(@disabled)]'.$placeholderHidden.'[.="[trans]Test&Me[/trans]"]
         /following-sibling::option[@value="&a"][@selected="selected"][.="[trans]Choice&A[/trans]"]
         /following-sibling::option[@value="&b"][not(@selected)][.="[trans]Choice&B[/trans]"]
     ]
@@ -940,12 +884,14 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         // The "disabled" attribute was removed again due to a bug in the
         // BlackBerry 10 browser.
         // See https://github.com/symfony/symfony/pull/7678
+        // The hidden attribute is only defaulted for the "placeholder" option:
+        // placeholders injected via view variables render without it.
         $this->assertWidgetMatchesXpath($form->createView(), ['placeholder' => ''],
             '/select
     [@name="name"]
     [@required="required"]
     [
-        ./option[@value=""][not(@selected)][not(@disabled)][.=""]
+        ./option[@value=""][not(@selected)][not(@disabled)][not(@hidden)][.=""]
         /following-sibling::option[@value="&a"][@selected="selected"][.="[trans]Choice&A[/trans]"]
         /following-sibling::option[@value="&b"][not(@selected)][.="[trans]Choice&B[/trans]"]
     ]
@@ -1667,7 +1613,7 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         $form->get('date')->addError(new FormError('[trans]Error![/trans]'));
         $view = $form->createView();
 
-        $this->assertEmpty($this->renderErrors($view));
+        $this->assertSame('', $this->renderErrors($view));
         $this->assertNotEmpty($this->renderErrors($view['date']));
     }
 
@@ -1880,8 +1826,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testRenderNumberWithHtml5NumberType()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\NumberType', 1234.56, [
             'html5' => true,
         ]);
@@ -1898,8 +1842,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testRenderNumberWithHtml5NumberTypeAndStepAttribute()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\NumberType', 1234.56, [
             'html5' => true,
             'attr' => ['step' => '0.1'],
@@ -1974,8 +1916,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testPercentNoSymbol()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', PercentType::class, 0.1, ['symbol' => false, 'rounding_mode' => \NumberFormatter::ROUND_CEILING]);
         $this->assertWidgetMatchesXpath($form->createView(), [],
             '/input
@@ -1989,8 +1929,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testPercentCustomSymbol()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', PercentType::class, 0.1, ['symbol' => '‱', 'rounding_mode' => \NumberFormatter::ROUND_CEILING]);
         $this->assertWidgetMatchesXpath($form->createView(), [],
             '/input
@@ -2296,7 +2234,7 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         $form->get('time')->addError(new FormError('[trans]Error![/trans]'));
         $view = $form->createView();
 
-        $this->assertEmpty($this->renderErrors($view));
+        $this->assertSame('', $this->renderErrors($view));
         $this->assertNotEmpty($this->renderErrors($view['time']));
     }
 
@@ -2478,9 +2416,9 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
     public function testStartTagForMultipartForm()
     {
         $form = $this->factory->createBuilder('Symfony\Component\Form\Extension\Core\Type\FormType', null, [
-                'method' => 'get',
-                'action' => 'http://example.com/directory',
-            ])
+            'method' => 'get',
+            'action' => 'http://example.com/directory',
+        ])
             ->add('file', 'Symfony\Component\Form\Extension\Core\Type\FileType')
             ->getForm();
 
@@ -2514,7 +2452,7 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         $html = $this->renderWidget($form->createView());
 
         // compare plain HTML to check the whitespace
-        $this->assertSame('<input type="text" id="text" name="text" disabled="disabled" required="required" readonly="readonly" maxlength="10" pattern="\d+" class="foobar" data-foo="bar" value="value">', $html);
+        $this->assertSame('<input type="text" id="text" name="text" disabled="disabled" required="required" readonly="readonly" maxlength="10" pattern="\d+" class="foobar" data-foo="bar" value="value" />', $html);
     }
 
     public function testWidgetAttributeNameRepeatedIfTrue()
@@ -2526,7 +2464,7 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         $html = $this->renderWidget($form->createView());
 
         // foo="foo"
-        $this->assertSame('<input type="text" id="text" name="text" required="required" foo="foo" value="value">', $html);
+        $this->assertSame('<input type="text" id="text" name="text" required="required" foo="foo" value="value" />', $html);
     }
 
     public function testWidgetAttributeHiddenIfFalse()
@@ -2625,8 +2563,8 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
     public function testAttributesNotTranslatedWhenTranslationDomainIsFalse()
     {
         $view = $this->factory->createNamedBuilder('name', 'Symfony\Component\Form\Extension\Core\Type\FormType', null, [
-                'translation_domain' => false,
-            ])
+            'translation_domain' => false,
+        ])
             ->add('firstName', 'Symfony\Component\Form\Extension\Core\Type\TextType', ['attr' => ['title' => 'Foo']])
             ->add('lastName', 'Symfony\Component\Form\Extension\Core\Type\TextType', ['attr' => ['placeholder' => 'Bar']])
             ->getForm()
@@ -2668,8 +2606,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testLabelWithTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\TextType');
         $html = $this->renderLabel($form->createView(), 'Address is %address%', [
             'label_translation_parameters' => [
@@ -2687,8 +2623,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testHelpWithTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\TextType', null, [
             'help' => 'for company %company%',
             'help_translation_parameters' => [
@@ -2737,8 +2671,8 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testHelpWithTranslatableInterface()
     {
-        $message = new class() implements TranslatableInterface {
-            public function trans(TranslatorInterface $translator, string $locale = null): string
+        $message = new class implements TranslatableInterface {
+            public function trans(TranslatorInterface $translator, ?string $locale = null): string
             {
                 return $translator->trans('foo');
             }
@@ -2759,8 +2693,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testAttributesWithTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\TextType', null, [
             'attr' => [
                 'title' => 'Message to %company%',
@@ -2782,8 +2714,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testButtonWithTranslationParameters()
     {
-        $this->requiresFeatureSet(403);
-
         $form = $this->factory->createNamedBuilder('myform')
             ->add('mybutton', 'Symfony\Component\Form\Extension\Core\Type\ButtonType', [
                 'label' => 'Submit to %company%',
@@ -2802,13 +2732,9 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
         );
     }
 
-    /**
-     * @dataProvider submitFormNoValidateProvider
-     */
+    #[DataProvider('submitFormNoValidateProvider')]
     public function testSubmitFormNoValidate(bool $validate)
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->create(SubmitType::class, null, [
             'validate' => $validate,
         ]);
@@ -2838,8 +2764,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testWeekSingleText()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('holidays', 'Symfony\Component\Form\Extension\Core\Type\WeekType', '1970-W01', [
             'input' => 'string',
             'widget' => 'single_text',
@@ -2857,8 +2781,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testWeekSingleTextNoHtml5()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('holidays', 'Symfony\Component\Form\Extension\Core\Type\WeekType', '1970-W01', [
             'input' => 'string',
             'widget' => 'single_text',
@@ -2877,8 +2799,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testWeekChoices()
     {
-        $this->requiresFeatureSet(404);
-
         $data = ['year' => (int) date('Y'), 'week' => 1];
 
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\WeekType', $data, [
@@ -2903,8 +2823,6 @@ abstract class AbstractLayoutTestCase extends FormIntegrationTestCase
 
     public function testWeekText()
     {
-        $this->requiresFeatureSet(404);
-
         $form = $this->factory->createNamed('name', 'Symfony\Component\Form\Extension\Core\Type\WeekType', '2000-W01', [
             'input' => 'string',
             'widget' => 'text',

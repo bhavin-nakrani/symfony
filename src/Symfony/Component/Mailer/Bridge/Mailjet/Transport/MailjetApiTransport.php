@@ -30,48 +30,46 @@ class MailjetApiTransport extends AbstractApiTransport
     private const HOST = 'api.mailjet.com';
     private const API_VERSION = '3.1';
     private const FORBIDDEN_HEADERS = [
-        'Date', 'X-CSA-Complaints', 'Message-Id', 'X-MJ-StatisticsContactsListID',
-        'DomainKey-Status', 'Received-SPF', 'Authentication-Results', 'Received',
-        'From', 'Sender', 'Subject', 'To', 'Cc', 'Bcc', 'Reply-To', 'Return-Path', 'Delivered-To', 'DKIM-Signature',
-        'X-Feedback-Id', 'X-Mailjet-Segmentation', 'List-Id', 'X-MJ-MID', 'X-MJ-ErrorMessage',
-        'X-Mailjet-Debug', 'User-Agent', 'X-Mailer', 'X-MJ-WorkflowID',
+        'date', 'x-csa-complaints', 'message-id', 'x-mj-statisticscontactslistid',
+        'domainkey-status', 'received-spf', 'authentication-results', 'received',
+        'from', 'sender', 'subject', 'to', 'cc', 'bcc', 'reply-to', 'return-path', 'delivered-to', 'dkim-signature',
+        'x-feedback-id', 'x-mailjet-segmentation', 'list-id', 'x-mj-mid', 'x-mj-errormessage',
+        'x-mailjet-debug', 'user-agent', 'x-mailer', 'x-mj-workflowid',
     ];
     private const HEADER_TO_MESSAGE = [
-        'X-MJ-TemplateLanguage' => ['TemplateLanguage', 'bool'],
-        'X-MJ-TemplateID' => ['TemplateID', 'int'],
-        'X-MJ-TemplateErrorReporting' => ['TemplateErrorReporting', 'json'],
-        'X-MJ-TemplateErrorDeliver' => ['TemplateErrorDeliver', 'bool'],
-        'X-MJ-Vars' => ['Variables', 'json'],
-        'X-MJ-CustomID' => ['CustomID', 'string'],
-        'X-MJ-EventPayload' => ['EventPayload', 'string'],
-        'X-Mailjet-Campaign' => ['CustomCampaign', 'string'],
-        'X-Mailjet-DeduplicateCampaign' => ['DeduplicateCampaign', 'bool'],
-        'X-Mailjet-Prio' => ['Priority', 'int'],
-        'X-Mailjet-TrackClick' => ['TrackClick', 'string'],
-        'X-Mailjet-TrackOpen' => ['TrackOpen', 'string'],
+        'x-mj-templatelanguage' => ['TemplateLanguage', 'bool'],
+        'x-mj-templateid' => ['TemplateID', 'int'],
+        'x-mj-templateerrorreporting' => ['TemplateErrorReporting', 'templateerrorreporting'],
+        'x-mj-templateerrordeliver' => ['TemplateErrorDeliver', 'bool'],
+        'x-mj-vars' => ['Variables', 'json'],
+        'x-mj-customid' => ['CustomID', 'string'],
+        'x-mj-eventpayload' => ['EventPayload', 'string'],
+        'x-mailjet-campaign' => ['CustomCampaign', 'string'],
+        'x-mailjet-deduplicatecampaign' => ['DeduplicateCampaign', 'bool'],
+        'x-mailjet-prio' => ['Priority', 'int'],
+        'x-mailjet-trackclick' => ['TrackClicks', 'string'],
+        'x-mailjet-trackopen' => ['TrackOpens', 'string'],
     ];
 
-    private string $privateKey;
-    private string $publicKey;
-    private bool $sandbox;
-
-    public function __construct(string $publicKey, string $privateKey, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null, LoggerInterface $logger = null, bool $sandbox = false)
-    {
-        $this->publicKey = $publicKey;
-        $this->privateKey = $privateKey;
-        $this->sandbox = $sandbox;
-
+    public function __construct(
+        private string $publicKey,
+        #[\SensitiveParameter] private string $privateKey,
+        ?HttpClientInterface $client = null,
+        ?EventDispatcherInterface $dispatcher = null,
+        ?LoggerInterface $logger = null,
+        private bool $sandbox = false,
+    ) {
         parent::__construct($client, $dispatcher, $logger);
     }
 
     public function __toString(): string
     {
-        return sprintf('mailjet+api://%s', $this->getEndpoint().($this->sandbox ? '?sandbox=true' : ''));
+        return \sprintf('mailjet+api://%s', $this->getEndpoint().($this->sandbox ? '?sandbox=true' : ''));
     }
 
     protected function doSendApi(SentMessage $sentMessage, Email $email, Envelope $envelope): ResponseInterface
     {
-        $response = $this->client->request('POST', sprintf('https://%s/v%s/send', $this->getEndpoint(), self::API_VERSION), [
+        $response = $this->client->request('POST', \sprintf('https://%s/v%s/send', $this->getEndpoint(), self::API_VERSION), [
             'headers' => [
                 'Accept' => 'application/json',
             ],
@@ -83,7 +81,7 @@ class MailjetApiTransport extends AbstractApiTransport
             $statusCode = $response->getStatusCode();
             $result = $response->toArray(false);
         } catch (DecodingExceptionInterface) {
-            throw new HttpTransportException(sprintf('Unable to send an email: "%s" (code %d).', $response->getContent(false), $statusCode), $response);
+            throw new HttpTransportException(\sprintf('Unable to send an email: "%s" (code %d).', $response->getContent(false), $statusCode), $response);
         } catch (TransportExceptionInterface $e) {
             throw new HttpTransportException('Could not reach the remote Mailjet server.', $response, 0, $e);
         }
@@ -91,12 +89,12 @@ class MailjetApiTransport extends AbstractApiTransport
         if (200 !== $statusCode) {
             $errorDetails = $result['Messages'][0]['Errors'][0]['ErrorMessage'] ?? $response->getContent(false);
 
-            throw new HttpTransportException(sprintf('Unable to send an email: "%s" (code %d).', $errorDetails, $statusCode), $response);
+            throw new HttpTransportException(\sprintf('Unable to send an email: "%s" (code %d).', $errorDetails, $statusCode), $response);
         }
 
         // The response needs to contains a 'Messages' key that is an array
         if (!\array_key_exists('Messages', $result) || !\is_array($result['Messages']) || 0 === \count($result['Messages'])) {
-            throw new HttpTransportException(sprintf('Unable to send an email: "%s" malformed api response.', $response->getContent(false)), $response);
+            throw new HttpTransportException(\sprintf('Unable to send an email: "%s" malformed api response.', $response->getContent(false)), $response);
         }
 
         $sentMessage->setMessageId($result['Messages'][0]['To'][0]['MessageID'] ?? '');
@@ -130,7 +128,7 @@ class MailjetApiTransport extends AbstractApiTransport
         }
         if ($emails = $email->getReplyTo()) {
             if (1 < $length = \count($emails)) {
-                throw new TransportException(sprintf('Mailjet\'s API only supports one Reply-To email, %d given.', $length));
+                throw new TransportException(\sprintf('Mailjet\'s API only supports one Reply-To email, %d given.', $length));
             }
             $message['ReplyTo'] = $this->formatAddress($emails[0]);
         }
@@ -141,12 +139,13 @@ class MailjetApiTransport extends AbstractApiTransport
             $message['HTMLPart'] = $html;
         }
 
-        foreach ($email->getHeaders()->all() as $header) {
-            if ($convertConf = self::HEADER_TO_MESSAGE[$header->getName()] ?? false) {
+        foreach ($email->getHeaders()->all() as $headerName => $header) {
+            if ($convertConf = self::HEADER_TO_MESSAGE[$headerName] ?? false) {
                 $message[$convertConf[0]] = $this->castCustomHeader($header->getBodyAsString(), $convertConf[1]);
                 continue;
             }
-            if (\in_array($header->getName(), self::FORBIDDEN_HEADERS, true)) {
+
+            if (\in_array($headerName, self::FORBIDDEN_HEADERS, true)) {
                 continue;
             }
 
@@ -184,7 +183,7 @@ class MailjetApiTransport extends AbstractApiTransport
                 'Base64Content' => $attachment->bodyToString(),
             ];
             if ('inline' === $headers->getHeaderBody('Content-Disposition')) {
-                $formattedAttachment['ContentID'] = $headers->getHeaderParameter('Content-Disposition', 'name');
+                $formattedAttachment['ContentID'] = $attachment->hasContentId() ? $attachment->getContentId() : $filename;
                 $inlines[] = $formattedAttachment;
             } else {
                 $attachments[] = $formattedAttachment;
@@ -206,6 +205,9 @@ class MailjetApiTransport extends AbstractApiTransport
             'int' => (int) $value,
             'json' => json_decode($value, true, 512, \JSON_THROW_ON_ERROR),
             'string' => $value,
+
+            // The API transport supports a richer address format than the SMTP relay. Use a special case to support both with BC.
+            'templateerrorreporting' => false !== filter_var($value, \FILTER_VALIDATE_EMAIL) ? ['Email' => $value, 'Name' => ''] : $this->castCustomHeader($value, 'json'),
         };
     }
 }

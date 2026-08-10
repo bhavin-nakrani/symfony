@@ -1,8 +1,12 @@
-name: Intl data
+name: Intl/Emoji data
 
 on:
   push:
+    branches: [ '*.*' ]
     paths:
+      - 'src/Symfony/Component/Emoji/*.php'
+      - 'src/Symfony/Component/Emoji/Resources/data/**'
+      - 'src/Symfony/Component/Emoji/Tests/*Test.php'
       - 'src/Symfony/Component/Intl/*.php'
       - 'src/Symfony/Component/Intl/Util/GitRepository.php'
       - 'src/Symfony/Component/Intl/Resources/data/**'
@@ -10,6 +14,9 @@ on:
       - 'src/Symfony/Component/Intl/Tests/Util/GitRepositoryTest.php'
   pull_request:
     paths:
+      - 'src/Symfony/Component/Emoji/*.php'
+      - 'src/Symfony/Component/Emoji/Resources/data/**'
+      - 'src/Symfony/Component/Emoji/Tests/*Test.php'
       - 'src/Symfony/Component/Intl/*.php'
       - 'src/Symfony/Component/Intl/Util/GitRepository.php'
       - 'src/Symfony/Component/Intl/Resources/data/**'
@@ -29,12 +36,14 @@ permissions:
 
 jobs:
   tests:
-    name: Intl data
-    runs-on: Ubuntu-20.04
+    name: Intl/Emoji data
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install system dependencies
         run: |
@@ -52,12 +61,12 @@ jobs:
           echo "SYMFONY_ICU_VERSION=$SYMFONY_ICU_VERSION" >> $GITHUB_ENV
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           coverage: "none"
           extensions: "zip,intl-${{env.SYMFONY_ICU_VERSION}}"
-          ini-values: "memory_limit=-1"
-          php-version: "8.1"
+          ini-values: memory_limit=-1,intl.default_locale=en,intl.error_level=0
+          php-version: "8.4"
 
       - name: Install dependencies
         run: |
@@ -78,17 +87,29 @@ jobs:
         run: uconv -V && php -i | grep 'ICU version'
 
       - name: Run intl-data tests
-        run: ./phpunit --group intl-data -v
+        run: |
+          ./phpunit --group intl-data --exclude-group intl-data-isolate
+          ./phpunit --group intl-data --filter testWhenEnvVarNotSet
+          ./phpunit --group intl-data --filter testWhenEnvVarSetFalse
+          ./phpunit --group intl-data --filter testWhenEnvVarSetTrue
 
-      - name: Test with compressed data
+      - name: Test intl-data with compressed data
         run: |
           [ -f src/Symfony/Component/Intl/Resources/data/locales/en.php ]
           [ ! -f src/Symfony/Component/Intl/Resources/data/locales/en.php.gz ]
-          [ -f src/Symfony/Component/Intl/Resources/data/transliterator/emoji/emoji-en.php ]
-          [ ! -f src/Symfony/Component/Intl/Resources/data/transliterator/emoji/emoji-en.php.gz ]
           src/Symfony/Component/Intl/Resources/bin/compress
           [ ! -f src/Symfony/Component/Intl/Resources/data/locales/en.php ]
           [ -f src/Symfony/Component/Intl/Resources/data/locales/en.php.gz ]
-          [ ! -f src/Symfony/Component/Intl/Resources/data/transliterator/emoji/emoji-en.php ]
-          [ -f src/Symfony/Component/Intl/Resources/data/transliterator/emoji/emoji-en.php.gz ]
           ./phpunit src/Symfony/Component/Intl
+
+      - name: Run Emoji tests
+        run: ./phpunit src/Symfony/Component/Emoji
+
+      - name: Test Emoji with compressed data
+        run: |
+          [ -f src/Symfony/Component/Emoji/Resources/data/emoji-en.php ]
+          [ ! -f src/Symfony/Component/Emoji/Resources/data/emoji-en.php.gz ]
+          src/Symfony/Component/Emoji/Resources/bin/compress
+          [ ! -f src/Symfony/Component/Emoji/Resources/data/emoji-en.php ]
+          [ -f src/Symfony/Component/Emoji/Resources/data/emoji-en.php.gz ]
+          ./phpunit src/Symfony/Component/Emoji

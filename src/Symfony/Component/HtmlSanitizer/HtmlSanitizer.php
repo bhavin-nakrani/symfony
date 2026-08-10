@@ -11,7 +11,7 @@
 
 namespace Symfony\Component\HtmlSanitizer;
 
-use Symfony\Component\HtmlSanitizer\Parser\MastermindsParser;
+use Symfony\Component\HtmlSanitizer\Parser\NativeParser;
 use Symfony\Component\HtmlSanitizer\Parser\ParserInterface;
 use Symfony\Component\HtmlSanitizer\Reference\W3CReference;
 use Symfony\Component\HtmlSanitizer\TextSanitizer\StringSanitizer;
@@ -22,7 +22,6 @@ use Symfony\Component\HtmlSanitizer\Visitor\DomVisitor;
  */
 final class HtmlSanitizer implements HtmlSanitizerInterface
 {
-    private HtmlSanitizerConfig $config;
     private ParserInterface $parser;
 
     /**
@@ -30,27 +29,29 @@ final class HtmlSanitizer implements HtmlSanitizerInterface
      */
     private array $domVisitors = [];
 
-    public function __construct(HtmlSanitizerConfig $config, ParserInterface $parser = null)
-    {
-        $this->config = $config;
-        $this->parser = $parser ?? new MastermindsParser();
+    public function __construct(
+        private HtmlSanitizerConfig $config,
+        ?ParserInterface $parser = null,
+    ) {
+        $this->parser = $parser ?? new NativeParser();
     }
 
     public function sanitize(string $input): string
     {
-        return $this->sanitizeWithContext(W3CReference::CONTEXT_BODY, $input);
+        return $this->sanitizeFor(W3CReference::CONTEXT_BODY, $input);
     }
 
     public function sanitizeFor(string $element, string $input): string
     {
-        return $this->sanitizeWithContext(
-            W3CReference::CONTEXTS_MAP[StringSanitizer::htmlLower($element)] ?? W3CReference::CONTEXT_BODY,
-            $input
-        );
-    }
+        $element = StringSanitizer::htmlLower($element);
+        $context = W3CReference::CONTEXTS_MAP[$element] ?? W3CReference::CONTEXT_BODY;
+        $element = isset(W3CReference::BODY_ELEMENTS[$element]) ? $element : $context;
 
-    private function sanitizeWithContext(string $context, string $input): string
-    {
+        // Prevent DOS attack induced by extremely long HTML strings
+        if (-1 !== $this->config->getMaxInputLength() && \strlen($input) > $this->config->getMaxInputLength()) {
+            $input = substr($input, 0, $this->config->getMaxInputLength());
+        }
+
         // Text context: early return with HTML encoding
         if (W3CReference::CONTEXT_TEXT === $context) {
             return StringSanitizer::encodeHtmlEntities($input);
@@ -59,22 +60,17 @@ final class HtmlSanitizer implements HtmlSanitizerInterface
         // Other context: build a DOM visitor
         $this->domVisitors[$context] ??= $this->createDomVisitorForContext($context);
 
-        // Prevent DOS attack induced by extremely long HTML strings
-        if (\strlen($input) > $this->config->getMaxInputLength()) {
-            $input = substr($input, 0, $this->config->getMaxInputLength());
-        }
-
         // Only operate on valid UTF-8 strings. This is necessary to prevent cross
         // site scripting issues on Internet Explorer 6. Idea from Drupal (filter_xss).
         if (!$this->isValidUtf8($input)) {
             return '';
         }
 
-        // Remove NULL character
-        $input = str_replace(\chr(0), '', $input);
+        // Remove NULL character and HTML entities for null byte
+        $input = str_replace(\chr(0), '�', $input);
 
         // Parse as HTML
-        if (!$parsed = $this->parser->parse($input)) {
+        if ('' === trim($input) || !$parsed = $this->parser->parse($input, $element)) {
             return '';
         }
 
@@ -102,7 +98,13 @@ final class HtmlSanitizer implements HtmlSanitizerInterface
 
             foreach ($this->config->getBlockedElements() as $blockedElement => $v) {
                 if (\array_key_exists($blockedElement, W3CReference::HEAD_ELEMENTS)) {
-                    $elementsConfig[$blockedElement] = false;
+                    $elementsConfig[$blockedElement] = HtmlSanitizerAction::Block;
+                }
+            }
+
+            foreach ($this->config->getDroppedElements() as $droppedElement => $v) {
+                if (\array_key_exists($droppedElement, W3CReference::HEAD_ELEMENTS)) {
+                    $elementsConfig[$droppedElement] = HtmlSanitizerAction::Drop;
                 }
             }
 
@@ -118,7 +120,13 @@ final class HtmlSanitizer implements HtmlSanitizerInterface
 
         foreach ($this->config->getBlockedElements() as $blockedElement => $v) {
             if (!\array_key_exists($blockedElement, W3CReference::HEAD_ELEMENTS)) {
-                $elementsConfig[$blockedElement] = false;
+                $elementsConfig[$blockedElement] = HtmlSanitizerAction::Block;
+            }
+        }
+
+        foreach ($this->config->getDroppedElements() as $droppedElement => $v) {
+            if (!\array_key_exists($droppedElement, W3CReference::HEAD_ELEMENTS)) {
+                $elementsConfig[$droppedElement] = HtmlSanitizerAction::Drop;
             }
         }
 

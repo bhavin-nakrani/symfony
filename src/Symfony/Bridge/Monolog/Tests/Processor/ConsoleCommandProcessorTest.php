@@ -17,7 +17,7 @@ use Symfony\Bridge\Monolog\Tests\RecordFactory;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Event\ConsoleEvent;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Output\NullOutput;
 
 class ConsoleCommandProcessorTest extends TestCase
 {
@@ -61,14 +61,26 @@ class ConsoleCommandProcessorTest extends TestCase
         $this->assertEquals([], $record['extra']);
     }
 
+    public function testCommandDataSurvivesReset()
+    {
+        $processor = new ConsoleCommandProcessor();
+        $processor->addCommandData($this->getConsoleEvent());
+
+        $processor->reset();
+
+        $record = $processor(RecordFactory::create());
+
+        $this->assertArrayHasKey('command', $record['extra']);
+        $this->assertSame(self::TEST_NAME, $record['extra']['command']['name']);
+    }
+
     private function getConsoleEvent(): ConsoleEvent
     {
-        $input = $this->createMock(InputInterface::class);
+        $input = $this->createStub(InputInterface::class);
         $input->method('getArguments')->willReturn(self::TEST_ARGUMENTS);
         $input->method('getOptions')->willReturn(self::TEST_OPTIONS);
-        $command = $this->createMock(Command::class);
-        $command->method('getName')->willReturn(self::TEST_NAME);
+        $command = new Command(self::TEST_NAME);
 
-        return new ConsoleEvent($command, $input, $this->createMock(OutputInterface::class));
+        return new ConsoleEvent($command, $input, new NullOutput());
     }
 }

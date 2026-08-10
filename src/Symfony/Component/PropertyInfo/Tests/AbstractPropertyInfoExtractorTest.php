@@ -20,7 +20,7 @@ use Symfony\Component\PropertyInfo\PropertyInitializableExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyTypeExtractorInterface;
 use Symfony\Component\PropertyInfo\Tests\Fixtures\DummyExtractor;
 use Symfony\Component\PropertyInfo\Tests\Fixtures\NullExtractor;
-use Symfony\Component\PropertyInfo\Type;
+use Symfony\Component\TypeInfo\Type;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
@@ -54,9 +54,9 @@ class AbstractPropertyInfoExtractorTest extends TestCase
         $this->assertSame('long', $this->propertyInfo->getLongDescription('Foo', 'bar', []));
     }
 
-    public function testGetTypes()
+    public function testGetType()
     {
-        $this->assertEquals([new Type(Type::BUILTIN_TYPE_INT)], $this->propertyInfo->getTypes('Foo', 'bar', []));
+        $this->assertEquals(Type::int(), $this->propertyInfo->getType('Foo', 'bar', []));
     }
 
     public function testIsReadable()

@@ -11,22 +11,32 @@
 
 namespace Symfony\Component\Validator\Tests\Mapping\Loader;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\All;
 use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\Collection;
+use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\IsTrue;
+use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotNull;
+use Symfony\Component\Validator\Constraints\Optional;
 use Symfony\Component\Validator\Constraints\Range;
+use Symfony\Component\Validator\Constraints\Required;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
 use Symfony\Component\Validator\Mapping\Loader\YamlFileLoader;
-use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\Entity;
-use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\GroupSequenceProviderEntity;
+use Symfony\Component\Validator\Tests\Dummy\DummyGroupProvider;
+use Symfony\Component\Validator\Tests\Fixtures\Attribute\GroupProviderDto;
 use Symfony\Component\Validator\Tests\Fixtures\ConstraintA;
 use Symfony\Component\Validator\Tests\Fixtures\ConstraintB;
 use Symfony\Component\Validator\Tests\Fixtures\ConstraintWithRequiredArgument;
 use Symfony\Component\Validator\Tests\Fixtures\Entity_81;
+use Symfony\Component\Validator\Tests\Fixtures\GroupSequenceCascadeEntity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\Entity;
+use Symfony\Component\Validator\Tests\Fixtures\NestedAttribute\GroupSequenceProviderEntity;
+use Symfony\Component\Validator\Tests\Mapping\Loader\Fixtures\ConstraintWithNamedArguments;
+use Symfony\Component\Validator\Tests\Mapping\Loader\Fixtures\ConstraintWithoutValueWithNamedArguments;
 
 class YamlFileLoaderTest extends TestCase
 {
@@ -41,14 +51,13 @@ class YamlFileLoaderTest extends TestCase
         $this->assertSame([], $r->getValue($loader));
     }
 
-    /**
-     * @dataProvider provideInvalidYamlFiles
-     */
+    #[DataProvider('provideInvalidYamlFiles')]
     public function testInvalidYamlFiles($path)
     {
-        $this->expectException(\InvalidArgumentException::class);
         $loader = new YamlFileLoader(__DIR__.'/'.$path);
         $metadata = new ClassMetadata(Entity::class);
+
+        $this->expectException(\InvalidArgumentException::class);
 
         $loader->loadClassMetadata($metadata);
     }
@@ -107,19 +116,22 @@ class YamlFileLoaderTest extends TestCase
         $expected->addConstraint(new Callback('validateMe'));
         $expected->addConstraint(new Callback('validateMeStatic'));
         $expected->addConstraint(new Callback(['Symfony\Component\Validator\Tests\Fixtures\CallbackClass', 'callback']));
+        $expected->addConstraint(new ConstraintWithoutValueWithNamedArguments());
+        $expected->addConstraint(new ConstraintWithNamedArguments('foo'));
+        $expected->addConstraint(new ConstraintWithNamedArguments(['foo', 'bar']));
         $expected->addPropertyConstraint('firstName', new NotNull());
-        $expected->addPropertyConstraint('firstName', new Range(['min' => 3]));
-        $expected->addPropertyConstraint('firstName', new Choice(['A', 'B']));
-        $expected->addPropertyConstraint('firstName', new All([new NotNull(), new Range(['min' => 3])]));
-        $expected->addPropertyConstraint('firstName', new All(['constraints' => [new NotNull(), new Range(['min' => 3])]]));
-        $expected->addPropertyConstraint('firstName', new Collection(['fields' => [
-            'foo' => [new NotNull(), new Range(['min' => 3])],
-            'bar' => [new Range(['min' => 5])],
-        ]]));
-        $expected->addPropertyConstraint('firstName', new Choice([
-            'message' => 'Must be one of %choices%',
-            'choices' => ['A', 'B'],
+        $expected->addPropertyConstraint('firstName', new All(constraints: [new NotNull(), new Range(min: 3)]));
+        $expected->addPropertyConstraint('firstName', new All(constraints: [new NotNull(), new Range(min: 3)]));
+        $expected->addPropertyConstraint('firstName', new Collection(fields: [
+            'foo' => [new NotNull(), new Range(min: 3)],
+            'bar' => [new Range(min: 5)],
+            'baz' => new Required([new Email()]),
+            'qux' => new Optional([new NotBlank()]),
         ]));
+        $expected->addPropertyConstraint('firstName', new Choice(
+            message: 'Must be one of %choices%',
+            choices: ['A', 'B'],
+        ));
         $expected->addGetterConstraint('lastName', new NotNull());
         $expected->addGetterConstraint('valid', new IsTrue());
         $expected->addGetterConstraint('permissions', new IsTrue());
@@ -135,7 +147,7 @@ class YamlFileLoaderTest extends TestCase
         $loader->loadClassMetadata($metadata);
 
         $expected = new ClassMetadata(Entity::class);
-        $expected->addPropertyConstraint('firstName', new Range(['max' => \PHP_INT_MAX]));
+        $expected->addPropertyConstraint('firstName', new Range(max: \PHP_INT_MAX));
 
         $this->assertEquals($expected, $metadata);
     }
@@ -153,6 +165,19 @@ class YamlFileLoaderTest extends TestCase
         $this->assertEquals($expected, $metadata);
     }
 
+    public function testLoadGroupSequenceCascadingTheCurrentGroup()
+    {
+        $loader = new YamlFileLoader(__DIR__.'/constraint-mapping.yml');
+        $metadata = new ClassMetadata(GroupSequenceCascadeEntity::class);
+
+        $loader->loadClassMetadata($metadata);
+
+        $groupSequence = $metadata->getGroupSequence();
+
+        $this->assertSame(['Foo', 'GroupSequenceCascadeEntity'], $groupSequence->groups);
+        $this->assertTrue($groupSequence->cascadeCurrentGroup);
+    }
+
     public function testLoadGroupSequenceProvider()
     {
         $loader = new YamlFileLoader(__DIR__.'/constraint-mapping.yml');
@@ -161,6 +186,20 @@ class YamlFileLoaderTest extends TestCase
         $loader->loadClassMetadata($metadata);
 
         $expected = new ClassMetadata(GroupSequenceProviderEntity::class);
+        $expected->setGroupSequenceProvider(true);
+
+        $this->assertEquals($expected, $metadata);
+    }
+
+    public function testLoadGroupProvider()
+    {
+        $loader = new YamlFileLoader(__DIR__.'/constraint-mapping.yml');
+        $metadata = new ClassMetadata(GroupProviderDto::class);
+
+        $loader->loadClassMetadata($metadata);
+
+        $expected = new ClassMetadata(GroupProviderDto::class);
+        $expected->setGroupProvider(DummyGroupProvider::class);
         $expected->setGroupSequenceProvider(true);
 
         $this->assertEquals($expected, $metadata);

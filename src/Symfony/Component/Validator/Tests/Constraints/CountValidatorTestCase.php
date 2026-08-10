@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraints\Count;
 use Symfony\Component\Validator\Constraints\CountValidator;
 use Symfony\Component\Validator\Constraints\DivisibleBy;
@@ -31,7 +32,7 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Count(6));
+        $this->validate(null, new Count(6));
 
         $this->assertNoViolation();
     }
@@ -39,7 +40,7 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
     public function testExpectsCountableType()
     {
         $this->expectException(UnexpectedValueException::class);
-        $this->validator->validate(new \stdClass(), new Count(5));
+        $this->validate(new \stdClass(), new Count(5));
     }
 
     public static function getThreeOrLessElements()
@@ -69,101 +70,39 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
         ];
     }
 
-    /**
-     * @dataProvider getThreeOrLessElements
-     */
-    public function testValidValuesMax($value)
-    {
-        $constraint = new Count(['max' => 3]);
-        $this->validator->validate($value, $constraint);
-
-        $this->assertNoViolation();
-    }
-
-    /**
-     * @dataProvider getThreeOrLessElements
-     */
+    #[DataProvider('getThreeOrLessElements')]
     public function testValidValuesMaxNamed($value)
     {
         $constraint = new Count(max: 3);
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
-    public function testValidValuesMin($value)
-    {
-        $constraint = new Count(['min' => 5]);
-        $this->validator->validate($value, $constraint);
-
-        $this->assertNoViolation();
-    }
-
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
+    #[DataProvider('getFiveOrMoreElements')]
     public function testValidValuesMinNamed($value)
     {
         $constraint = new Count(min: 5);
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getFourElements
-     */
-    public function testValidValuesExact($value)
-    {
-        $constraint = new Count(4);
-        $this->validator->validate($value, $constraint);
-
-        $this->assertNoViolation();
-    }
-
-    /**
-     * @dataProvider getFourElements
-     */
+    #[DataProvider('getFourElements')]
     public function testValidValuesExactNamed($value)
     {
         $constraint = new Count(exactly: 4);
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
-    public function testTooManyValues($value)
-    {
-        $constraint = new Count([
-            'max' => 4,
-            'maxMessage' => 'myMessage',
-        ]);
-
-        $this->validator->validate($value, $constraint);
-
-        $this->buildViolation('myMessage')
-            ->setParameter('{{ count }}', \count($value))
-            ->setParameter('{{ limit }}', 4)
-            ->setInvalidValue($value)
-            ->setPlural(4)
-            ->setCode(Count::TOO_MANY_ERROR)
-            ->assertRaised();
-    }
-
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
+    #[DataProvider('getFiveOrMoreElements')]
     public function testTooManyValuesNamed($value)
     {
         $constraint = new Count(max: 4, maxMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ count }}', \count($value))
@@ -174,35 +113,12 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getThreeOrLessElements
-     */
-    public function testTooFewValues($value)
-    {
-        $constraint = new Count([
-            'min' => 4,
-            'minMessage' => 'myMessage',
-        ]);
-
-        $this->validator->validate($value, $constraint);
-
-        $this->buildViolation('myMessage')
-            ->setParameter('{{ count }}', \count($value))
-            ->setParameter('{{ limit }}', 4)
-            ->setInvalidValue($value)
-            ->setPlural(4)
-            ->setCode(Count::TOO_FEW_ERROR)
-            ->assertRaised();
-    }
-
-    /**
-     * @dataProvider getThreeOrLessElements
-     */
+    #[DataProvider('getThreeOrLessElements')]
     public function testTooFewValuesNamed($value)
     {
         $constraint = new Count(min: 4, minMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ count }}', \count($value))
@@ -213,36 +129,12 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
-    public function testTooManyValuesExact($value)
-    {
-        $constraint = new Count([
-            'min' => 4,
-            'max' => 4,
-            'exactMessage' => 'myMessage',
-        ]);
-
-        $this->validator->validate($value, $constraint);
-
-        $this->buildViolation('myMessage')
-            ->setParameter('{{ count }}', \count($value))
-            ->setParameter('{{ limit }}', 4)
-            ->setInvalidValue($value)
-            ->setPlural(4)
-            ->setCode(Count::NOT_EQUAL_COUNT_ERROR)
-            ->assertRaised();
-    }
-
-    /**
-     * @dataProvider getFiveOrMoreElements
-     */
+    #[DataProvider('getFiveOrMoreElements')]
     public function testTooManyValuesExactNamed($value)
     {
         $constraint = new Count(exactly: 4, exactMessage: 'myMessage');
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ count }}', \count($value))
@@ -253,18 +145,16 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
-    /**
-     * @dataProvider getThreeOrLessElements
-     */
+    #[DataProvider('getThreeOrLessElements')]
     public function testTooFewValuesExact($value)
     {
-        $constraint = new Count([
-            'min' => 4,
-            'max' => 4,
-            'exactMessage' => 'myMessage',
-        ]);
+        $constraint = new Count(
+            min: 4,
+            max: 4,
+            exactMessage: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ count }}', \count($value))
@@ -283,9 +173,9 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
         $this->assertEquals(5, $constraint->max);
     }
 
-    public function testConstraintAnnotationDefaultOption()
+    public function testConstraintAttributeDefaultOption()
     {
-        $constraint = new Count(['value' => 5, 'exactMessage' => 'message']);
+        $constraint = new Count(exactly: 5, exactMessage: 'message');
 
         $this->assertEquals(5, $constraint->min);
         $this->assertEquals(5, $constraint->max);
@@ -296,17 +186,17 @@ abstract class CountValidatorTestCase extends ConstraintValidatorTestCase
     // is called with the right DivisibleBy constraint.
     public function testDivisibleBy()
     {
-        $constraint = new Count([
-            'divisibleBy' => 123,
-            'divisibleByMessage' => 'foo {{ compared_value }}',
-        ]);
+        $constraint = new Count(
+            divisibleBy: 123,
+            divisibleByMessage: 'foo {{ compared_value }}',
+        );
 
-        $this->expectValidateValue(0, 3, [new DivisibleBy([
-            'value' => 123,
-            'message' => 'foo {{ compared_value }}',
-        ])], $this->group);
+        $this->expectValidateValue(0, 3, [new DivisibleBy(
+            value: 123,
+            message: 'foo {{ compared_value }}',
+        )], $this->group);
 
-        $this->validator->validate(['foo', 'bar', 'ccc'], $constraint);
+        $this->validate(['foo', 'bar', 'ccc'], $constraint);
 
         $this->assertNoViolation();
     }

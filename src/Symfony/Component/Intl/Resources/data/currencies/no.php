@@ -220,7 +220,7 @@ return [
         ],
         'BYN' => [
             'BYN',
-            'nye hviterussiske rubler',
+            'nye belarusiske rubler',
         ],
         'BYR' => [
             'BYR',
@@ -898,9 +898,13 @@ return [
             'SKK',
             'slovakiske koruna',
         ],
+        'SLE' => [
+            'SLE',
+            'sierraleonsk leone',
+        ],
         'SLL' => [
             'SLL',
-            'sierraleonske leone',
+            'sierraleonsk leone (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -1074,6 +1078,10 @@ return [
             'XCD',
             'østkaribiske dollar',
         ],
+        'XCG' => [
+            'Cg.',
+            'karibiske gylden',
+        ],
         'XEU' => [
             'XEU',
             'europeisk valutaenhet',
@@ -1149,6 +1157,10 @@ return [
         'ZWD' => [
             'ZWD',
             'zimbabwiske dollar (1980–2008)',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'zimbabwiske gull',
         ],
         'ZWL' => [
             'ZWL',

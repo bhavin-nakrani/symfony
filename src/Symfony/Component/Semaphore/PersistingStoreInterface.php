@@ -24,32 +24,34 @@ interface PersistingStoreInterface
     /**
      * Stores the resource if the semaphore is not full.
      *
-     * @return void
-     *
      * @throws SemaphoreAcquiringException
      */
-    public function save(Key $key, float $ttlInSecond);
+    public function save(Key $key, float $ttlInSecond): void;
 
     /**
      * Removes a resource from the storage.
      *
-     * @return void
-     *
      * @throws SemaphoreReleasingException
      */
-    public function delete(Key $key);
+    public function delete(Key $key): void;
 
     /**
      * Returns whether or not the resource exists in the storage.
+     *
+     * Implementations may have side effects on the {@see Key}'s opaque state
+     * (e.g. dropping references to slots that were lost on the backend) and
+     * may issue more than one backend round-trip. Callers in hot paths or
+     * destructors should expect O(weight) cost on stores that track each
+     * slot individually (see {@see Store\LockStore})
+     * versus O(1) on stores that maintain a single token per key (see
+     * {@see Store\RedisStore}).
      */
     public function exists(Key $key): bool;
 
     /**
      * Extends the TTL of a resource.
      *
-     * @return void
-     *
      * @throws SemaphoreExpiredException
      */
-    public function putOffExpiration(Key $key, float $ttlInSecond);
+    public function putOffExpiration(Key $key, float $ttlInSecond): void;
 }

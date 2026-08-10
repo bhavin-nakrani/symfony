@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Notifier\Bridge\KazInfoTeh\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\KazInfoTeh\KazInfoTehTransport;
@@ -26,7 +27,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 final class KazInfoTehTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null): TransportInterface
+    public static function createTransport(?HttpClientInterface $client = null): TransportInterface
     {
         return (new KazInfoTehTransport('username', 'password', 'sender', $client ?? new MockHttpClient()))->setHost('test.host');
     }
@@ -68,9 +69,7 @@ final class KazInfoTehTransportTest extends TransportTestCase
         }
     }
 
-    /**
-     * @dataProvider responseProvider
-     */
+    #[DataProvider('responseProvider')]
     public function testThrowExceptionWhenMessageWasNotSent(int $statusCode, string $content, string $errorMessage)
     {
         $client = $this->createClient($statusCode, $content);

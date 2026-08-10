@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'UserAssignedNames' => [
+        'XK' => 'il-Kosovo',
+    ],
     'Names' => [
         'AD' => 'Andorra',
         'AE' => 'l-Emirati Għarab Magħquda',
@@ -107,7 +110,6 @@ return [
         'IL' => 'Iżrael',
         'IM' => 'Isle of Man',
         'IN' => 'l-Indja',
-        'IO' => 'Territorju Brittaniku tal-Oċean Indjan',
         'IQ' => 'l-Iraq',
         'IR' => 'l-Iran',
         'IS' => 'l-Iżlanda',

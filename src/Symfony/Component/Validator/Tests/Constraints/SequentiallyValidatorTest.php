@@ -33,7 +33,7 @@ class SequentiallyValidatorTest extends ConstraintValidatorTestCase
     {
         $constraints = [
             new Type('number'),
-            new Range(['min' => 4]),
+            new Range(min: 4),
         ];
 
         $value = 6;
@@ -41,7 +41,7 @@ class SequentiallyValidatorTest extends ConstraintValidatorTestCase
         $this->expectValidateValue(0, $value, [$constraints[0]]);
         $this->expectValidateValue(1, $value, [$constraints[1]]);
 
-        $this->validator->validate($value, new Sequentially($constraints));
+        $this->validate($value, new Sequentially($constraints));
 
         $this->assertNoViolation();
     }
@@ -50,7 +50,7 @@ class SequentiallyValidatorTest extends ConstraintValidatorTestCase
     {
         $constraints = [
             new Type('string'),
-            new Regex(['pattern' => '[a-z]']),
+            new Regex(pattern: '[a-z]'),
             new NotEqualTo('Foo'),
         ];
 
@@ -59,7 +59,7 @@ class SequentiallyValidatorTest extends ConstraintValidatorTestCase
         $this->expectValidateValue(0, $value, [$constraints[0]]);
         $this->expectFailingValueValidation(1, $value, [$constraints[1]], null, new ConstraintViolation('regex error', null, [], null, '', null, null, 'regex'));
 
-        $this->validator->validate($value, new Sequentially($constraints));
+        $this->validate($value, new Sequentially($constraints));
 
         $this->assertCount(1, $this->context->getViolations());
     }
@@ -68,20 +68,20 @@ class SequentiallyValidatorTest extends ConstraintValidatorTestCase
     {
         $validator = Validation::createValidator();
 
-        $violations = $validator->validate(50, new Sequentially([
-            'constraints' => [
-                new GreaterThan([
-                    'groups' => 'senior',
-                    'value' => 55,
-                ]),
-                new Range([
-                    'groups' => 'adult',
-                    'min' => 18,
-                    'max' => 55,
-                ]),
+        $violations = $validator->validate(50, new Sequentially(
+            constraints: [
+                new GreaterThan(
+                    groups: ['senior'],
+                    value: 55,
+                ),
+                new Range(
+                    groups: ['adult'],
+                    min: 18,
+                    max: 55,
+                ),
             ],
-            'groups' => ['adult', 'senior'],
-        ]), 'adult');
+            groups: ['adult', 'senior'],
+        ), 'adult');
 
         $this->assertCount(0, $violations);
     }

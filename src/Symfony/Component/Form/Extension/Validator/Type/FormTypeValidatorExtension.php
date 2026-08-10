@@ -14,6 +14,7 @@ namespace Symfony\Component\Form\Extension\Validator\Type;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Validator\EventListener\ValidationListener;
 use Symfony\Component\Form\Extension\Validator\ViolationMapper\ViolationMapper;
+use Symfony\Component\Form\Extension\Validator\ViolationMapper\ViolationMapperInterface;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormRendererInterface;
 use Symfony\Component\OptionsResolver\Options;
@@ -27,28 +28,27 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 class FormTypeValidatorExtension extends BaseValidatorExtension
 {
-    private ValidatorInterface $validator;
-    private ViolationMapper $violationMapper;
-    private bool $legacyErrorMessages;
+    private readonly ViolationMapperInterface $violationMapper;
 
-    public function __construct(ValidatorInterface $validator, bool $legacyErrorMessages = true, FormRendererInterface $formRenderer = null, TranslatorInterface $translator = null)
-    {
-        $this->validator = $validator;
-        $this->violationMapper = new ViolationMapper($formRenderer, $translator);
+    public function __construct(
+        private ValidatorInterface $validator,
+        bool|ViolationMapperInterface|null $violationMapper = null,
+        ?FormRendererInterface $formRenderer = null,
+        ?TranslatorInterface $translator = null,
+    ) {
+        if (\is_bool($violationMapper)) {
+            trigger_deprecation('symfony/form', '8.1', \sprintf('Passing a boolean as a second argument of "%s"\'s constructor is deprecated; pass a "%s" instead.', self::class, ViolationMapperInterface::class));
+            $violationMapper = null;
+        }
+        $this->violationMapper = $violationMapper ?? new ViolationMapper($formRenderer, $translator);
     }
 
-    /**
-     * @return void
-     */
-    public function buildForm(FormBuilderInterface $builder, array $options)
+    public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder->addEventSubscriber(new ValidationListener($this->validator, $this->violationMapper));
     }
 
-    /**
-     * @return void
-     */
-    public function configureOptions(OptionsResolver $resolver)
+    public function configureOptions(OptionsResolver $resolver): void
     {
         parent::configureOptions($resolver);
 

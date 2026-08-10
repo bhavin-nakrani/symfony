@@ -11,11 +11,15 @@
 
 namespace Symfony\Component\Scheduler\Generator;
 
+use Psr\Cache\CacheItemInterface;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
 final class Checkpoint implements CheckpointInterface
 {
+    private const CACHE_EXPIRY = 5 * 365 * 86400; // 5 years
+
+    private \DateTimeImmutable $from;
     private \DateTimeImmutable $time;
     private int $index = -1;
     private bool $reset = false;
@@ -30,23 +34,33 @@ final class Checkpoint implements CheckpointInterface
     public function acquire(\DateTimeImmutable $now): bool
     {
         if ($this->lock && !$this->lock->acquire()) {
-            // Reset local state if a Lock is acquired by another Worker.
+            // Reset local state if a Lock is acquired by another Worker and state is not shared through cache.
             $this->reset = true;
 
             return false;
         }
 
-        if ($this->reset) {
+        if ($this->cache) {
+            [$this->time, $this->index, $this->from] = $this->cache->get($this->name, static function (CacheItemInterface $item) use ($now) {
+                $item->expiresAfter(self::CACHE_EXPIRY);
+
+                return [$now, -1, $now];
+            }) + [2 => $now];
+            $this->save($this->time, $this->index);
+        } elseif ($this->reset) {
             $this->reset = false;
             $this->save($now, -1);
         }
 
         $this->time ??= $now;
-        if ($this->cache) {
-            $this->save(...$this->cache->get($this->name, fn () => [$now, -1]));
-        }
+        $this->from ??= $now;
 
         return true;
+    }
+
+    public function from(): \DateTimeImmutable
+    {
+        return $this->from;
     }
 
     public function time(): \DateTimeImmutable
@@ -63,7 +77,13 @@ final class Checkpoint implements CheckpointInterface
     {
         $this->time = $time;
         $this->index = $index;
-        $this->cache?->get($this->name, fn () => [$time, $index], \INF);
+        $this->from ??= $time;
+        $from = $this->from;
+        $this->cache?->get($this->name, static function (CacheItemInterface $item) use ($time, $index, $from) {
+            $item->expiresAfter(self::CACHE_EXPIRY);
+
+            return [$time, $index, $from];
+        }, \INF);
     }
 
     /**

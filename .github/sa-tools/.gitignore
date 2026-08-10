@@ -1,0 +1,10 @@
+*
+!.gitignore
+!psalm.baseline.xml
+!phpstan-diff.php
+!check-hardening-tests.php
+!rules.neon
+!rules
+!rules/*
+!stubs
+!stubs/*

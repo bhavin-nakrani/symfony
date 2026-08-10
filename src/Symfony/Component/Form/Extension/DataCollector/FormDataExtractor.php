@@ -98,19 +98,17 @@ class FormDataExtractor implements FormDataExtractorInterface
             while (null !== $cause) {
                 if ($cause instanceof ConstraintViolationInterface) {
                     $errorData['trace'][] = $cause;
-                    $cause = method_exists($cause, 'getCause') ? $cause->getCause() : null;
-
-                    continue;
-                }
-
-                if ($cause instanceof \Exception) {
-                    $errorData['trace'][] = $cause;
-                    $cause = $cause->getPrevious();
+                    $cause = $cause->getCause();
 
                     continue;
                 }
 
                 $errorData['trace'][] = $cause;
+                if ($cause instanceof \Exception) {
+                    $cause = $cause->getPrevious();
+
+                    continue;
+                }
 
                 break;
             }

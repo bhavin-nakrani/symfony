@@ -1,7 +1,8 @@
 framework:
-    annotations: false
-    http_method_override: false
     secret: s3cr3t
     csrf_protection: ~
     session:
+        handler_id: null
         storage_factory_id: session.storage.factory.native
+        cookie_secure: auto
+        cookie_samesite: lax

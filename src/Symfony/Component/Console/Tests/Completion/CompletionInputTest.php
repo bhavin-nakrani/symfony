@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Console\Tests\Completion;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Completion\CompletionInput;
 use Symfony\Component\Console\Input\InputArgument;
@@ -19,15 +20,15 @@ use Symfony\Component\Console\Input\InputOption;
 
 class CompletionInputTest extends TestCase
 {
-    /**
-     * @dataProvider provideBindData
-     */
+    #[DataProvider('provideBindData')]
     public function testBind(CompletionInput $input, string $expectedType, ?string $expectedName, string $expectedValue)
     {
         $definition = new InputDefinition([
             new InputOption('with-required-value', 'r', InputOption::VALUE_REQUIRED),
             new InputOption('with-optional-value', 'o', InputOption::VALUE_OPTIONAL),
             new InputOption('without-value', 'n', InputOption::VALUE_NONE),
+            new InputOption('deprecated-option', 'y', InputOption::DEPRECATED | InputOption::VALUE_NONE),
+            new InputOption('hidden-option', 'z', InputOption::HIDDEN | InputOption::VALUE_NONE),
             new InputArgument('required-arg', InputArgument::REQUIRED),
             new InputArgument('optional-arg', InputArgument::OPTIONAL),
         ]);
@@ -61,6 +62,14 @@ class CompletionInputTest extends TestCase
         yield 'optval-long-optional' => [CompletionInput::fromTokens(['bin/console', '--with-optional-value='], 1), CompletionInput::TYPE_OPTION_VALUE, 'with-optional-value', ''];
         yield 'optval-long-space-optional' => [CompletionInput::fromTokens(['bin/console', '--with-optional-value'], 2), CompletionInput::TYPE_OPTION_VALUE, 'with-optional-value', ''];
 
+        // deprecated & hidden options
+        yield 'optval-short-deprecated' => [CompletionInput::fromTokens(['bin/console', '-y'], 2), CompletionInput::TYPE_ARGUMENT_VALUE, 'required-arg', ''];
+        yield 'optval-short-hidden' => [CompletionInput::fromTokens(['bin/console', '-z'], 2), CompletionInput::TYPE_ARGUMENT_VALUE, 'required-arg', ''];
+        yield 'optval-long-deprecated-partial' => [CompletionInput::fromTokens(['bin/console', '--deprecated'], 1), CompletionInput::TYPE_OPTION_NAME, null, '--deprecated'];
+        yield 'optval-long-deprecated' => [CompletionInput::fromTokens(['bin/console', '--deprecated-option'], 2), CompletionInput::TYPE_ARGUMENT_VALUE, 'required-arg', ''];
+        yield 'optval-long-hidden-partial' => [CompletionInput::fromTokens(['bin/console', '--hidden'], 1), CompletionInput::TYPE_OPTION_NAME, null, '--hidden'];
+        yield 'optval-long-hidden' => [CompletionInput::fromTokens(['bin/console', '--hidden-option'], 2), CompletionInput::TYPE_ARGUMENT_VALUE, 'required-arg', ''];
+
         // arguments
         yield 'arg-minimal-input' => [CompletionInput::fromTokens(['bin/console'], 1), CompletionInput::TYPE_ARGUMENT_VALUE, 'required-arg', ''];
         yield 'arg-optional' => [CompletionInput::fromTokens(['bin/console', 'symfony'], 2), CompletionInput::TYPE_ARGUMENT_VALUE, 'optional-arg', ''];
@@ -74,9 +83,7 @@ class CompletionInputTest extends TestCase
         yield 'end' => [CompletionInput::fromTokens(['bin/console', 'symfony', 'sensiolabs'], 3), CompletionInput::TYPE_NONE, null, ''];
     }
 
-    /**
-     * @dataProvider provideBindWithLastArrayArgumentData
-     */
+    #[DataProvider('provideBindWithLastArrayArgumentData')]
     public function testBindWithLastArrayArgument(CompletionInput $input, ?string $expectedValue)
     {
         $definition = new InputDefinition([
@@ -111,9 +118,7 @@ class CompletionInputTest extends TestCase
         $this->assertEquals('', $input->getCompletionValue(), 'Unexpected value');
     }
 
-    /**
-     * @dataProvider provideFromStringData
-     */
+    #[DataProvider('provideFromStringData')]
     public function testFromString($inputStr, array $expectedTokens)
     {
         $input = CompletionInput::fromString($inputStr, 1);
@@ -131,5 +136,20 @@ class CompletionInputTest extends TestCase
         yield ['bin/console -eprod', ['bin/console', '-eprod']];
         yield ['bin/console cache:clear "multi word string"', ['bin/console', 'cache:clear', '"multi word string"']];
         yield ['bin/console cache:clear \'multi word string\'', ['bin/console', 'cache:clear', '\'multi word string\'']];
+    }
+
+    public function testToString()
+    {
+        $input = CompletionInput::fromTokens(['foo', 'bar', 'baz'], 0);
+        $this->assertSame('foo| bar baz', (string) $input);
+
+        $input = CompletionInput::fromTokens(['foo', 'bar', 'baz'], 1);
+        $this->assertSame('foo bar| baz', (string) $input);
+
+        $input = CompletionInput::fromTokens(['foo', 'bar', 'baz'], 2);
+        $this->assertSame('foo bar baz|', (string) $input);
+
+        $input = CompletionInput::fromTokens(['foo', 'bar', 'baz'], 11);
+        $this->assertSame('foo bar baz |', (string) $input);
     }
 }

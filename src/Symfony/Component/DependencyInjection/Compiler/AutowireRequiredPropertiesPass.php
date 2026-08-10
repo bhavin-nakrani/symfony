@@ -11,8 +11,12 @@
 
 namespace Symfony\Component\DependencyInjection\Compiler;
 
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\TypedReference;
 use Symfony\Contracts\Service\Attribute\Required;
 
@@ -42,21 +46,26 @@ class AutowireRequiredPropertiesPass extends AbstractRecursivePass
             if (!($type = $reflectionProperty->getType()) instanceof \ReflectionNamedType) {
                 continue;
             }
-            $doc = false;
-            if (!$reflectionProperty->getAttributes(Required::class)
-                && ((false === $doc = $reflectionProperty->getDocComment()) || false === stripos($doc, '@required') || !preg_match('#(?:^/\*\*|\n\s*+\*)\s*+@required(?:\s|\*/$)#i', $doc))
-            ) {
+            if (!$reflectionProperty->getAttributes(Required::class)) {
                 continue;
-            }
-            if ($doc) {
-                trigger_deprecation('symfony/dependency-injection', '6.3', 'Using the "@required" annotation on property "%s::$%s" is deprecated, use the "Symfony\Contracts\Service\Attribute\Required" attribute instead.', $reflectionProperty->class, $reflectionProperty->name);
             }
             if (\array_key_exists($name = $reflectionProperty->getName(), $properties)) {
                 continue;
             }
+            if (
+                $reflectionProperty->isPrivateSet()
+                || $reflectionProperty->isProtectedSet()
+                || !$reflectionProperty->isPublic()
+            ) {
+                throw new InvalidArgumentException(\sprintf('Cannot autowire non-public(set) property "%s::$%s" with #[%s].', $reflectionClass->getName(), $reflectionProperty->getName(), Required::class));
+            }
 
             $type = $type->getName();
-            $value->setProperty($name, new TypedReference($type, $type, ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE, $name));
+            $value->setProperty($name, new TypedReference($type, $type, ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE, $name, array_map(static fn ($a) => $a->newInstance(), array_merge(
+                $reflectionProperty->getAttributes(Autowire::class, \ReflectionAttribute::IS_INSTANCEOF),
+                $reflectionProperty->getAttributes(AutowireDecorated::class),
+                $reflectionProperty->getAttributes(Target::class),
+            ))));
         }
 
         return $value;

@@ -64,6 +64,8 @@ interface ClassMetadataInterface extends MetadataInterface
      */
     public function isGroupSequenceProvider(): bool;
 
+    public function getGroupProvider(): ?string;
+
     /**
      * Check if there's any metadata attached to the given named property.
      *

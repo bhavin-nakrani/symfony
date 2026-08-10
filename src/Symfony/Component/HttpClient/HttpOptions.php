@@ -66,6 +66,16 @@ class HttpOptions
     /**
      * @return $this
      */
+    public function setHeader(string $key, string $value): static
+    {
+        $this->options['headers'][$key] = $value;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
     public function setHeaders(iterable $headers): static
     {
         $this->options['headers'] = $headers;
@@ -146,9 +156,13 @@ class HttpOptions
     }
 
     /**
+     * Whether to buffer the response, or a stream to write it to, or a closure deciding it from the response headers.
+     *
+     * @param bool|resource|\Closure(array<string, list<string>> $headers): (bool|resource) $buffer
+     *
      * @return $this
      */
-    public function buffer(bool $buffer): static
+    public function buffer(mixed $buffer): static
     {
         $this->options['buffer'] = $buffer;
 
@@ -156,6 +170,8 @@ class HttpOptions
     }
 
     /**
+     * @param callable(int, int, array, \Closure|null=):void $callback
+     *
      * @return $this
      */
     public function setOnProgress(callable $callback): static
@@ -211,6 +227,16 @@ class HttpOptions
     public function setMaxDuration(float $maxDuration): static
     {
         $this->options['max_duration'] = $maxDuration;
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function setMaxConnectDuration(float $maxConnectDuration): static
+    {
+        $this->options['max_connect_duration'] = $maxConnectDuration;
 
         return $this;
     }

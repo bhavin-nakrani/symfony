@@ -11,29 +11,24 @@
 
 namespace Symfony\Component\Translation\Tests;
 
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Translation\LocaleSwitcher;
 use Symfony\Contracts\Translation\LocaleAwareInterface;
 
-/**
- * @requires extension intl
- */
+#[RequiresPhpExtension('intl')]
 class LocaleSwitcherTest extends TestCase
 {
     private string $intlLocale;
 
     protected function setUp(): void
     {
-        parent::setUp();
-
         $this->intlLocale = \Locale::getDefault();
     }
 
     protected function tearDown(): void
     {
-        parent::tearDown();
-
         \Locale::setDefault($this->intlLocale);
     }
 
@@ -66,10 +61,11 @@ class LocaleSwitcherTest extends TestCase
         $this->assertSame('en', $service->getLocale());
         $this->assertSame('en', $switcher->getLocale());
 
-        $switcher->runWithLocale('fr', function () use ($switcher, $service) {
+        $switcher->runWithLocale('fr', function (string $locale) use ($switcher, $service) {
             $this->assertSame('fr', \Locale::getDefault());
             $this->assertSame('fr', $service->getLocale());
             $this->assertSame('fr', $switcher->getLocale());
+            $this->assertSame('fr', $locale);
         });
 
         $this->assertSame('en', \Locale::getDefault());

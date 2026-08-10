@@ -694,9 +694,13 @@ return [
             'SKK',
             'Slóvakísk króna',
         ],
+        'SLE' => [
+            'SLE',
+            'síerraleónsk ljóna',
+        ],
         'SLL' => [
             'SLL',
-            'síerraleónsk ljóna',
+            'síerraleónsk ljóna (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -854,6 +858,10 @@ return [
             'EC$',
             'austurkarabískur dalur',
         ],
+        'XCG' => [
+            'XCG',
+            'Karíbahafsgyllini',
+        ],
         'XFO' => [
             'XFO',
             'Franskur gullfranki',
@@ -901,6 +909,10 @@ return [
         'ZWD' => [
             'ZWD',
             'Simbabveskur dalur',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'simbabveskt gold',
         ],
     ],
 ];

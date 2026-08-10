@@ -11,10 +11,12 @@
 
 namespace Symfony\Component\Translation\Bridge\Loco\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Translation\Bridge\Loco\LocoProvider;
+use Symfony\Component\Translation\Dumper\XliffFileDumper;
 use Symfony\Component\Translation\Loader\LoaderInterface;
 use Symfony\Component\Translation\Loader\XliffFileLoader;
 use Symfony\Component\Translation\Provider\ProviderInterface;
@@ -25,21 +27,18 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class LocoProviderWithoutTranslatorBagTest extends LocoProviderTest
 {
-    public static function createProvider(HttpClientInterface $client, LoaderInterface $loader, LoggerInterface $logger, string $defaultLocale, string $endpoint, TranslatorBagInterface $translatorBag = null): ProviderInterface
+    public static function createProvider(HttpClientInterface $client, LoaderInterface $loader, LoggerInterface $logger, string $defaultLocale, string $endpoint, ?TranslatorBagInterface $translatorBag = null, ?string $restrictToStatus = null, XliffFileDumper $dumper = new XliffFileDumper()): ProviderInterface
     {
-        return new LocoProvider($client, $loader, $logger, $defaultLocale, $endpoint, null);
+        return new LocoProvider($client, $loader, $logger, $endpoint, null, $restrictToStatus, $dumper);
     }
 
     /**
      * Ensure the Last-Modified is not sent when $translatorBag is null.
-     *
-     * @dataProvider getResponsesForReadWithLastModified
      */
+    #[DataProvider('getResponsesForReadWithLastModified')]
     public function testReadWithLastModified(array $locales, array $domains, array $responseContents, array $lastModifieds, TranslatorBag $expectedTranslatorBag)
     {
         $responses = [];
-        $consecutiveLoadArguments = [];
-        $consecutiveLoadReturns = [];
 
         foreach ($locales as $locale) {
             foreach ($domains as $domain) {
@@ -55,21 +54,18 @@ class LocoProviderWithoutTranslatorBagTest extends LocoProviderTest
                         ],
                     ]);
                 };
-                $consecutiveLoadArguments[] = [$responseContents[$locale][$domain], $locale, $domain];
-                $consecutiveLoadReturns[] = (new XliffFileLoader())->load($responseContents[$locale][$domain], $locale, $domain);
             }
         }
 
+        $this->loader = $this->createMock(LoaderInterface::class);
         $loader = $this->getLoader();
-        $consecutiveLoadArguments = array_merge($consecutiveLoadArguments, $consecutiveLoadArguments);
-        $consecutiveLoadReturns = array_merge($consecutiveLoadReturns, $consecutiveLoadReturns);
 
-        $loader->expects($this->exactly(\count($consecutiveLoadArguments)))
+        $loader->expects($this->exactly(\count($responses) * 2))
             ->method('load')
-            ->willReturnCallback(function (...$args) use (&$consecutiveLoadArguments, &$consecutiveLoadReturns) {
-                $this->assertSame(array_shift($consecutiveLoadArguments), $args);
+            ->willReturnCallback(function (string $resource, string $locale, string $domain) use ($responseContents) {
+                $this->assertSame($responseContents[$locale][$domain], $resource);
 
-                return array_shift($consecutiveLoadReturns);
+                return (new XliffFileLoader())->load($resource, $locale, $domain);
             });
 
         $provider = $this->createProvider(

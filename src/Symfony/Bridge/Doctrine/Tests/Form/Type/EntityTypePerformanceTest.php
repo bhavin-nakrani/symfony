@@ -14,6 +14,8 @@ namespace Symfony\Bridge\Doctrine\Tests\Form\Type;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use Symfony\Bridge\Doctrine\Form\DoctrineOrmExtension;
 use Symfony\Bridge\Doctrine\Tests\DoctrineTestHelper;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\SingleIntIdEntity;
@@ -23,21 +25,23 @@ use Symfony\Component\Form\Test\FormPerformanceTestCase;
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
+#[IgnoreDeprecations]
+#[Group('doctrine-dbal-workaround')]
 class EntityTypePerformanceTest extends FormPerformanceTestCase
 {
-    private const ENTITY_CLASS = 'Symfony\Bridge\Doctrine\Tests\Fixtures\SingleIntIdEntity';
+    private const ENTITY_CLASS = SingleIntIdEntity::class;
 
     private EntityManager $em;
 
-    protected function getExtensions()
+    protected function getExtensions(): array
     {
-        $manager = $this->createMock(ManagerRegistry::class);
+        $manager = $this->createStub(ManagerRegistry::class);
 
-        $manager->expects($this->any())
+        $manager
             ->method('getManager')
             ->willReturn($this->em);
 
-        $manager->expects($this->any())
+        $manager
             ->method('getManagerForClass')
             ->willReturn($this->em);
 
@@ -81,9 +85,8 @@ class EntityTypePerformanceTest extends FormPerformanceTestCase
     /**
      * This test case is realistic in collection forms where each
      * row contains the same entity field.
-     *
-     * @group benchmark
      */
+    #[Group('benchmark')]
     public function testCollapsedEntityField()
     {
         $this->setMaxRunningTime(1);
@@ -98,9 +101,7 @@ class EntityTypePerformanceTest extends FormPerformanceTestCase
         }
     }
 
-    /**
-     * @group benchmark
-     */
+    #[Group('benchmark')]
     public function testCollapsedEntityFieldWithChoices()
     {
         $choices = $this->em->createQuery('SELECT c FROM '.self::ENTITY_CLASS.' c')->getResult();
@@ -117,9 +118,7 @@ class EntityTypePerformanceTest extends FormPerformanceTestCase
         }
     }
 
-    /**
-     * @group benchmark
-     */
+    #[Group('benchmark')]
     public function testCollapsedEntityFieldWithPreferredChoices()
     {
         $choices = $this->em->createQuery('SELECT c FROM '.self::ENTITY_CLASS.' c')->getResult();
@@ -127,9 +126,9 @@ class EntityTypePerformanceTest extends FormPerformanceTestCase
 
         for ($i = 0; $i < 40; ++$i) {
             $form = $this->factory->create('Symfony\Bridge\Doctrine\Form\Type\EntityType', null, [
-                    'class' => self::ENTITY_CLASS,
-                    'preferred_choices' => $choices,
-                ]);
+                'class' => self::ENTITY_CLASS,
+                'preferred_choices' => $choices,
+            ]);
 
             // force loading of the choice list
             $form->createView();

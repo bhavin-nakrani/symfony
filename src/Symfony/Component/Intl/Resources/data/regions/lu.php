@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'UserAssignedNames' => [],
     'Names' => [
         'AD' => 'Andore',
         'AE' => 'Lemila alabu',
@@ -92,7 +93,6 @@ return [
         'IE' => 'Irelande',
         'IL' => 'Isirayele',
         'IN' => 'Inde',
-        'IO' => 'Lutanda lwa Angeletele ku mbu wa Indiya',
         'IQ' => 'Iraki',
         'IR' => 'Ira',
         'IS' => 'Isilande',

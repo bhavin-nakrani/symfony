@@ -1,13 +1,80 @@
 CHANGELOG
 =========
 
+8.2
+---
+
+ * Add IterableToArrayCollectionTransformer for ObjectMapper
+ * Throw a `ConstraintDefinitionException` from `UniqueEntity` when a checked field holds an array or is a to-many association, instead of building a query that cannot match
+ * Allow using closures with the `#[MapEntity]` attribute
+
+8.1
+---
+
+ * Add option `uid_format` to `EntityType`
+ * Deprecate setting an `$aliasMap` in `RegisterMappingsPass`; namespace aliases are no longer supported in Doctrine
+
+8.0
+---
+
+ * Remove support for auto-mapping Doctrine entities to controller arguments; use explicit mapping instead
+ * Make `ProxyCacheWarmer` class `final`
+ * Remove `AbstractDoctrineExtension`, the code is incorporated into the extension classes of Doctrine bundles
+
+7.4
+---
+
+ * Deprecate `UniqueEntity::getRequiredOptions()` and `UniqueEntity::getDefaultOption()`
+ * Use a single table named `schema_subscriber_check_` in schema listeners to detect same database connections
+ * Add support for `Symfony\Component\Clock\DatePoint` as `DayPointType` and `TimePointType` Doctrine type
+ * Deprecate the `AbstractDoctrineExtension` class; its code is incorporated into the extension classes of Doctrine bundles
+
+7.3
+---
+
+ * Reset the manager registry using native lazy objects when applicable
+ * Deprecate the `DoctrineExtractor::getTypes()` method, use `DoctrineExtractor::getType()` instead
+ * Add support for `Symfony\Component\Clock\DatePoint` as `DatePointType` Doctrine type
+ * Improve exception message when `EntityValueResolver` gets no mapping information
+ * Add type aliases support to `EntityValueResolver`
+
+7.2
+---
+
+ * Accept `ReadableCollection` in `CollectionToArrayTransformer`
+
+7.1
+---
+
+ * Allow `EntityValueResolver` to return a list of entities
+ * Add support for auto-closing idle connections
+ * Allow validating every class against `UniqueEntity` constraint
+ * Deprecate auto-mapping of entities in favor of mapped route parameters
+
+7.0
+---
+
+ * Remove `DoctrineDbalCacheAdapterSchemaSubscriber`, use `DoctrineDbalCacheAdapterSchemaListener` instead
+ * Remove `MessengerTransportDoctrineSchemaSubscriber`, use `MessengerTransportDoctrineSchemaListener` instead
+ * Remove `RememberMeTokenProviderDoctrineSchemaSubscriber`, use `RememberMeTokenProviderDoctrineSchemaListener` instead
+ * Remove `DbalLogger`, use a middleware instead
+ * Remove `DoctrineDataCollector::addLogger()`, use a `DebugDataHolder` instead
+ * Remove `ContainerAwareLoader`, use dependency injection in your fixtures instead
+ * `ContainerAwareEventManager::getListeners()` must be called with an event name
+ * DoctrineBridge now requires `doctrine/event-manager:^2`
+ * Add parameter `$isSameDatabase` to `DoctrineTokenProvider::configureSchema()`
+
 6.4
 ---
 
+ * [BC BREAK] Add argument `$buildDir` to `ProxyCacheWarmer::warmUp()`
+ * [BC BREAK] Add return type-hints to `EntityFactory`
  * Deprecate `DbalLogger`, use a middleware instead
  * Deprecate not constructing `DoctrineDataCollector` with an instance of `DebugDataHolder`
  * Deprecate `DoctrineDataCollector::addLogger()`, use a `DebugDataHolder` instead
  * Deprecate `ContainerAwareLoader`, use dependency injection in your fixtures instead
+ * Always pass the `Request` object to `EntityValueResolver`'s expression
+ * [BC BREAK] Change argument `$lastUsed` of `DoctrineTokenProvider::updateToken()` to accept `DateTimeInterface`
 
 6.3
 ---

@@ -498,9 +498,13 @@ return [
             'SHP',
             'Libra de Santa Helena',
         ],
+        'SLE' => [
+            'SLE',
+            'Leone qullqi de Sierra Leona',
+        ],
         'SLL' => [
             'SLL',
-            'Leone de Sierra Leona',
+            'Leone qullqi de Sierra Leona (1964–2022)',
         ],
         'SOS' => [
             'SOS',
@@ -606,6 +610,10 @@ return [
             'EC$',
             'Dólar del Caribe Oriental',
         ],
+        'XCG' => [
+            'Cg.',
+            'Caribe guilderkuna',
+        ],
         'XOF' => [
             'F CFA',
             'Franco CFA de África Occidental',
@@ -625,6 +633,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Kwacha Zambiano',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabuemanta quri',
         ],
     ],
 ];

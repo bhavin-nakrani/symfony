@@ -38,8 +38,22 @@ abstract class Descriptor implements DescriptorInterface
             $object instanceof InputDefinition => $this->describeInputDefinition($object, $options),
             $object instanceof Command => $this->describeCommand($object, $options),
             $object instanceof Application => $this->describeApplication($object, $options),
-            default => throw new InvalidArgumentException(sprintf('Object of type "%s" is not describable.', get_debug_type($object))),
+            default => throw new InvalidArgumentException(\sprintf('Object of type "%s" is not describable.', get_debug_type($object))),
         };
+    }
+
+    /**
+     * @param array<string, InputOption> $inputOptions
+     *
+     * @return array<string, InputOption>
+     */
+    protected function removeHiddenOptions(array $inputOptions, array $options = []): array
+    {
+        if ($options['show-hidden-options'] ?? false) {
+            return $inputOptions;
+        }
+
+        return array_filter($inputOptions, static fn (InputOption $option) => !$option->isHidden());
     }
 
     protected function write(string $content, bool $decorated = false): void

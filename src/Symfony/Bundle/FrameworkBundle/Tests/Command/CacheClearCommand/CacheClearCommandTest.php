@@ -11,11 +11,13 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Command\CacheClearCommand;
 
+use Symfony\Bundle\FrameworkBundle\Command\CacheClearCommand;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Tests\Command\CacheClearCommand\Fixture\TestAppKernel;
 use Symfony\Bundle\FrameworkBundle\Tests\TestCase;
 use Symfony\Component\Config\ConfigCacheFactory;
 use Symfony\Component\Config\Resource\ResourceInterface;
+use Symfony\Component\Console\Command\LazyCommand;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\DependencyInjection\Container;
@@ -62,7 +64,7 @@ class CacheClearCommandTest extends TestCase
             $configCacheFactory->cache(
                 substr($file, 0, -5),
                 function () use ($file) {
-                    $this->fail(sprintf('Meta file "%s" is not fresh', (string) $file));
+                    $this->fail(\sprintf('Meta file "%s" is not fresh', (string) $file));
                 }
             );
         }
@@ -75,7 +77,7 @@ class CacheClearCommandTest extends TestCase
         $kernelRef = new \ReflectionObject($this->kernel);
         $kernelFile = $kernelRef->getFileName();
         /** @var ResourceInterface[] $meta */
-        $meta = unserialize(file_get_contents($containerMetaFile));
+        $meta = unserialize($this->fs->readFile($containerMetaFile));
         $found = false;
         foreach ($meta as $resource) {
             if ((string) $resource === $kernelFile) {
@@ -92,8 +94,8 @@ class CacheClearCommandTest extends TestCase
             $containerRef->getFileName()
         );
         $this->assertMatchesRegularExpression(
-            sprintf('/\'kernel.container_class\'\s*=>\s*\'%s\'/', $containerClass),
-            file_get_contents($containerFile),
+            \sprintf('/\'kernel.container_class\'\s*=>\s*\'%s\'/', $containerClass),
+            $this->fs->readFile($containerFile),
             'kernel.container_class is properly set on the dumped container'
         );
     }
@@ -113,6 +115,57 @@ class CacheClearCommandTest extends TestCase
         $this->assertTrue(is_file($this->kernel->getCacheDir().'/dummy.txt'));
     }
 
+    public function testCacheIsClearedWhenBuildDirIsRecreatedConcurrently()
+    {
+        // Boot once to learn the exact build dir path the command will use.
+        $this->kernel->boot();
+        $realBuildDir = $this->kernel->getContainer()->getParameter('kernel.build_dir');
+
+        // Simulate a concurrent HTTP request that reboots the kernel and recreates
+        // the build directory in the small window after cache:clear has moved it
+        // aside (rename to the "old" dir) but before it renames the freshly warmed-up
+        // dir into place. Without handling, that final rename fails with
+        // "Cannot rename because the target ... already exists.".
+        $fs = new class($realBuildDir) extends Filesystem {
+            public function __construct(private string $realBuildDir)
+            {
+            }
+
+            public function rename(string $origin, string $target, bool $overwrite = false): void
+            {
+                parent::rename($origin, $target, $overwrite);
+
+                if ($origin === $this->realBuildDir && !is_dir($this->realBuildDir)) {
+                    $this->mkdir($this->realBuildDir);
+                    file_put_contents($this->realBuildDir.'/concurrent.php', '<?php // rebuilt by a concurrent request');
+                }
+            }
+        };
+
+        $application = new Application($this->kernel);
+        $application->setCatchExceptions(false);
+        $command = $application->find('cache:clear');
+        if ($command instanceof LazyCommand) {
+            $command = $command->getCommand();
+        }
+        (new \ReflectionProperty(CacheClearCommand::class, 'filesystem'))->setValue($command, $fs);
+
+        // Force the rebuild+publish path (the container looks stale) instead of the
+        // "cache is fresh" shortcut, so the final rename is actually exercised.
+        $requestTime = $_SERVER['REQUEST_TIME'];
+        $_SERVER['REQUEST_TIME'] = time() + 1;
+        try {
+            $application->doRun(new ArrayInput(['cache:clear']), new NullOutput());
+        } finally {
+            $_SERVER['REQUEST_TIME'] = $requestTime;
+        }
+
+        // The freshly warmed-up cache wins: the command completes, the warmer output is
+        // in place and the concurrent rebuild is gone instead of being merged into it.
+        $this->assertTrue(is_file($this->kernel->getCacheDir().'/dummy.txt'));
+        $this->assertFileDoesNotExist($realBuildDir.'/concurrent.php');
+    }
+
     public function testCacheIsWarmedWithOldContainer()
     {
         $kernel = clone $this->kernel;
@@ -121,7 +174,7 @@ class CacheClearCommandTest extends TestCase
         // BUT without "kernel.build_dir" parameter (like an old dumped container)
         $kernel->boot();
         $container = $kernel->getContainer();
-        \Closure::bind(function (Container $class) {
+        \Closure::bind(static function (Container $class) {
             unset($class->loadedDynamicParameters['kernel.build_dir']);
             unset($class->parameters['kernel.build_dir']);
         }, null, $container::class)($container);

@@ -28,6 +28,10 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Bandwidth\BandwidthTransportFactory::class,
             'package' => 'symfony/bandwidth-notifier',
         ],
+        'bluesky' => [
+            'class' => Bridge\Bluesky\BlueskyTransportFactory::class,
+            'package' => 'symfony/bluesky-notifier',
+        ],
         'brevo' => [
             'class' => Bridge\Brevo\BrevoTransportFactory::class,
             'package' => 'symfony/brevo-notifier',
@@ -64,6 +68,10 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Expo\ExpoTransportFactory::class,
             'package' => 'symfony/expo-notifier',
         ],
+        'facebook-page' => [
+            'class' => Bridge\FacebookPage\FacebookPageTransportFactory::class,
+            'package' => 'symfony/facebook-page-notifier',
+        ],
         'fakechat' => [
             'class' => Bridge\FakeChat\FakeChatTransportFactory::class,
             'package' => 'symfony/fake-chat-notifier',
@@ -88,9 +96,9 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\GatewayApi\GatewayApiTransportFactory::class,
             'package' => 'symfony/gateway-api-notifier',
         ],
-        'gitter' => [
-            'class' => Bridge\Gitter\GitterTransportFactory::class,
-            'package' => 'symfony/gitter-notifier',
+        'goip' => [
+            'class' => Bridge\GoIp\GoIpTransportFactory::class,
+            'package' => 'symfony/go-ip-notifier',
         ],
         'googlechat' => [
             'class' => Bridge\GoogleChat\GoogleChatTransportFactory::class,
@@ -108,13 +116,21 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Isendpro\IsendproTransportFactory::class,
             'package' => 'symfony/isendpro-notifier',
         ],
+        'jolinotif' => [
+            'class' => Bridge\JoliNotif\JoliNotifTransportFactory::class,
+            'package' => 'symfony/joli-notif-notifier',
+        ],
         'kaz-info-teh' => [
             'class' => Bridge\KazInfoTeh\KazInfoTehTransportFactory::class,
-            'package' => 'symfony/symfony/kaz-info-teh-notifier',
+            'package' => 'symfony/kaz-info-teh-notifier',
         ],
         'lightsms' => [
             'class' => Bridge\LightSms\LightSmsTransportFactory::class,
             'package' => 'symfony/light-sms-notifier',
+        ],
+        'linebot' => [
+            'class' => Bridge\LineBot\LineBotTransportFactory::class,
+            'package' => 'symfony/line-bot-notifier',
         ],
         'linenotify' => [
             'class' => Bridge\LineNotify\LineNotifyTransportFactory::class,
@@ -124,6 +140,10 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\LinkedIn\LinkedInTransportFactory::class,
             'package' => 'symfony/linked-in-notifier',
         ],
+        'lox24' => [
+            'class' => Bridge\Lox24\Lox24TransportFactory::class,
+            'package' => 'symfony/lox24-notifier',
+        ],
         'mailjet' => [
             'class' => Bridge\Mailjet\MailjetTransportFactory::class,
             'package' => 'symfony/mailjet-notifier',
@@ -131,6 +151,10 @@ class UnsupportedSchemeException extends LogicException
         'mastodon' => [
             'class' => Bridge\Mastodon\MastodonTransportFactory::class,
             'package' => 'symfony/mastodon-notifier',
+        ],
+        'matrix' => [
+            'class' => Bridge\Matrix\MatrixTransportFactory::class,
+            'package' => 'symfony/matrix-notifier',
         ],
         'mattermost' => [
             'class' => Bridge\Mattermost\MattermostTransportFactory::class,
@@ -188,9 +212,21 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Plivo\PlivoTransportFactory::class,
             'package' => 'symfony/plivo-notifier',
         ],
+        'prelude' => [
+            'class' => Bridge\Prelude\PreludeTransportFactory::class,
+            'package' => 'symfony/prelude-notifier',
+        ],
+        'primotexto' => [
+            'class' => Bridge\Primotexto\PrimotextoTransportFactory::class,
+            'package' => 'symfony/primotexto-notifier',
+        ],
         'pushover' => [
             'class' => Bridge\Pushover\PushoverTransportFactory::class,
             'package' => 'symfony/pushover-notifier',
+        ],
+        'pushy' => [
+            'class' => Bridge\Pushy\PushyTransportFactory::class,
+            'package' => 'symfony/pushy-notifier',
         ],
         'redlink' => [
             'class' => Bridge\Redlink\RedlinkTransportFactory::class,
@@ -208,9 +244,13 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Sendberry\SendberryTransportFactory::class,
             'package' => 'symfony/sendberry-notifier',
         ],
-        'sendinblue' => [
-            'class' => Bridge\Sendinblue\SendinblueTransportFactory::class,
-            'package' => 'symfony/sendinblue-notifier',
+        'sevenio' => [
+            'class' => Bridge\Sevenio\SevenIoTransportFactory::class,
+            'package' => 'symfony/sevenio-notifier',
+        ],
+        'sipgate' => [
+            'class' => Bridge\Sipgate\SipgateTransportFactory::class,
+            'package' => 'symfony/sipgate-notifier',
         ],
         'simpletextin' => [
             'class' => Bridge\SimpleTextin\SimpleTextinTransportFactory::class,
@@ -224,10 +264,6 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Slack\SlackTransportFactory::class,
             'package' => 'symfony/slack-notifier',
         ],
-        'sms77' => [
-            'class' => Bridge\Sms77\Sms77TransportFactory::class,
-            'package' => 'symfony/sms77-notifier',
-        ],
         'smsapi' => [
             'class' => Bridge\Smsapi\SmsapiTransportFactory::class,
             'package' => 'symfony/smsapi-notifier',
@@ -236,9 +272,17 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\SmsBiuras\SmsBiurasTransportFactory::class,
             'package' => 'symfony/sms-biuras-notifier',
         ],
+        'smsbox' => [
+            'class' => Bridge\Smsbox\SmsboxTransportFactory::class,
+            'package' => 'symfony/smsbox-notifier',
+        ],
         'smsc' => [
             'class' => Bridge\Smsc\SmscTransportFactory::class,
             'package' => 'symfony/smsc-notifier',
+        ],
+        'smsense' => [
+            'class' => Bridge\Smsense\SmsenseTransportFactory::class,
+            'package' => 'symfony/smsense-notifier',
         ],
         'sms-factor' => [
             'class' => Bridge\SmsFactor\SmsFactorTransportFactory::class,
@@ -248,6 +292,10 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Smsmode\SmsmodeTransportFactory::class,
             'package' => 'symfony/smsmode-notifier',
         ],
+        'sms-sluzba' => [
+            'class' => Bridge\SmsSluzba\SmsSluzbaTransportFactory::class,
+            'package' => 'symfony/sms-sluzba-notifier',
+        ],
         'sns' => [
             'class' => Bridge\AmazonSns\AmazonSnsTransportFactory::class,
             'package' => 'symfony/amazon-sns-notifier',
@@ -255,6 +303,10 @@ class UnsupportedSchemeException extends LogicException
         'spothit' => [
             'class' => Bridge\SpotHit\SpotHitTransportFactory::class,
             'package' => 'symfony/spot-hit-notifier',
+        ],
+        'sweego' => [
+            'class' => Bridge\Sweego\SweegoTransportFactory::class,
+            'package' => 'symfony/sweego-notifier',
         ],
         'telegram' => [
             'class' => Bridge\Telegram\TelegramTransportFactory::class,
@@ -280,9 +332,17 @@ class UnsupportedSchemeException extends LogicException
             'class' => Bridge\Twitter\TwitterTransportFactory::class,
             'package' => 'symfony/twitter-notifier',
         ],
+        'unifonic' => [
+            'class' => Bridge\Unifonic\UnifonicTransportFactory::class,
+            'package' => 'symfony/unifonic-notifier',
+        ],
         'vonage' => [
             'class' => Bridge\Vonage\VonageTransportFactory::class,
             'package' => 'symfony/vonage-notifier',
+        ],
+        'whatsapp' => [
+            'class' => Bridge\WhatsApp\WhatsAppTransportFactory::class,
+            'package' => 'symfony/whats-app-notifier',
         ],
         'yunpian' => [
             'class' => Bridge\Yunpian\YunpianTransportFactory::class,
@@ -301,7 +361,7 @@ class UnsupportedSchemeException extends LogicException
     /**
      * @param string[] $supported
      */
-    public function __construct(Dsn $dsn, string $name = null, array $supported = [], \Throwable $previous = null)
+    public function __construct(Dsn $dsn, ?string $name = null, array $supported = [], ?\Throwable $previous = null)
     {
         $provider = $dsn->getScheme();
         if (false !== $pos = strpos($provider, '+')) {
@@ -309,14 +369,14 @@ class UnsupportedSchemeException extends LogicException
         }
         $package = self::SCHEME_TO_PACKAGE_MAP[$provider] ?? null;
         if ($package && !class_exists($package['class'])) {
-            parent::__construct(sprintf('Unable to send notification via "%s" as the bridge is not installed. Try running "composer require %s".', $provider, $package['package']));
+            parent::__construct(\sprintf('Unable to send notification via "%s" as the bridge is not installed. Try running "composer require %s".', $provider, $package['package']));
 
             return;
         }
 
-        $message = sprintf('The "%s" scheme is not supported', $dsn->getScheme());
+        $message = \sprintf('The "%s" scheme is not supported', $dsn->getScheme());
         if ($name && $supported) {
-            $message .= sprintf('; supported schemes for notifier "%s" are: "%s"', $name, implode('", "', $supported));
+            $message .= \sprintf('; supported schemes for notifier "%s" are: "%s"', $name, implode('", "', $supported));
         }
 
         parent::__construct($message.'.', 0, $previous);

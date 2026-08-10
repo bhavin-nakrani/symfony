@@ -436,7 +436,7 @@ return [
         ],
         'PHP' => [
             '₱',
-            'Ego piso obodo Philippine',
+            'Ego Piso obodo Philippine',
         ],
         'PKR' => [
             'PKR',
@@ -498,9 +498,13 @@ return [
             'SHP',
             'Ego Pound obodo St Helena',
         ],
+        'SLE' => [
+            'SLE',
+            'Ego Leone obodo Sierra Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Ego Leone obodo Sierra Leone',
+            'Ego Leone obodo Sierra Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -606,6 +610,10 @@ return [
             'EC$',
             'Ego Dollar obodo East Carribbean',
         ],
+        'XCG' => [
+            'Cg.',
+            'Ego Guilder Caribbean',
+        ],
         'XOF' => [
             'F CFA',
             'Ego CFA Franc obodo West Africa',
@@ -625,6 +633,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Ego Kwacha Obodo Zambia',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Ego Ọlaọcha Zimbabwe',
         ],
     ],
 ];

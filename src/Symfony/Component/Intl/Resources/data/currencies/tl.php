@@ -534,9 +534,13 @@ return [
             'SKK',
             'Slovak Koruna',
         ],
+        'SLE' => [
+            'SLE',
+            'Sierra Leonean Leone',
+        ],
         'SLL' => [
             'SLL',
-            'Sierra Leonean Leone',
+            'Sierra Leonean Leone (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -654,6 +658,10 @@ return [
             'EC$',
             'Dolyar ng Silangang Caribbean',
         ],
+        'XCG' => [
+            'Cg.',
+            'Caribbean guilder',
+        ],
         'XOF' => [
             'F CFA',
             'CFA Franc ng Kanlurang Africa',
@@ -677,6 +685,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Zambian Kwacha',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabwean Gold',
         ],
     ],
 ];

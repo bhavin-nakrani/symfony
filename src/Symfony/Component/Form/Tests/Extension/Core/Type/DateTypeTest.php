@@ -11,18 +11,20 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Core\Type;
 
-use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Clock\DatePoint;
 use Symfony\Component\Form\ChoiceList\View\ChoiceView;
+use Symfony\Component\Form\Exception\LogicException;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Intl\Intl;
 use Symfony\Component\Intl\Util\IntlTestHelper;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
 class DateTypeTest extends BaseTypeTestCase
 {
-    use ExpectDeprecationTrait;
-
-    public const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\DateType';
+    public const TESTED_TYPE = DateType::class;
 
     private string $defaultTimezone;
     private string $defaultLocale;
@@ -92,7 +94,11 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSubmitFromSingleTextDateTime()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
+
+        if (\in_array(Intl::getIcuVersion(), ['71.1', '72.1'], true)) {
+            $this->markTestSkipped('Skipping test due to a bug in ICU 71.1/72.1.');
+        }
 
         \Locale::setDefault('de_DE');
 
@@ -111,10 +117,31 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertEquals('02.06.2010', $form->getViewData());
     }
 
+    public function testSubmitFromSingleTextDatePoint()
+    {
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'html5' => false,
+            'model_timezone' => 'UTC',
+            'view_timezone' => 'UTC',
+            'widget' => 'single_text',
+            'input' => 'date_point',
+        ]);
+
+        $form->submit('2010-06-02');
+
+        $this->assertInstanceOf(DatePoint::class, $form->getData());
+        $this->assertEquals(DatePoint::createFromMutable(new \DateTime('2010-06-02 UTC')), $form->getData());
+        $this->assertEquals('2010-06-02', $form->getViewData());
+    }
+
     public function testSubmitFromSingleTextDateTimeImmutable()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
+
+        if (\in_array(Intl::getIcuVersion(), ['71.1', '72.1'], true)) {
+            $this->markTestSkipped('Skipping test due to a bug in ICU 71.1/72.1.');
+        }
 
         \Locale::setDefault('de_DE');
 
@@ -137,7 +164,11 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSubmitFromSingleTextString()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
+
+        if (\in_array(Intl::getIcuVersion(), ['71.1', '72.1'], true)) {
+            $this->markTestSkipped('Skipping test due to a bug in ICU 71.1/72.1.');
+        }
 
         \Locale::setDefault('de_DE');
 
@@ -159,7 +190,11 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSubmitFromSingleTextTimestamp()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
+
+        if (\in_array(Intl::getIcuVersion(), ['71.1', '72.1'], true)) {
+            $this->markTestSkipped('Skipping test due to a bug in ICU 71.1/72.1.');
+        }
 
         \Locale::setDefault('de_DE');
 
@@ -183,7 +218,11 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSubmitFromSingleTextRaw()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
+
+        if (\in_array(Intl::getIcuVersion(), ['71.1', '72.1'], true)) {
+            $this->markTestSkipped('Skipping test due to a bug in ICU 71.1/72.1.');
+        }
 
         \Locale::setDefault('de_DE');
 
@@ -211,7 +250,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testArrayDateWithReferenceDoesUseReferenceTimeOnZero()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_DE');
 
@@ -376,9 +415,7 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertEquals('06*2010*02', $form->getViewData());
     }
 
-    /**
-     * @dataProvider provideDateFormats
-     */
+    #[DataProvider('provideDateFormats')]
     public function testDatePatternWithFormatOption($format, $pattern)
     {
         $view = $this->factory->create(static::TESTED_TYPE, null, [
@@ -484,7 +521,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSetDataWithNegativeTimezoneOffsetStringInput()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_DE');
 
@@ -507,7 +544,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testSetDataWithNegativeTimezoneOffsetDateTimeInput()
     {
         // we test against "de_DE", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_DE');
 
@@ -586,7 +623,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testMonthsOptionLongFormat()
     {
         // we test against "de_AT", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_AT');
 
@@ -606,7 +643,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testMonthsOptionLongFormatWithDifferentTimezone()
     {
         // we test against "de_AT", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_AT');
 
@@ -692,7 +729,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testPassDatePatternToView()
     {
         // we test against "de_AT", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_AT');
 
@@ -705,7 +742,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testPassDatePatternToViewDifferentFormat()
     {
         // we test against "de_AT", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('de_AT');
 
@@ -753,7 +790,7 @@ class DateTypeTest extends BaseTypeTestCase
     public function testDatePatternFormatWithQuotedStrings()
     {
         // we test against "es_ES", so we need the full implementation
-        IntlTestHelper::requireFullIntl($this, false);
+        IntlTestHelper::requireFullIntl($this);
 
         \Locale::setDefault('es_ES');
 
@@ -935,9 +972,7 @@ class DateTypeTest extends BaseTypeTestCase
         ];
     }
 
-    /**
-     * @dataProvider provideCompoundWidgets
-     */
+    #[DataProvider('provideCompoundWidgets')]
     public function testYearErrorsBubbleUp($widget)
     {
         $error = new FormError('Invalid!');
@@ -950,9 +985,7 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertSame([$error], iterator_to_array($form->getErrors()));
     }
 
-    /**
-     * @dataProvider provideCompoundWidgets
-     */
+    #[DataProvider('provideCompoundWidgets')]
     public function testMonthErrorsBubbleUp($widget)
     {
         $error = new FormError('Invalid!');
@@ -965,9 +998,7 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertSame([$error], iterator_to_array($form->getErrors()));
     }
 
-    /**
-     * @dataProvider provideCompoundWidgets
-     */
+    #[DataProvider('provideCompoundWidgets')]
     public function testDayErrorsBubbleUp($widget)
     {
         $error = new FormError('Invalid!');
@@ -1066,14 +1097,13 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertSame($expectedData, $form->getData());
     }
 
-    /**
-     * @dataProvider provideEmptyData
-     */
+    #[DataProvider('provideEmptyData')]
     public function testSubmitNullUsesDateEmptyData($widget, $emptyData, $expectedData)
     {
         $form = $this->factory->create(static::TESTED_TYPE, null, [
             'widget' => $widget,
             'empty_data' => $emptyData,
+            'years' => range(2018, (int) date('Y')),
         ]);
         $form->submit(null);
 
@@ -1115,33 +1145,96 @@ class DateTypeTest extends BaseTypeTestCase
         $this->assertSame('14/01/2018', $form->getData());
     }
 
-    /**
-     * @group legacy
-     */
     public function testDateTimeInputTimezoneNotMatchingModelTimezone()
     {
-        $this->expectDeprecation('Since symfony/form 6.4: Using a "DateTime" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is deprecated.');
-        // $this->expectException(LogicException::class);
-        // $this->expectExceptionMessage('Using a "DateTime" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is not supported.');
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Using a "DateTime" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is not supported.');
 
         $this->factory->create(static::TESTED_TYPE, new \DateTime('now', new \DateTimeZone('UTC')), [
             'model_timezone' => 'Europe/Berlin',
         ]);
     }
 
-    /**
-     * @group legacy
-     */
     public function testDateTimeImmutableInputTimezoneNotMatchingModelTimezone()
     {
-        $this->expectDeprecation('Since symfony/form 6.4: Using a "DateTimeImmutable" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is deprecated.');
-        // $this->expectException(LogicException::class);
-        // $this->expectExceptionMessage('Using a "DateTimeImmutable" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is not supported.');
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Using a "DateTimeImmutable" instance with a timezone ("UTC") not matching the configured model timezone "Europe/Berlin" is not supported.');
 
         $this->factory->create(static::TESTED_TYPE, new \DateTimeImmutable('now', new \DateTimeZone('UTC')), [
             'input' => 'datetime_immutable',
             'model_timezone' => 'Europe/Berlin',
         ]);
+    }
+
+    public function testSubmitWithCustomCalendarOption()
+    {
+        IntlTestHelper::requireFullIntl($this);
+
+        // Creates a new form using the "roc" (Republic Of China) calendar. This calendar starts in 1912, the year 2024 in
+        // the Gregorian calendar is the year 113 in the "roc" calendar.
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'format' => 'y-MM-dd',
+            'html5' => false,
+            'input' => 'array',
+            'calendar' => \IntlCalendar::createInstance(null, 'zh_TW@calendar=roc'),
+        ]);
+        $form->submit('113-03-31');
+
+        $this->assertSame('2024', $form->getData()['year'], 'The year should be converted to the default locale (en)');
+        $this->assertSame('31', $form->getData()['day']);
+        $this->assertSame('3', $form->getData()['month']);
+
+        $this->assertSame('113-03-31', $form->getViewData());
+    }
+
+    public function testSetDataWithCustomCalendarOption()
+    {
+        IntlTestHelper::requireFullIntl($this);
+
+        // Creates a new form using the "roc" (Republic Of China) calendar. This calendar starts in 1912, the year 2024 in
+        // the Gregorian calendar is the year 113 in the "roc" calendar.
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'format' => 'y-MM-dd',
+            'html5' => false,
+            'input' => 'array',
+            'calendar' => \IntlCalendar::createInstance(null, 'zh_TW@calendar=roc'),
+        ]);
+        $form->setData(['year' => '2024', 'month' => '3', 'day' => '31']);
+
+        $this->assertSame('113-03-31', $form->getViewData());
+    }
+
+    public function testPassLabelsAsArray()
+    {
+        $view = $this->factory->create(static::TESTED_TYPE, null, [
+            'widget' => 'choice',
+            'labels' => [
+                'year' => 'Year label',
+                'month' => 'Month label',
+                'day' => 'Day label',
+            ],
+        ])
+            ->createView();
+
+        $this->assertSame('Year label', $view['year']->vars['label']);
+        $this->assertSame('Month label', $view['month']->vars['label']);
+        $this->assertSame('Day label', $view['day']->vars['label']);
+    }
+
+    public function testPassLabelsAsPartialArray()
+    {
+        $view = $this->factory->create(static::TESTED_TYPE, null, [
+            'widget' => 'choice',
+            'labels' => [
+                'year' => 'Year label',
+                'day' => 'Day label',
+            ],
+        ])
+            ->createView();
+
+        $this->assertSame('Year label', $view['year']->vars['label']);
+        $this->assertNull($view['month']->vars['label']);
+        $this->assertSame('Day label', $view['day']->vars['label']);
     }
 
     protected function getTestOptions(): array

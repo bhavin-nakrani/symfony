@@ -12,6 +12,10 @@
 namespace Symfony\Component\Translation\Bridge\Loco;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\HttpClient\ScopingHttpClient;
+use Symfony\Component\Translation\Dumper\XliffFileDumper;
 use Symfony\Component\Translation\Exception\UnsupportedSchemeException;
 use Symfony\Component\Translation\Loader\LoaderInterface;
 use Symfony\Component\Translation\Provider\AbstractProviderFactory;
@@ -26,19 +30,29 @@ final class LocoProviderFactory extends AbstractProviderFactory
 {
     private const HOST = 'localise.biz';
 
-    private HttpClientInterface $client;
-    private LoggerInterface $logger;
-    private string $defaultLocale;
     private LoaderInterface $loader;
-    private ?TranslatorBagInterface $translatorBag = null;
+    private ?TranslatorBagInterface $translatorBag;
+    private XliffFileDumper $dumper;
 
-    public function __construct(HttpClientInterface $client, LoggerInterface $logger, string $defaultLocale, LoaderInterface $loader, TranslatorBagInterface $translatorBag = null)
-    {
-        $this->client = $client;
-        $this->logger = $logger;
-        $this->defaultLocale = $defaultLocale;
-        $this->loader = $loader;
-        $this->translatorBag = $translatorBag;
+    public function __construct(
+        private HttpClientInterface $client,
+        private LoggerInterface $logger,
+        LoaderInterface|string $loader,
+        TranslatorBagInterface|LoaderInterface|null $translatorBag = null,
+        XliffFileDumper|TranslatorBagInterface|null $dumper = null,
+    ) {
+        if (\is_string($loader)) {
+            trigger_deprecation('symfony/loco-translation-provider', '8.2', '"%s" constructor "$defaultLocale" parameter has no effect and will be removed in version 9.0.', __CLASS__);
+
+            $this->loader = $translatorBag;
+            $this->translatorBag = $dumper;
+            $dumper = \func_get_args()[5] ?? null;
+        } else {
+            $this->loader = $loader;
+            $this->translatorBag = $translatorBag;
+        }
+
+        $this->dumper = $dumper ?? new XliffFileDumper();
     }
 
     public function create(Dsn $dsn): LocoProvider
@@ -49,15 +63,16 @@ final class LocoProviderFactory extends AbstractProviderFactory
 
         $endpoint = 'default' === $dsn->getHost() ? self::HOST : $dsn->getHost();
         $endpoint .= $dsn->getPort() ? ':'.$dsn->getPort() : '';
+        $restrictToStatus = $dsn->getOption('status');
 
-        $client = $this->client->withOptions([
-            'base_uri' => 'https://'.$endpoint.'/api/',
+        $client = new RetryableHttpClient($this->client, new GenericRetryStrategy(), 3, $this->logger);
+        $client = ScopingHttpClient::forBaseUri($client, 'https://'.$endpoint.'/api/', [
             'headers' => [
                 'Authorization' => 'Loco '.$this->getUser($dsn),
             ],
         ]);
 
-        return new LocoProvider($client, $this->loader, $this->logger, $this->defaultLocale, $endpoint, $this->translatorBag);
+        return new LocoProvider($client, $this->loader, $this->logger, $endpoint, $this->translatorBag, $restrictToStatus, $this->dumper);
     }
 
     protected function getSupportedSchemes(): array

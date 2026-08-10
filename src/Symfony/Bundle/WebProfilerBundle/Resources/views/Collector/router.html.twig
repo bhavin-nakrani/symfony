@@ -4,11 +4,11 @@
 
 {% block menu %}
 <span class="label">
-    <span class="icon">{{ source('@WebProfiler/Icon/router.svg') }}</span>
+    <span class="icon" aria-hidden="true">{{ source('@WebProfiler/Icon/router.svg') }}</span>
     <strong>Routing</strong>
 </span>
 {% endblock %}
 
 {% block panel %}
-    {{ render(controller('web_profiler.controller.router::panelAction', { token: token })) }}
+    {{ render(controller('web_profiler.controller.router::panelAction', {token: token})) }}
 {% endblock %}

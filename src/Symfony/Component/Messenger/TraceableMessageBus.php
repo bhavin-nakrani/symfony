@@ -11,21 +11,27 @@
 
 namespace Symfony\Component\Messenger;
 
+use Symfony\Component\Messenger\Stamp\StampInterface;
+
 /**
  * @author Samuel Roze <samuel.roze@gmail.com>
  */
 class TraceableMessageBus implements MessageBusInterface
 {
-    private MessageBusInterface $decoratedBus;
     private array $dispatchedMessages = [];
 
-    public function __construct(MessageBusInterface $decoratedBus)
-    {
-        $this->decoratedBus = $decoratedBus;
+    public function __construct(
+        private MessageBusInterface $decoratedBus,
+        protected readonly ?\Closure $disabled = null,
+    ) {
     }
 
     public function dispatch(object $message, array $stamps = []): Envelope
     {
+        if ($this->disabled?->__invoke()) {
+            return $this->decoratedBus->dispatch($message, $stamps);
+        }
+
         $envelope = Envelope::wrap($message, $stamps);
         $context = [
             'stamps' => array_merge([], ...array_values($envelope->all())),
@@ -45,19 +51,29 @@ class TraceableMessageBus implements MessageBusInterface
         }
     }
 
+    /**
+     * @return list<array{
+     *     stamps: list<StampInterface>,
+     *     message: object,
+     *     caller: array{name: string, file: string|null, line: int|null},
+     *     callTime: float,
+     *     exception?: \Throwable,
+     *     stamps_after_dispatch: list<StampInterface>,
+     * }>
+     */
     public function getDispatchedMessages(): array
     {
         return $this->dispatchedMessages;
     }
 
-    /**
-     * @return void
-     */
-    public function reset()
+    public function reset(): void
     {
         $this->dispatchedMessages = [];
     }
 
+    /**
+     * @return array{name: string, file: string|null, line: int|null}
+     */
     private function getCaller(): array
     {
         $trace = debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 8);

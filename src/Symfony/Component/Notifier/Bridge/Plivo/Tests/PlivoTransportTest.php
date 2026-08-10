@@ -11,7 +11,9 @@
 
 namespace Symfony\Component\Notifier\Bridge\Plivo\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Notifier\Bridge\Plivo\PlivoOptions;
 use Symfony\Component\Notifier\Bridge\Plivo\PlivoTransport;
 use Symfony\Component\Notifier\Exception\InvalidArgumentException;
@@ -24,12 +26,12 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final class PlivoTransportTest extends TransportTestCase
 {
-    public static function createTransport(HttpClientInterface $client = null, string $from = 'from'): PlivoTransport
+    public static function createTransport(?HttpClientInterface $client = null, string $from = 'from'): PlivoTransport
     {
         return new PlivoTransport('authId', 'authToken', $from, $client ?? new MockHttpClient());
     }
 
-    public function invalidFromProvider(): iterable
+    public static function invalidFromProvider(): iterable
     {
         yield 'too short' => ['a'];
         yield 'too long' => ['abcdefghijkl'];
@@ -43,33 +45,26 @@ final class PlivoTransportTest extends TransportTestCase
         yield [new SmsMessage('0611223344', 'Hello!', 'from', new PlivoOptions(['src' => 'foo']))];
     }
 
-    /**
-     * @dataProvider invalidFromProvider
-     */
+    #[DataProvider('invalidFromProvider')]
     public function testInvalidArgumentExceptionIsThrownIfFromIsInvalid(string $from)
     {
         $transport = $this->createTransport(null, $from);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $from));
+        $this->expectExceptionMessage(\sprintf('The "From" number "%s" is not a valid phone number, shortcode, or alphanumeric sender ID.', $from));
 
         $transport->send(new SmsMessage('+33612345678', 'Hello!'));
     }
 
-    /**
-     * @dataProvider validFromProvider
-     */
+    #[DataProvider('validFromProvider')]
     public function testNoInvalidArgumentExceptionIsThrownIfFromIsValid(string $from)
     {
         $message = new SmsMessage('+33612345678', 'Hello!');
-        $response = $this->createMock(ResponseInterface::class);
-        $response->expects(self::exactly(2))->method('getStatusCode')->willReturn(202);
-        $response->expects(self::once())->method('getContent')->willReturn(json_encode(['message' => 'message(s) queued', 'message_uuid' => ['foo'], 'api_id' => 'bar']));
-        $client = new MockHttpClient(function (string $method, string $url) use ($response): ResponseInterface {
+        $client = new MockHttpClient(static function (string $method, string $url): ResponseInterface {
             self::assertSame('POST', $method);
             self::assertSame('https://api.plivo.com/v1/Account/authId/Message/', $url);
 
-            return $response;
+            return new MockResponse(json_encode(['message' => 'message(s) queued', 'message_uuid' => ['foo'], 'api_id' => 'bar']), ['http_code' => 202]);
         }
         );
         $transport = $this->createTransport($client, $from);

@@ -11,14 +11,17 @@
 
 namespace Symfony\Component\DependencyInjection\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\ServiceCircularReferenceException;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\DependencyInjection\ParameterBag\FrozenParameterBag;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Contracts\Service\ResetInterface;
 
 class ContainerTest extends TestCase
@@ -32,12 +35,10 @@ class ContainerTest extends TestCase
         $this->assertEquals(['foo' => 'bar'], $sc->getParameterBag()->all(), '__construct() takes an array of parameters as its first argument');
     }
 
-    /**
-     * @dataProvider dataForTestCamelize
-     */
+    #[DataProvider('dataForTestCamelize')]
     public function testCamelize($id, $expected)
     {
-        $this->assertEquals($expected, Container::camelize($id), sprintf('Container::camelize("%s")', $id));
+        $this->assertEquals($expected, Container::camelize($id), \sprintf('Container::camelize("%s")', $id));
     }
 
     public static function dataForTestCamelize()
@@ -56,12 +57,10 @@ class ContainerTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider dataForTestUnderscore
-     */
+    #[DataProvider('dataForTestUnderscore')]
     public function testUnderscore($id, $expected)
     {
-        $this->assertEquals($expected, Container::underscore($id), sprintf('Container::underscore("%s")', $id));
+        $this->assertEquals($expected, Container::underscore($id), \sprintf('Container::underscore("%s")', $id));
     }
 
     public static function dataForTestUnderscore()
@@ -136,13 +135,13 @@ class ContainerTest extends TestCase
     public function testGetServiceIds()
     {
         $sc = new Container();
-        $sc->set('foo', $obj = new \stdClass());
-        $sc->set('bar', $obj = new \stdClass());
+        $sc->set('foo', new \stdClass());
+        $sc->set('bar', new \stdClass());
         $this->assertEquals(['service_container', 'foo', 'bar'], $sc->getServiceIds(), '->getServiceIds() returns all defined service ids');
 
         $sc = new ProjectServiceContainer();
-        $sc->set('foo', $obj = new \stdClass());
-        $this->assertEquals(['service_container', 'bar', 'foo_bar', 'foo.baz', 'circular', 'throw_exception', 'throws_exception_on_service_configuration', 'internal_dependency', 'alias', 'foo'], $sc->getServiceIds(), '->getServiceIds() returns defined service ids by factory methods in the method map, followed by service ids defined by set()');
+        $sc->set('foo', new \stdClass());
+        $this->assertEquals(['service_container', 'bar', 'foo_bar', 'foo.baz', 'circular', 'throw_exception', 'throws_exception_on_service_configuration', 'throws_error_on_service_configuration', 'throws_exception_on_private_service_configuration', 'internal_dependency', 'alias', 'foo'], $sc->getServiceIds(), '->getServiceIds() returns defined service ids by factory methods in the method map, followed by service ids defined by set()');
     }
 
     public function testSet()
@@ -221,15 +220,15 @@ class ContainerTest extends TestCase
         $sc->set('Foo', $foo2 = new \stdClass());
 
         $this->assertSame(['service_container', 'foo', 'Foo'], $sc->getServiceIds());
-        $this->assertSame($foo1, $sc->get('foo'), '->get() returns the service for the given id, case sensitively');
-        $this->assertSame($foo2, $sc->get('Foo'), '->get() returns the service for the given id, case sensitively');
+        $this->assertSame($foo1, $sc->get('foo'), '->get() returns the service for the given id, case-sensitively');
+        $this->assertSame($foo2, $sc->get('Foo'), '->get() returns the service for the given id, case-sensitively');
     }
 
     public function testGetThrowServiceNotFoundException()
     {
         $sc = new ProjectServiceContainer();
-        $sc->set('foo', $foo = new \stdClass());
-        $sc->set('baz', $foo = new \stdClass());
+        $sc->set('foo', new \stdClass());
+        $sc->set('baz', new \stdClass());
 
         try {
             $sc->get('foo1');
@@ -262,21 +261,25 @@ class ContainerTest extends TestCase
 
     public function testGetSyntheticServiceThrows()
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The "request" service is synthetic, it needs to be set at boot time before it can be used.');
         require_once __DIR__.'/Fixtures/php/services9_compiled.php';
 
         $container = new \ProjectServiceContainer();
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The "request" service is synthetic, it needs to be set at boot time before it can be used.');
+
         $container->get('request');
     }
 
     public function testGetRemovedServiceThrows()
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('The "inlined" service or alias has been removed or inlined when the container was compiled. You should either make it public, or stop using the container directly and use dependency injection instead.');
         require_once __DIR__.'/Fixtures/php/services9_compiled.php';
 
         $container = new \ProjectServiceContainer();
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('The "inlined" service or alias has been removed or inlined when the container was compiled. You should either make it public, or stop using the container directly and use dependency injection instead.');
+
         $container->get('inlined');
     }
 
@@ -314,7 +317,7 @@ class ContainerTest extends TestCase
     public function testReset()
     {
         $c = new Container();
-        $c->set('bar', $bar = new class() implements ResetInterface {
+        $c->set('bar', $bar = new class implements ResetInterface {
             public int $resetCounter = 0;
 
             public function reset(): void
@@ -337,7 +340,7 @@ class ContainerTest extends TestCase
 
         try {
             $c->get('throw_exception');
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             // Do nothing.
         }
 
@@ -351,7 +354,7 @@ class ContainerTest extends TestCase
 
         try {
             $c->get('throws_exception_on_service_configuration');
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             // Do nothing.
         }
 
@@ -360,10 +363,54 @@ class ContainerTest extends TestCase
         // Retry, to make sure that get*Service() will be called.
         try {
             $c->get('throws_exception_on_service_configuration');
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             // Do nothing.
         }
         $this->assertFalse($c->initialized('throws_exception_on_service_configuration'));
+    }
+
+    public function testGetThrowsErrorOnServiceConfiguration()
+    {
+        $c = new ProjectServiceContainer();
+
+        try {
+            $c->get('throws_error_on_service_configuration');
+            $this->fail('->get() should throw the error raised while configuring the service');
+        } catch (\Error $e) {
+            // Do nothing.
+        }
+
+        $this->assertFalse($c->initialized('throws_error_on_service_configuration'));
+
+        // Retry, to make sure that get*Service() will be called.
+        try {
+            $c->get('throws_error_on_service_configuration');
+            $this->fail('->get() should throw the error again instead of returning a partially-configured service');
+        } catch (\Error $e) {
+            // Do nothing.
+        }
+        $this->assertFalse($c->initialized('throws_error_on_service_configuration'));
+    }
+
+    public function testGetThrowsExceptionOnPrivateServiceConfiguration()
+    {
+        $c = new ProjectServiceContainer();
+
+        try {
+            $c->get('throws_exception_on_private_service_configuration');
+        } catch (\Exception $e) {
+            // Do nothing.
+        }
+
+        $this->assertArrayNotHasKey('throws_exception_on_private_service_configuration', $this->getField($c, 'privates'));
+
+        // Retry, to make sure that get*Service() will be called.
+        try {
+            $c->get('throws_exception_on_private_service_configuration');
+        } catch (\Exception $e) {
+            // Do nothing.
+        }
+        $this->assertArrayNotHasKey('throws_exception_on_private_service_configuration', $this->getField($c, 'privates'));
     }
 
     protected function getField($obj, $field)
@@ -398,11 +445,36 @@ class ContainerTest extends TestCase
 
     public function testRequestAnInternalSharedPrivateService()
     {
-        $this->expectException(ServiceNotFoundException::class);
-        $this->expectExceptionMessage('You have requested a non-existent service "internal".');
         $c = new ProjectServiceContainer();
         $c->get('internal_dependency');
+
+        $this->expectException(ServiceNotFoundException::class);
+        $this->expectExceptionMessage('You have requested a non-existent service "internal".');
+
         $c->get('internal');
+    }
+
+    public function testGetEnvDoesNotAutoCastNullWithDefaultEnvVarProcessor()
+    {
+        $container = new Container();
+        $container->setParameter('env(FOO)', null);
+        $container->compile();
+
+        $r = new \ReflectionMethod($container, 'getEnv');
+        $this->assertNull($r->invoke($container, 'FOO'));
+    }
+
+    public function testGetEnvDoesNotAutoCastNullWithEnvVarProcessorsLocatorReturningDefaultEnvVarProcessor()
+    {
+        $container = new Container();
+        $container->setParameter('env(FOO)', null);
+        $container->set('container.env_var_processors_locator', new ServiceLocator([
+            'string' => static fn (): EnvVarProcessor => new EnvVarProcessor($container),
+        ]));
+        $container->compile();
+
+        $r = new \ReflectionMethod($container, 'getEnv');
+        $this->assertNull($r->invoke($container, 'FOO'));
     }
 }
 
@@ -430,6 +502,8 @@ class ProjectServiceContainer extends Container
             'circular' => 'getCircularService',
             'throw_exception' => 'getThrowExceptionService',
             'throws_exception_on_service_configuration' => 'getThrowsExceptionOnServiceConfigurationService',
+            'throws_error_on_service_configuration' => 'getThrowsErrorOnServiceConfigurationService',
+            'throws_exception_on_private_service_configuration' => 'getThrowsExceptionOnPrivateServiceConfigurationService',
             'internal_dependency' => 'getInternalDependencyService',
         ];
     }
@@ -469,6 +543,20 @@ class ProjectServiceContainer extends Container
         $this->services['throws_exception_on_service_configuration'] = $instance = new \stdClass();
 
         throw new \Exception('Something was terribly wrong while trying to configure the service!');
+    }
+
+    protected function getThrowsErrorOnServiceConfigurationService()
+    {
+        $this->services['throws_error_on_service_configuration'] = $instance = new \stdClass();
+
+        throw new \Error('Something was terribly wrong while trying to configure the service!');
+    }
+
+    protected function getThrowsExceptionOnPrivateServiceConfigurationService()
+    {
+        $this->privates['throws_exception_on_private_service_configuration'] = $instance = new \stdClass();
+
+        throw new \Exception('Something was terribly wrong while trying to configure the private service!');
     }
 
     protected function getInternalDependencyService()

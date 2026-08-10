@@ -11,19 +11,35 @@ permissions:
 jobs:
   verify:
     name: Verify Packages
-    runs-on: Ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Fetch branch from where the PR started
-        run: git fetch --no-tags --prune --depth=1 origin +refs/heads/*:refs/remotes/origin/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Credentials are not persisted by the checkout, so remote operations are given
+          # the job token explicitly. Public repositories would also accept anonymous reads,
+          # private forks do not.
+          git fetch --no-tags --prune --depth=1 "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" +refs/heads/*:refs/remotes/origin/*
 
       - name: Find packages
         id: find-packages
-        run: echo "packages=$(php .github/get-modified-packages.php $(find src/Symfony -mindepth 2 -type f -name composer.json -printf '%h\n' | grep -v src/Symfony/Component/Intl/Resources/emoji |jq -R -s -c 'split("\n")[:-1]') $(git diff --name-only origin/${{ github.base_ref }} HEAD | grep src/ | jq -R -s -c 'split("\n")[:-1]'))" >> $GITHUB_OUTPUT
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          packages=$(php .github/get-modified-packages.php \
+            "$(find src/Symfony -mindepth 2 -type f -name composer.json -printf '%h\n' | grep -v src/Symfony/Component/Emoji/Resources/bin | jq -R -s -c 'split("\n")[:-1]')" \
+            "$(git diff --name-only "origin/$BASE_REF" HEAD | grep src/ | jq -R -s -c 'split("\n")[:-1]')")
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
       - name: Verify meta files are correct
+        env:
+          PACKAGES_JSON: ${{ steps.find-packages.outputs.packages }}
         run: |
           ok=0
 
@@ -57,7 +73,7 @@ jobs:
             fi
           }
 
-          json='${{ steps.find-packages.outputs.packages }}'
+          json="$PACKAGES_JSON"
           for package in $(echo "${json}" | jq -r '.[] | @base64'); do
               _jq() {
                 echo ${package} | base64 --decode | jq -r ${1}
@@ -97,6 +113,48 @@ jobs:
               echo ::endgroup::
               if [ $localExit -ne 0 ]; then
                 echo "::error::$NAME failed"
+              fi
+          done
+
+          exit $ok
+      - name: Verify symfony/deprecation-contracts requirements
+        env:
+          PACKAGES_JSON: ${{ steps.find-packages.outputs.packages }}
+        run: |
+          set +e
+
+          ok=0
+          json="$PACKAGES_JSON"
+          for package in $(echo "${json}" | jq -r '.[] | @base64'); do
+              _jq() {
+                echo ${package} | base64 --decode | jq -r ${1}
+              }
+
+              NAME=$(_jq '.name')
+              if [[ $NAME = 'symfony/deprecation-contracts' || $NAME = 'symfony/contracts' ]]; then
+                continue
+              fi
+
+              echo "::group::$NAME"
+              DIR=$(_jq '.directory')
+              localExit=0
+              grep -rq 'trigger_deprecation(' --include=*.php --exclude-dir=Tests/ --exclude-dir=Bridge/ $DIR
+              triggersDeprecation=$?
+              if [[ $triggersDeprecation -eq 0 && $(_jq '.requires_deprecation_contracts') == false ]]; then
+                errorMessage="::error::$NAME does not require symfony/deprecation-contracts but triggers at least one deprecation"
+                localExit=1
+              elif [[ $triggersDeprecation -eq 1 && $(_jq '.requires_deprecation_contracts') == true ]]; then
+                errorMessage="::error::$NAME requires symfony/deprecation-contracts but does not trigger any deprecation"
+                localExit=1
+              elif [[ $triggersDeprecation -ne 0 && $triggersDeprecation -ne 1 ]]; then
+                echo "::error::grep failed"
+                exit 2
+              fi
+
+              ok=$(( $localExit || $ok ))
+              echo ::endgroup::
+              if [ $localExit -ne 0 ]; then
+                echo $errorMessage
               fi
           done
 

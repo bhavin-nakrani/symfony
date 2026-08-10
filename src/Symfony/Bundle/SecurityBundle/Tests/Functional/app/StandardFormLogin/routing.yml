@@ -3,3 +3,28 @@ _form_login_bundle:
 
 _form_login_localized:
     resource: '@FormLoginBundle/Resources/config/localized_routing.yml'
+
+logout_form:
+    path:     /logout-form
+    defaults: { _controller: Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\FormLoginBundle\Controller\LoginController::logoutFormAction }
+
+app_logout:
+    path:     /logout
+    methods:  [POST]
+
+switch_user_route:
+    path:     /switch-user
+    defaults: { _controller: Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\FormLoginBundle\Controller\LoginController::afterLoginAction }
+    methods:  [POST]
+
+impersonation_form:
+    path:     /impersonation-form
+    defaults: { _controller: Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\FormLoginBundle\Controller\LoginController::impersonationFormAction }
+
+impersonation_link:
+    path:     /impersonation-link
+    defaults: { _controller: Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\FormLoginBundle\Controller\LoginController::impersonationLinkAction }
+
+impersonation_form_helper:
+    path:     /impersonation-form-helper
+    defaults: { _controller: Symfony\Bundle\SecurityBundle\Tests\Functional\Bundle\FormLoginBundle\Controller\LoginController::impersonationFormHelperAction }

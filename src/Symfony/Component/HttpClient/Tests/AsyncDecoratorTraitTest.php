@@ -26,7 +26,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class AsyncDecoratorTraitTest extends NativeHttpClientTest
 {
-    protected function getHttpClient(string $testCase, \Closure $chunkFilter = null, HttpClientInterface $decoratedClient = null): HttpClientInterface
+    protected function getHttpClient(string $testCase, ?\Closure $chunkFilter = null, ?HttpClientInterface $decoratedClient = null): HttpClientInterface
     {
         if ('testHandleIsRemovedOnException' === $testCase) {
             $this->markTestSkipped("AsyncDecoratorTrait doesn't cache handles");
@@ -41,11 +41,10 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
         return new class($decoratedClient ?? parent::getHttpClient($testCase), $chunkFilter) implements HttpClientInterface {
             use AsyncDecoratorTrait;
 
-            private ?\Closure $chunkFilter;
-
-            public function __construct(HttpClientInterface $client, \Closure $chunkFilter = null)
-            {
-                $this->chunkFilter = $chunkFilter;
+            public function __construct(
+                HttpClientInterface $client,
+                private ?\Closure $chunkFilter = null,
+            ) {
                 $this->client = $client;
             }
 
@@ -182,7 +181,7 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
     public function testProcessingHappensOnce()
     {
         $lastChunks = 0;
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) use (&$lastChunks) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) use (&$lastChunks) {
             $lastChunks += $chunk->isLast();
 
             yield $chunk;
@@ -205,7 +204,7 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
     public function testLastChunkIsYieldOnHttpExceptionAtDestructTime()
     {
         $lastChunk = null;
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) use (&$lastChunk) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) use (&$lastChunk) {
             $lastChunk = $chunk;
 
             yield $chunk;
@@ -222,11 +221,25 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
 
     public function testBufferPurePassthru()
     {
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) {
             $context->passthru();
 
             yield $chunk;
         });
+
+        $response = $client->request('GET', 'http://localhost:8057/');
+
+        $this->assertStringContainsString('SERVER_PROTOCOL', $response->getContent());
+        $this->assertStringContainsString('HTTP_HOST', $response->getContent());
+
+        $client = new class(parent::getHttpClient(__FUNCTION__)) implements HttpClientInterface {
+            use AsyncDecoratorTrait;
+
+            public function request(string $method, string $url, array $options = []): ResponseInterface
+            {
+                return new AsyncResponse($this->client, $method, $url, $options);
+            }
+        };
 
         $response = $client->request('GET', 'http://localhost:8057/');
 
@@ -284,10 +297,10 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
     public function testInfoPassToDecorator()
     {
         $lastInfo = null;
-        $options = ['on_progress' => function (int $dlNow, int $dlSize, array $info) use (&$lastInfo) {
+        $options = ['on_progress' => static function (int $dlNow, int $dlSize, array $info) use (&$lastInfo) {
             $lastInfo = $info;
         }];
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) use ($options) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) use ($options) {
             $context->setInfo('foo', 'test');
             $context->getResponse()->cancel();
             $context->replaceRequest('GET', 'http://localhost:8057/', $options);
@@ -302,7 +315,7 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
 
     public function testMultipleYieldInInitializer()
     {
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) {
             static $first;
             if ($chunk->isFirst()) {
                 $first = $chunk;
@@ -344,7 +357,7 @@ class AsyncDecoratorTraitTest extends NativeHttpClientTest
 
     public function testMaxDuration()
     {
-        $client = $this->getHttpClient(__FUNCTION__, function (ChunkInterface $chunk, AsyncContext $context) {
+        $client = $this->getHttpClient(__FUNCTION__, static function (ChunkInterface $chunk, AsyncContext $context) {
             static $sawFirst = false;
             try {
                 if (!$chunk->isFirst() || !$sawFirst) {

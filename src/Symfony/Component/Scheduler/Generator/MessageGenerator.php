@@ -16,11 +16,13 @@ use Symfony\Component\Clock\Clock;
 use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
 use Symfony\Component\Scheduler\ScheduleProviderInterface;
+use Symfony\Component\Scheduler\Trigger\StatefulTriggerInterface;
 
 final class MessageGenerator implements MessageGeneratorInterface
 {
-    private Schedule $schedule;
+    private ?Schedule $schedule = null;
     private TriggerHeap $triggerHeap;
+    private bool $heapInitialized = false;
     private ?\DateTimeImmutable $waitUntil;
 
     public function __construct(
@@ -32,9 +34,18 @@ final class MessageGenerator implements MessageGeneratorInterface
         $this->waitUntil = new \DateTimeImmutable('@0');
     }
 
+    /**
+     * @return \Generator<MessageContext, object>
+     */
     public function getMessages(): \Generator
     {
         $checkpoint = $this->checkpoint();
+
+        if ($this->schedule?->shouldRestart()) {
+            unset($this->triggerHeap);
+            $this->waitUntil = new \DateTimeImmutable('@0');
+            $this->schedule->setRestart(false);
+        }
 
         if (!$this->waitUntil
             || $this->waitUntil > ($now = $this->clock->now())
@@ -43,9 +54,10 @@ final class MessageGenerator implements MessageGeneratorInterface
             return;
         }
 
+        $startTime = $checkpoint->from();
         $lastTime = $checkpoint->time();
         $lastIndex = $checkpoint->index();
-        $heap = $this->heap($lastTime);
+        $heap = $this->heap($lastTime, $startTime, $lastIndex);
 
         while (!$heap->isEmpty() && $heap->top()[0] <= $now) {
             /** @var \DateTimeImmutable $time */
@@ -53,7 +65,6 @@ final class MessageGenerator implements MessageGeneratorInterface
             /** @var RecurringMessage $recurringMessage */
             [$time, $index, $recurringMessage] = $heap->extract();
             $id = $recurringMessage->getId();
-            $message = $recurringMessage->getMessage();
             $trigger = $recurringMessage->getTrigger();
             $yield = true;
 
@@ -64,13 +75,27 @@ final class MessageGenerator implements MessageGeneratorInterface
                 $yield = false;
             }
 
-            if ($nextTime = $trigger->getNextRunDate($time)) {
+            $nextTime = $trigger->getNextRunDate($time);
+
+            if ($this->schedule->shouldProcessOnlyLastMissedRun()) {
+                while ($nextTime && $nextTime < $this->clock->now()) {
+                    $nextTime = $trigger->getNextRunDate($nextTime);
+                }
+            }
+
+            if ($nextTime) {
                 $heap->insert([$nextTime, $index, $recurringMessage]);
             }
 
             if ($yield) {
-                yield (new MessageContext($this->name, $id, $trigger, $time, $nextTime)) => $message;
-                $checkpoint->save($time, $index);
+                $context = new MessageContext($this->name, $id, $trigger, $time, $nextTime);
+                try {
+                    foreach ($recurringMessage->getMessages($context) as $message) {
+                        yield $context => $message;
+                    }
+                } finally {
+                    $checkpoint->save($time, $index);
+                }
             }
         }
 
@@ -79,7 +104,12 @@ final class MessageGenerator implements MessageGeneratorInterface
         $checkpoint->release($now, $this->waitUntil);
     }
 
-    private function heap(\DateTimeImmutable $time): TriggerHeap
+    public function getSchedule(): Schedule
+    {
+        return $this->schedule ??= $this->scheduleProvider->getSchedule();
+    }
+
+    private function heap(\DateTimeImmutable $time, \DateTimeImmutable $startTime, int $lastIndex): TriggerHeap
     {
         if (isset($this->triggerHeap) && $this->triggerHeap->time <= $time) {
             return $this->triggerHeap;
@@ -87,8 +117,25 @@ final class MessageGenerator implements MessageGeneratorInterface
 
         $heap = new TriggerHeap($time);
 
-        foreach ($this->schedule()->getRecurringMessages() as $index => $recurringMessage) {
-            if (!$nextTime = $recurringMessage->getTrigger()->getNextRunDate($time)) {
+        // On the very first heap build of this instance — a new process picking up a
+        // checkpoint that already yielded part of the messages due at $time (lastIndex
+        // >= 0) — probe one microsecond before $time so triggers, whose getNextRunDate()
+        // is strictly-after, re-emit entries due at exactly $time. The skip logic in
+        // getMessages() then filters out already-yielded indices, letting the
+        // un-processed remainder through. Subsequent rebuilds happen after a normal
+        // yield-then-advance cycle (not after a partial yield), so re-probing $time
+        // would re-emit entries that are already advanced past.
+        $probeTime = !$this->heapInitialized && $lastIndex >= 0 ? $time->modify('-1 microsecond') : $time;
+        $this->heapInitialized = true;
+
+        foreach ($this->getSchedule()->getRecurringMessages() as $index => $recurringMessage) {
+            $trigger = $recurringMessage->getTrigger();
+
+            if ($trigger instanceof StatefulTriggerInterface) {
+                $trigger->continue($startTime);
+            }
+
+            if (!$nextTime = $trigger->getNextRunDate($probeTime)) {
                 continue;
             }
 
@@ -98,13 +145,8 @@ final class MessageGenerator implements MessageGeneratorInterface
         return $this->triggerHeap = $heap;
     }
 
-    private function schedule(): Schedule
-    {
-        return $this->schedule ??= $this->scheduleProvider->getSchedule();
-    }
-
     private function checkpoint(): Checkpoint
     {
-        return $this->checkpoint ??= new Checkpoint('scheduler_checkpoint_'.$this->name, $this->schedule()->getLock(), $this->schedule()->getState());
+        return $this->checkpoint ??= new Checkpoint('scheduler_checkpoint_'.$this->name, $this->getSchedule()->getLock(), $this->getSchedule()->getState());
     }
 }

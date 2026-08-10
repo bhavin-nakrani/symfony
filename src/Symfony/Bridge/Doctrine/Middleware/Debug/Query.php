@@ -11,6 +11,8 @@
 
 namespace Symfony\Bridge\Doctrine\Middleware\Debug;
 
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Connections\PrimaryReadReplicaConnection;
 use Doctrine\DBAL\ParameterType;
 
 /**
@@ -21,13 +23,18 @@ use Doctrine\DBAL\ParameterType;
 class Query
 {
     private array $params = [];
+
+    /** @var array<ParameterType|int> */
     private array $types = [];
 
     private ?float $start = null;
     private ?float $duration = null;
 
+    private ?bool $ranOnPrimary = null;
+
     public function __construct(
-        private string $sql,
+        private readonly string $sql,
+        private readonly ?Connection $connection = null,
     ) {
     }
 
@@ -40,10 +47,14 @@ class Query
     {
         if (null !== $this->start) {
             $this->duration = microtime(true) - $this->start;
+
+            if ($this->connection instanceof PrimaryReadReplicaConnection) {
+                $this->ranOnPrimary = $this->connection->isConnectedToPrimary();
+            }
         }
     }
 
-    public function setParam(string|int $param, mixed &$variable, int $type): void
+    public function setParam(string|int $param, mixed &$variable, ParameterType|int $type): void
     {
         // Numeric indexes start at 0 in profiler
         $idx = \is_int($param) ? $param - 1 : $param;
@@ -52,7 +63,7 @@ class Query
         $this->types[$idx] = $type;
     }
 
-    public function setValue(string|int $param, mixed $value, int $type): void
+    public function setValue(string|int $param, mixed $value, ParameterType|int $type): void
     {
         // Numeric indexes start at 0 in profiler
         $idx = \is_int($param) ? $param - 1 : $param;
@@ -77,7 +88,7 @@ class Query
     }
 
     /**
-     * @return array<int, string|int|float}>
+     * @return array<int, string|int|float>
      */
     public function getParams(): array
     {
@@ -85,7 +96,7 @@ class Query
     }
 
     /**
-     * @return array<int, int>
+     * @return array<int, int|ParameterType>
      */
     public function getTypes(): array
     {
@@ -98,6 +109,11 @@ class Query
     public function getDuration(): ?float
     {
         return $this->duration;
+    }
+
+    public function ranOnPrimary(): ?bool
+    {
+        return $this->ranOnPrimary;
     }
 
     public function __clone()

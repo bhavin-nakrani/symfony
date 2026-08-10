@@ -12,6 +12,7 @@
 namespace Symfony\Component\Workflow;
 
 use Symfony\Component\Workflow\Exception\LogicException;
+use Symfony\Component\Workflow\Exception\UndefinedTransitionException;
 use Symfony\Component\Workflow\MarkingStore\MarkingStoreInterface;
 use Symfony\Component\Workflow\Metadata\MetadataStoreInterface;
 
@@ -36,6 +37,8 @@ interface WorkflowInterface
 
     /**
      * Builds a TransitionBlockerList to know why a transition is blocked.
+     *
+     * @throws UndefinedTransitionException If the transition is not defined
      */
     public function buildTransitionBlockerList(object $subject, string $transitionName): TransitionBlockerList;
 
@@ -52,6 +55,8 @@ interface WorkflowInterface
      * @return Transition[]
      */
     public function getEnabledTransitions(object $subject): array;
+
+    public function getEnabledTransition(object $subject, string $name): ?Transition;
 
     public function getName(): string;
 

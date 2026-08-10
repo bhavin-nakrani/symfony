@@ -53,6 +53,22 @@ class BazClass
     }
 }
 
+class BazInvokableFactory
+{
+    public function __invoke(): BazClass
+    {
+        return new BazClass();
+    }
+}
+
+class BazInvokableConfigurator
+{
+    public function __invoke($instance): void
+    {
+        $instance->configure();
+    }
+}
+
 class BarUserClass
 {
     public $foo;
@@ -83,7 +99,7 @@ class MethodCallClass
 
 class DummyProxyDumper implements DumperInterface
 {
-    public function isProxyCandidate(Definition $definition, bool &$asGhostObject = null, string $id = null): bool
+    public function isProxyCandidate(Definition $definition, ?bool &$asGhostObject = null, ?string $id = null): bool
     {
         $asGhostObject = false;
 

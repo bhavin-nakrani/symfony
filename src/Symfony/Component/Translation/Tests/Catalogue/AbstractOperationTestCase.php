@@ -11,7 +11,10 @@
 
 namespace Symfony\Component\Translation\Tests\Catalogue;
 
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Translation\Catalogue\AbstractOperation;
+use Symfony\Component\Translation\Exception\LogicException;
 use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\MessageCatalogueInterface;
 
@@ -70,5 +73,27 @@ abstract class AbstractOperationTestCase extends TestCase
         );
     }
 
-    abstract protected function createOperation(MessageCatalogueInterface $source, MessageCatalogueInterface $target);
+    public function testSourceAndTargetWithDifferentLocales()
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Operated catalogues must belong to the same locale.');
+        $this->createOperation(
+            new MessageCatalogue('en'),
+            new MessageCatalogue('fr')
+        );
+    }
+
+    #[RequiresPhpExtension('intl')]
+    public function testMovingMessagesToIntlDomainsKeepsCatalogueMetadata()
+    {
+        $target = new MessageCatalogue('en', ['messages' => ['foo' => 'bar']]);
+        $target->setCatalogueMetadata('foo', 'bar');
+
+        $operation = $this->createOperation(new MessageCatalogue('en'), $target);
+        $operation->moveMessagesToIntlDomainsIfPossible();
+
+        $this->assertSame(['foo' => 'bar'], $operation->getResult()->getCatalogueMetadata(domain: 'messages+intl-icu'));
+    }
+
+    abstract protected function createOperation(MessageCatalogueInterface $source, MessageCatalogueInterface $target): AbstractOperation;
 }

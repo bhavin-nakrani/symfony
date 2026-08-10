@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Config\Tests\Util;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Util\Exception\InvalidXmlException;
 use Symfony\Component\Config\Util\XmlUtils;
@@ -39,11 +40,11 @@ class XmlUtilsTest extends TestCase
             if ('\\' === \DIRECTORY_SEPARATOR) {
                 $this->markTestSkipped('chmod is not supported on Windows');
             }
-            chmod($fixtures.'not_readable.xml', 000);
+            chmod($fixtures.'not_readable.xml', 0o00);
             XmlUtils::loadFile($fixtures.'not_readable.xml');
             $this->fail();
         } catch (\InvalidArgumentException $e) {
-            chmod($fixtures.'not_readable.xml', 0644);
+            chmod($fixtures.'not_readable.xml', 0o644);
             $this->assertStringContainsString('is not readable', $e->getMessage());
         }
 
@@ -76,7 +77,8 @@ class XmlUtilsTest extends TestCase
         }
 
         $mock = $this->createMock(Validator::class);
-        $mock->expects($this->exactly(2))->method('validate')->will($this->onConsecutiveCalls(false, true));
+        $mock->expects($this->exactly(2))->method('validate')
+            ->willReturn(false, true);
 
         try {
             XmlUtils::loadFile($fixtures.'valid.xml', [$mock, 'validate']);
@@ -91,12 +93,13 @@ class XmlUtilsTest extends TestCase
 
     public function testParseWithInvalidValidatorCallable()
     {
-        $this->expectException(InvalidXmlException::class);
-        $this->expectExceptionMessage('The XML is not valid');
         $fixtures = __DIR__.'/../Fixtures/Util/';
 
         $mock = $this->createMock(Validator::class);
         $mock->expects($this->once())->method('validate')->willReturn(false);
+
+        $this->expectException(InvalidXmlException::class);
+        $this->expectExceptionMessage('The XML is not valid');
 
         XmlUtils::parse(file_get_contents($fixtures.'valid.xml'), [$mock, 'validate']);
     }
@@ -113,9 +116,7 @@ class XmlUtilsTest extends TestCase
         libxml_use_internal_errors($internalErrors);
     }
 
-    /**
-     * @dataProvider getDataForConvertDomToArray
-     */
+    #[DataProvider('getDataForConvertDomToArray')]
     public function testConvertDomToArray($expected, string $xml, bool $root = false, bool $checkPrefix = true)
     {
         $dom = new \DOMDocument();
@@ -147,9 +148,7 @@ class XmlUtilsTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider getDataForPhpize
-     */
+    #[DataProvider('getDataForPhpize')]
     public function testPhpize($expected, string $value)
     {
         $this->assertSame($expected, XmlUtils::phpize($value));
@@ -168,7 +167,7 @@ class XmlUtilsTest extends TestCase
             [0, '0'],
             [1, '1'],
             [-1, '-1'],
-            [0777, '0777'],
+            [0o777, '0777'],
             [-511, '-0777'],
             ['0877', '0877'],
             [255, '0xFF'],
@@ -194,7 +193,7 @@ class XmlUtilsTest extends TestCase
         $file = __DIR__.'/../Fixtures/foo.xml';
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('File "%s" does not contain valid XML, it is empty.', $file));
+        $this->expectExceptionMessage(\sprintf('File "%s" does not contain valid XML, it is empty.', $file));
 
         XmlUtils::loadFile($file);
     }
@@ -204,7 +203,7 @@ class XmlUtilsTest extends TestCase
     {
         $errorReporting = error_reporting(-1);
 
-        set_error_handler(function ($errno, $errstr) {
+        set_error_handler(static function ($errno, $errstr) {
             throw new \Exception($errstr, $errno);
         });
 
@@ -214,7 +213,7 @@ class XmlUtilsTest extends TestCase
                 XmlUtils::loadFile($file);
                 $this->fail('An exception should have been raised');
             } catch (\InvalidArgumentException $e) {
-                $this->assertEquals(sprintf('File "%s" does not contain valid XML, it is empty.', $file), $e->getMessage());
+                $this->assertEquals(\sprintf('File "%s" does not contain valid XML, it is empty.', $file), $e->getMessage());
             }
         } finally {
             restore_error_handler();

@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\Cache\Tests\Adapter;
 
+use PHPUnit\Framework\Attributes\DoesNotPerformAssertions;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\AdapterInterface;
@@ -21,9 +23,7 @@ use Symfony\Component\Cache\PruneableInterface;
 use Symfony\Component\Cache\Tests\Fixtures\PrunableAdapter;
 use Symfony\Component\Filesystem\Filesystem;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class TagAwareAdapterTest extends AdapterTestCase
 {
     use TagAwareTestTrait;
@@ -43,7 +43,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         $cache = new TagAwareAdapter($this->getPruneableMock());
         $this->assertTrue($cache->prune());
 
-        $cache = new TagAwareAdapter($this->getNonPruneableMock());
+        $cache = new TagAwareAdapter($this->createStub(AdapterInterface::class));
         $this->assertFalse($cache->prune());
 
         $cache = new TagAwareAdapter($this->getFailingPruneableMock());
@@ -123,14 +123,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         return $pruneable;
     }
 
-    private function getNonPruneableMock(): AdapterInterface&MockObject
-    {
-        return $this->createMock(AdapterInterface::class);
-    }
-
-    /**
-     * @doesNotPerformAssertions
-     */
+    #[DoesNotPerformAssertions]
     public function testToleranceForStringsAsTagVersionsCase1()
     {
         $pool = $this->createCachePool();
@@ -145,9 +138,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         $pool->getItem($itemKey);
     }
 
-    /**
-     * @doesNotPerformAssertions
-     */
+    #[DoesNotPerformAssertions]
     public function testToleranceForStringsAsTagVersionsCase2()
     {
         $pool = $this->createCachePool();
@@ -163,9 +154,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         $pool->hasItem($itemKey);
     }
 
-    /**
-     * @doesNotPerformAssertions
-     */
+    #[DoesNotPerformAssertions]
     public function testToleranceForStringsAsTagVersionsCase3()
     {
         $pool = $this->createCachePool();
@@ -187,9 +176,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         $pool->hasItem($itemKey);
     }
 
-    /**
-     * @doesNotPerformAssertions
-     */
+    #[DoesNotPerformAssertions]
     public function testToleranceForStringsAsTagVersionsCase4()
     {
         $pool = $this->createCachePool();
@@ -209,9 +196,7 @@ class TagAwareAdapterTest extends AdapterTestCase
         $pool->getItem($itemKey);
     }
 
-    /**
-     * @doesNotPerformAssertions
-     */
+    #[DoesNotPerformAssertions]
     public function testToleranceForStringsAsTagVersionsCase5()
     {
         $pool = $this->createCachePool();
@@ -231,5 +216,30 @@ class TagAwareAdapterTest extends AdapterTestCase
         foreach ($pool->getItems([$itemKey1, $itemKey2]) as $item) {
             // run generator
         }
+    }
+
+    public function testResetClearsInternalStateEvenOnCommitFailure()
+    {
+        $pool = new class extends ArrayAdapter {
+            public function commit(): bool
+            {
+                return false;
+            }
+        };
+
+        $adapter = new TagAwareAdapter($pool);
+        $item = $adapter->getItem('foo');
+        $item->set('bar');
+        $adapter->saveDeferred($item);
+
+        // Simulate some known tag versions
+        $propertyTags = new \ReflectionProperty($adapter, 'knownTagVersions');
+        $propertyTags->setValue($adapter, ['tag1' => 1]);
+
+        $adapter->reset();
+
+        $propertyDeferred = new \ReflectionProperty($adapter, 'deferred');
+        $this->assertEmpty($propertyDeferred->getValue($adapter), 'The deferred items must be cleared even if commit fails.');
+        $this->assertEmpty($propertyTags->getValue($adapter), 'The known tag versions must be cleared even if commit fails.');
     }
 }

@@ -550,9 +550,13 @@ return [
             'SHP',
             'libra santa-helenense',
         ],
+        'SLE' => [
+            'SLE',
+            'leone de Serra Leoa',
+        ],
         'SLL' => [
             'SLL',
-            'leone de Serra Leoa',
+            'leone de Serra Leoa (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -662,6 +666,10 @@ return [
             'EC$',
             'dólar das Caraíbas Orientais',
         ],
+        'XCG' => [
+            'Cg.',
+            'florim caribenho',
+        ],
         'XOF' => [
             'F CFA',
             'franco CFA (BCEAO)',
@@ -685,6 +693,10 @@ return [
         'ZMW' => [
             'ZMW',
             'kwacha zambiano',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'ouro zimbabuense',
         ],
     ],
 ];

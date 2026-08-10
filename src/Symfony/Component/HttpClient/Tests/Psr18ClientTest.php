@@ -12,6 +12,7 @@
 namespace Symfony\Component\HttpClient\Tests;
 
 use Nyholm\Psr7\Factory\Psr17Factory;
+use PHPUnit\Framework\Attributes\RequiresFunction;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\NativeHttpClient;
@@ -19,6 +20,7 @@ use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\HttpClient\Psr18NetworkException;
 use Symfony\Component\HttpClient\Psr18RequestException;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Tests\Fixtures\UnknownSizeStream;
 use Symfony\Contracts\HttpClient\Test\TestHttpServer;
 
 class Psr18ClientTest extends TestCase
@@ -28,6 +30,7 @@ class Psr18ClientTest extends TestCase
         TestHttpServer::start();
     }
 
+    #[RequiresFunction('ob_gzhandler')]
     public function testSendRequest()
     {
         $factory = new Psr17Factory();
@@ -55,6 +58,46 @@ class Psr18ClientTest extends TestCase
         $body = json_decode((string) $response->getBody(), true);
 
         $this->assertSame(['foo' => '0123456789', 'REQUEST_METHOD' => 'POST'], $body);
+    }
+
+    public function testRequestWithEmptyUnknownSizeBodyDoesNotPassAStreamingBody()
+    {
+        $factory = new Psr17Factory();
+        $body = new UnknownSizeStream('', seekable: false);
+        $body->getContents();
+        $client = new Psr18Client(new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
+            $this->assertSame('TRACE', $method);
+            $this->assertSame('', $options['body']);
+
+            return new MockResponse();
+        }), $factory, $factory);
+
+        $client->sendRequest($factory->createRequest('TRACE', 'http://localhost')->withBody($body));
+    }
+
+    public function testRequestWithConsumedSeekableUnknownSizeBodyIsRestreamed()
+    {
+        $factory = new Psr17Factory();
+        $body = new UnknownSizeStream('IMPORTANT-PAYLOAD');
+        $body->getContents();
+        $this->assertTrue($body->eof());
+        $client = new Psr18Client(new MockHttpClient(function (string $method, string $url, array $options) use (&$sentBody): MockResponse {
+            $sentBody = $options['body'];
+
+            if (!\is_string($sentBody)) {
+                $received = '';
+                while ('' !== $chunk = $sentBody()) {
+                    $received .= $chunk;
+                }
+                $sentBody = $received;
+            }
+
+            return new MockResponse();
+        }), $factory, $factory);
+
+        $client->sendRequest($factory->createRequest('POST', 'http://localhost')->withBody($body));
+
+        $this->assertSame('IMPORTANT-PAYLOAD', $sentBody);
     }
 
     public function testNetworkException()
@@ -100,5 +143,49 @@ class Psr18ClientTest extends TestCase
 
         $resultResponse = $client->sendRequest($request);
         $this->assertCount(1, $resultResponse->getHeaders());
+    }
+
+    public function testResponseReasonPhrase()
+    {
+        $responseHeaders = [
+            'HTTP/1.1 103 Very Early Hints',
+        ];
+        $response = new MockResponse('body', ['response_headers' => $responseHeaders]);
+
+        $client = new Psr18Client(new MockHttpClient($response));
+        $request = $client->createRequest('POST', 'http://localhost:8057/post')
+            ->withBody($client->createStream('foo=0123456789'));
+
+        $resultResponse = $client->sendRequest($request);
+        $this->assertSame('Very Early Hints', $resultResponse->getReasonPhrase());
+    }
+
+    public function testAutoUpgradeHttpVersion()
+    {
+        $clientWithoutOption = new Psr18Client(new MockHttpClient(static fn (string $method, string $url, array $options) => new MockResponse(json_encode([
+            'SERVER_PROTOCOL' => 'HTTP/'.$options['http_version'] ?? '',
+        ]), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ])));
+        $clientWithOptionFalse = $clientWithoutOption->withOptions(['auto_upgrade_http_version' => false]);
+
+        foreach (['1.0', '1.1', '2.0', '3.0'] as $httpVersion) {
+            $request = $clientWithoutOption->createRequest('GET', 'http://localhost:8057')
+                ->withProtocolVersion($httpVersion);
+
+            $responseWithoutOption = $clientWithoutOption->sendRequest($request);
+            $bodyWithoutOption = json_decode((string) $responseWithoutOption->getBody(), true);
+            if ('1.0' === $httpVersion) {
+                $this->assertSame('HTTP/1.0', $bodyWithoutOption['SERVER_PROTOCOL']);
+            } else {
+                $this->assertSame('HTTP/', $bodyWithoutOption['SERVER_PROTOCOL']);
+            }
+
+            $responseWithOptionFalse = $clientWithOptionFalse->sendRequest($request);
+            $bodyWithOptionFalse = json_decode((string) $responseWithOptionFalse->getBody(), true);
+            $this->assertSame('HTTP/'.$httpVersion, $bodyWithOptionFalse['SERVER_PROTOCOL']);
+        }
     }
 }

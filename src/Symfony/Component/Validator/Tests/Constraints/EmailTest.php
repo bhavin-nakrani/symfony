@@ -15,20 +15,20 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Exception\InvalidArgumentException;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
+use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
 
 class EmailTest extends TestCase
 {
     public function testConstructorStrict()
     {
-        $subject = new Email(['mode' => Email::VALIDATION_MODE_STRICT]);
+        $subject = new Email(mode: Email::VALIDATION_MODE_STRICT);
 
         $this->assertEquals(Email::VALIDATION_MODE_STRICT, $subject->mode);
     }
 
     public function testConstructorHtml5AllowNoTld()
     {
-        $subject = new Email(['mode' => Email::VALIDATION_MODE_HTML5_ALLOW_NO_TLD]);
+        $subject = new Email(mode: Email::VALIDATION_MODE_HTML5_ALLOW_NO_TLD);
 
         $this->assertEquals(Email::VALIDATION_MODE_HTML5_ALLOW_NO_TLD, $subject->mode);
     }
@@ -37,45 +37,38 @@ class EmailTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('The "mode" parameter value is not valid.');
-        new Email(['mode' => 'Unknown Mode']);
+        new Email(mode: 'Unknown Mode');
+    }
+
+    public function testUnknownModeArgumentsTriggerException()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "mode" parameter value is not valid.');
+        new Email(null, null, 'Unknown Mode');
     }
 
     public function testNormalizerCanBeSet()
     {
-        $email = new Email(['normalizer' => 'trim']);
+        $email = new Email(normalizer: 'trim');
 
         $this->assertEquals('trim', $email->normalizer);
-    }
-
-    public function testInvalidNormalizerThrowsException()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The "normalizer" option must be a valid callable ("string" given).');
-        new Email(['normalizer' => 'Unknown Callable']);
-    }
-
-    public function testInvalidNormalizerObjectThrowsException()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The "normalizer" option must be a valid callable ("stdClass" given).');
-        new Email(['normalizer' => new \stdClass()]);
     }
 
     public function testAttribute()
     {
         $metadata = new ClassMetadata(EmailDummy::class);
-        (new AnnotationLoader())->loadClassMetadata($metadata);
+        (new AttributeLoader())->loadClassMetadata($metadata);
 
-        [$aConstraint] = $metadata->properties['a']->constraints;
+        [$aConstraint] = $metadata->getPropertyMetadata('a')[0]->getConstraints();
         self::assertNull($aConstraint->mode);
         self::assertNull($aConstraint->normalizer);
 
-        [$bConstraint] = $metadata->properties['b']->constraints;
+        [$bConstraint] = $metadata->getPropertyMetadata('b')[0]->getConstraints();
         self::assertSame('myMessage', $bConstraint->message);
         self::assertSame(Email::VALIDATION_MODE_HTML5, $bConstraint->mode);
         self::assertSame('trim', $bConstraint->normalizer);
 
-        [$cConstraint] = $metadata->properties['c']->getConstraints();
+        [$cConstraint] = $metadata->getPropertyMetadata('c')[0]->getConstraints();
         self::assertSame(['my_group'], $cConstraint->groups);
         self::assertSame('some attached data', $cConstraint->payload);
     }

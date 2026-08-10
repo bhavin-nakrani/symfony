@@ -11,13 +11,14 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Tests\Functional;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandCompletionTester;
 use Symfony\Component\Console\Tester\CommandTester;
 
-/**
- * @group functional
- */
+#[Group('functional')]
 class RouterDebugCommandTest extends AbstractWebTestCase
 {
     private Application $application;
@@ -81,26 +82,85 @@ class RouterDebugCommandTest extends AbstractWebTestCase
 
     public function testSearchWithThrow()
     {
+        $tester = $this->createCommandTester();
+
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('The route "gerard" does not exist.');
-        $tester = $this->createCommandTester();
+
         $tester->execute(['name' => 'gerard'], ['interactive' => true]);
     }
 
-    /**
-     * @dataProvider provideCompletionSuggestions
-     */
+    public function testSortRoutesByPath()
+    {
+        $tester = $this->createCommandTester();
+        $ret = $tester->execute(['--sort' => 'path']);
+        $display = $tester->getDisplay();
+
+        $this->assertSame(0, $ret, 'Returns 0 in case of success');
+        $sessionPos = strpos($display, '/session ');
+        $sessionNamePos = strpos($display, '/session/{name}');
+        $logoutPos = strpos($display, '/session_logout');
+        $testPos = strpos($display, '/test');
+        $this->assertLessThan($sessionNamePos, $sessionPos);
+        $this->assertLessThan($logoutPos, $sessionNamePos);
+        $this->assertLessThan($testPos, $logoutPos);
+    }
+
+    public function testSortRoutesByName()
+    {
+        $tester = $this->createCommandTester();
+        $ret = $tester->execute(['--sort' => 'name']);
+        $display = $tester->getDisplay();
+
+        $this->assertSame(0, $ret, 'Returns 0 in case of success');
+        $logoutPos = strpos($display, 'routerdebug_session_logout');
+        $welcomePos = strpos($display, 'routerdebug_session_welcome ');
+        $welcomeNamePos = strpos($display, 'routerdebug_session_welcome_name');
+        $testPos = strpos($display, 'routerdebug_test');
+        $this->assertLessThan($welcomePos, $logoutPos);
+        $this->assertLessThan($welcomeNamePos, $welcomePos);
+        $this->assertLessThan($testPos, $welcomeNamePos);
+    }
+
+    public function testSortRoutesInvalidColumn()
+    {
+        $tester = $this->createCommandTester();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The sort column "invalid" is not supported');
+
+        $tester->execute(['--sort' => 'invalid']);
+    }
+
+    #[DataProvider('provideCompletionSuggestions')]
     public function testComplete(array $input, array $expectedSuggestions)
     {
         $tester = new CommandCompletionTester($this->application->get('debug:router'));
         $this->assertSame($expectedSuggestions, $tester->complete($input));
     }
 
-    public static function provideCompletionSuggestions()
+    #[TestWith(['txt'])]
+    #[TestWith(['xml'])]
+    #[TestWith(['json'])]
+    #[TestWith(['md'])]
+    public function testShowAliases(string $format)
+    {
+        $tester = $this->createCommandTester();
+
+        $this->assertSame(0, $tester->execute(['--show-aliases' => true, '--format' => $format]));
+        $this->assertStringContainsString('my_custom_alias', $tester->getDisplay());
+    }
+
+    public static function provideCompletionSuggestions(): iterable
     {
         yield 'option --format' => [
             ['--format', ''],
             ['txt', 'xml', 'json', 'md'],
+        ];
+
+        yield 'option --sort' => [
+            ['--sort', ''],
+            ['name', 'path', 'method', 'scheme', 'host'],
         ];
 
         yield 'route_name' => [

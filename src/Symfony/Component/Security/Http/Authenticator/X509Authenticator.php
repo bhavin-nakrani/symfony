@@ -28,17 +28,16 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
  */
 class X509Authenticator extends AbstractPreAuthenticatedAuthenticator
 {
-    private string $userKey;
-    private string $credentialsKey;
-    private string $credentialUserIdentifier;
-
-    public function __construct(UserProviderInterface $userProvider, TokenStorageInterface $tokenStorage, string $firewallName, string $userKey = 'SSL_CLIENT_S_DN_Email', string $credentialsKey = 'SSL_CLIENT_S_DN', LoggerInterface $logger = null, string $credentialUserIdentifier = 'emailAddress')
-    {
+    public function __construct(
+        UserProviderInterface $userProvider,
+        TokenStorageInterface $tokenStorage,
+        string $firewallName,
+        private string $userKey = 'SSL_CLIENT_S_DN_Email',
+        private string $credentialsKey = 'SSL_CLIENT_S_DN',
+        ?LoggerInterface $logger = null,
+        private string $credentialUserIdentifier = 'emailAddress',
+    ) {
         parent::__construct($userProvider, $tokenStorage, $firewallName, $logger);
-
-        $this->userKey = $userKey;
-        $this->credentialsKey = $credentialsKey;
-        $this->credentialUserIdentifier = $credentialUserIdentifier;
     }
 
     protected function extractUsername(Request $request): string
@@ -48,13 +47,19 @@ class X509Authenticator extends AbstractPreAuthenticatedAuthenticator
             $username = $request->server->get($this->userKey);
         } elseif (
             $request->server->has($this->credentialsKey)
-            && preg_match('#'.preg_quote($this->credentialUserIdentifier, '#').'=([^,/]++)#', $request->server->get($this->credentialsKey), $matches)
+            && preg_match(
+                'emailAddress' === $this->credentialUserIdentifier
+                    ? '#(?:^|[,/])\s*(?:emailAddress|1\.2\.840\.113549\.1\.9\.1)=([^,/@]++@[^,/]++)#'
+                    : '#(?:^|[,/])\s*'.preg_quote($this->credentialUserIdentifier, '#').'=([^,/]++)#',
+                $request->server->get($this->credentialsKey),
+                $matches,
+            )
         ) {
             $username = trim($matches[1]);
         }
 
         if (null === $username) {
-            throw new BadCredentialsException(sprintf('SSL credentials not found: "%s", "%s".', $this->userKey, $this->credentialsKey));
+            throw new BadCredentialsException(\sprintf('SSL credentials not found: "%s", "%s".', $this->userKey, $this->credentialsKey));
         }
 
         return $username;

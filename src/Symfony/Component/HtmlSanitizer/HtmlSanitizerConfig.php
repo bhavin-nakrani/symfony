@@ -19,6 +19,15 @@ use Symfony\Component\HtmlSanitizer\Visitor\AttributeSanitizer\AttributeSanitize
  */
 class HtmlSanitizerConfig
 {
+    private HtmlSanitizerAction $defaultAction = HtmlSanitizerAction::Drop;
+
+    /**
+     * Elements that should be removed.
+     *
+     * @var array<string, true>
+     */
+    private array $droppedElements = [];
+
     /**
      * Elements that should be removed but their children should be retained.
      *
@@ -96,7 +105,21 @@ class HtmlSanitizerConfig
     {
         $this->attributeSanitizers = [
             new Visitor\AttributeSanitizer\UrlAttributeSanitizer(),
+            new Visitor\AttributeSanitizer\MetaRefreshAttributeSanitizer(),
         ];
+    }
+
+    /**
+     * Sets the default action for elements which are not otherwise specifically allowed or blocked.
+     *
+     * Note that a default action of Allow will allow all tags but they will not have any attributes.
+     */
+    public function defaultAction(HtmlSanitizerAction $action): static
+    {
+        $clone = clone $this;
+        $clone->defaultAction = $action;
+
+        return $clone;
     }
 
     /**
@@ -261,8 +284,8 @@ class HtmlSanitizerConfig
     {
         $clone = clone $this;
 
-        // Unblock the element is necessary
-        unset($clone->blockedElements[$element]);
+        // Unblock/undrop the element if necessary
+        unset($clone->blockedElements[$element], $clone->droppedElements[$element]);
 
         $clone->allowedElements[$element] = [];
 
@@ -284,8 +307,8 @@ class HtmlSanitizerConfig
     {
         $clone = clone $this;
 
-        // Disallow the element is necessary
-        unset($clone->allowedElements[$element]);
+        // Disallow/undrop the element if necessary
+        unset($clone->allowedElements[$element], $clone->droppedElements[$element]);
 
         $clone->blockedElements[$element] = true;
 
@@ -300,12 +323,14 @@ class HtmlSanitizerConfig
      *
      * Note: when using an empty configuration, all unknown elements are dropped
      * automatically. This method let you drop elements that were allowed earlier
-     * in the configuration.
+     * in the configuration, or explicitly drop some if you changed the default action.
      */
     public function dropElement(string $element): static
     {
         $clone = clone $this;
         unset($clone->allowedElements[$element], $clone->blockedElements[$element]);
+
+        $clone->droppedElements[$element] = true;
 
         return $clone;
     }
@@ -317,6 +342,11 @@ class HtmlSanitizerConfig
      *
      * A list of allowed elements for this attribute can be passed as a second argument.
      * Passing "*" will allow all currently allowed elements to use this attribute.
+     *
+     * Note: this method is subtractive within the currently allowed elements.
+     * It restricts the attribute to the listed elements and removes it from any
+     * other allowed element that previously had it. To add an attribute to one
+     * element without affecting others, use allowElement($element, [$attribute]).
      *
      * @param list<string>|string $allowedElements
      */
@@ -370,7 +400,10 @@ class HtmlSanitizerConfig
     /**
      * Forcefully set the value of a given attribute on a given element.
      *
-     * The attribute will be created on the nodes if it didn't exist.
+     * The attribute will be created on the nodes if it didn't exist. The
+     * provided value is written verbatim and is NOT passed through any
+     * attribute sanitizer (in particular, URL attribute sanitization is
+     * skipped), so callers are responsible for ensuring the value is safe.
      */
     public function forceAttribute(string $element, string $attribute, string $value): static
     {
@@ -405,8 +438,16 @@ class HtmlSanitizerConfig
         return $clone;
     }
 
+    /**
+     * @param int $maxInputLength The maximum length of the input string in bytes
+     *                            -1 means no limit
+     */
     public function withMaxInputLength(int $maxInputLength): static
     {
+        if ($maxInputLength < -1) {
+            throw new \InvalidArgumentException(\sprintf('The maximum input length must be greater than -1, "%d" given.', $maxInputLength));
+        }
+
         $clone = clone $this;
         $clone->maxInputLength = $maxInputLength;
 
@@ -416,6 +457,11 @@ class HtmlSanitizerConfig
     public function getMaxInputLength(): int
     {
         return $this->maxInputLength;
+    }
+
+    public function getDefaultAction(): HtmlSanitizerAction
+    {
+        return $this->defaultAction;
     }
 
     /**
@@ -432,6 +478,14 @@ class HtmlSanitizerConfig
     public function getBlockedElements(): array
     {
         return $this->blockedElements;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    public function getDroppedElements(): array
+    {
+        return $this->droppedElements;
     }
 
     /**

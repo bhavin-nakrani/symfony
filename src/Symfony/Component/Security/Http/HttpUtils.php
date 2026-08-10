@@ -26,23 +26,18 @@ use Symfony\Component\Routing\Matcher\UrlMatcherInterface;
  */
 class HttpUtils
 {
-    private ?UrlGeneratorInterface $urlGenerator;
-    private UrlMatcherInterface|RequestMatcherInterface|null $urlMatcher;
-    private ?string $domainRegexp;
-    private ?string $secureDomainRegexp;
-
     /**
      * @param $domainRegexp       A regexp the target of HTTP redirections must match, scheme included
      * @param $secureDomainRegexp A regexp the target of HTTP redirections must match when the scheme is "https"
      *
      * @throws \InvalidArgumentException
      */
-    public function __construct(UrlGeneratorInterface $urlGenerator = null, UrlMatcherInterface|RequestMatcherInterface $urlMatcher = null, string $domainRegexp = null, string $secureDomainRegexp = null)
-    {
-        $this->urlGenerator = $urlGenerator;
-        $this->urlMatcher = $urlMatcher;
-        $this->domainRegexp = $domainRegexp;
-        $this->secureDomainRegexp = $secureDomainRegexp;
+    public function __construct(
+        private ?UrlGeneratorInterface $urlGenerator = null,
+        private UrlMatcherInterface|RequestMatcherInterface|null $urlMatcher = null,
+        private ?string $domainRegexp = null,
+        private ?string $secureDomainRegexp = null,
+    ) {
     }
 
     /**
@@ -53,10 +48,10 @@ class HttpUtils
      */
     public function createRedirectResponse(Request $request, string $path, int $status = 302): RedirectResponse
     {
-        if (null !== $this->secureDomainRegexp && 'https' === $this->urlMatcher->getContext()->getScheme() && preg_match('#^https?:[/\\\\]{2,}+[^/]++#i', $path, $host) && !preg_match(sprintf($this->secureDomainRegexp, preg_quote($request->getHttpHost())), $host[0])) {
+        if (null !== $this->secureDomainRegexp && 'https' === $this->urlMatcher->getContext()->getScheme() && preg_match('#^https?:[/\\\\]{2,}+[^/]++#i', $path, $host) && !preg_match(\sprintf($this->secureDomainRegexp, preg_quote($request->getHttpHost())), $host[0])) {
             $path = '/';
         }
-        if (null !== $this->domainRegexp && preg_match('#^https?:[/\\\\]{2,}+[^/]++#i', $path, $host) && !preg_match(sprintf($this->domainRegexp, preg_quote($request->getHttpHost())), $host[0])) {
+        if (null !== $this->domainRegexp && preg_match('#^https?:[/\\\\]{2,}+[^/]++#i', $path, $host) && !preg_match(\sprintf($this->domainRegexp, preg_quote($request->getHttpHost())), $host[0])) {
             $path = '/';
         }
 
@@ -70,7 +65,33 @@ class HttpUtils
      */
     public function createRequest(Request $request, string $path): Request
     {
-        $newRequest = Request::create($this->generateUri($request, $path), 'get', [], $request->cookies->all(), [], $request->server->all());
+        if ($trustedProxies = Request::getTrustedProxies()) {
+            Request::setTrustedProxies([], Request::getTrustedHeaderSet());
+        }
+
+        // Trusted proxies are disabled above, so getBaseUrl() now returns only the
+        // webserver-derived portion of the base URL (e.g. an Apache "Alias /myapp …"
+        // sub-directory install). That portion must remain in the generated sub-request
+        // URI so it can re-detect its own base URL from SCRIPT_NAME/REQUEST_URI; only
+        // the trusted-proxy prefix is dropped from the URL generator's context here,
+        // otherwise it would be doubled once the sub-request is processed.
+        $context = $this->urlGenerator?->getContext();
+        $contextBaseUrl = $context?->getBaseUrl();
+        $realBaseUrl = null !== $context ? $request->getBaseUrl() : null;
+        if ($resetBaseUrl = $contextBaseUrl !== $realBaseUrl) {
+            $context->setBaseUrl($realBaseUrl);
+        }
+
+        try {
+            $newRequest = Request::create($this->generateUri($request, $path), 'get', [], $request->cookies->all(), [], $request->server->all());
+        } finally {
+            if ($trustedProxies) {
+                Request::setTrustedProxies($trustedProxies, Request::getTrustedHeaderSet());
+            }
+            if ($resetBaseUrl) {
+                $context->setBaseUrl($contextBaseUrl);
+            }
+        }
 
         static $setSession;
 
@@ -87,8 +108,8 @@ class HttpUtils
             $newRequest->attributes->set(SecurityRequestAttributes::LAST_USERNAME, $request->attributes->get(SecurityRequestAttributes::LAST_USERNAME));
         }
 
-        if ($request->get('_format')) {
-            $newRequest->attributes->set('_format', $request->get('_format'));
+        if ($request->attributes->has('_format')) {
+            $newRequest->attributes->set('_format', $request->attributes->get('_format'));
         }
         if ($request->getDefaultLocale() !== $request->getLocale()) {
             $newRequest->setLocale($request->getLocale());
@@ -107,6 +128,11 @@ class HttpUtils
     public function checkRequestPath(Request $request, string $path): bool
     {
         if ('/' !== $path[0]) {
+            // Shortcut if request has already been matched before
+            if ($request->attributes->has('_route')) {
+                return $path === $request->attributes->get('_route');
+            }
+
             try {
                 // matching a request is more powerful than matching a URL path + context, so try that first
                 if ($this->urlMatcher instanceof RequestMatcherInterface) {
@@ -116,9 +142,7 @@ class HttpUtils
                 }
 
                 return isset($parameters['_route']) && $path === $parameters['_route'];
-            } catch (MethodNotAllowedException) {
-                return false;
-            } catch (ResourceNotFoundException) {
+            } catch (MethodNotAllowedException|ResourceNotFoundException) {
                 return false;
             }
         }

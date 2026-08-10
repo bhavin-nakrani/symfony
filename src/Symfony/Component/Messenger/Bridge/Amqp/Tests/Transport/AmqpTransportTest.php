@@ -11,17 +11,17 @@
 
 namespace Symfony\Component\Messenger\Bridge\Amqp\Tests\Transport;
 
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Bridge\Amqp\Tests\Fixtures\DummyMessage;
+use Symfony\Component\Messenger\Bridge\Amqp\Transport\AmqpReceivedStamp;
 use Symfony\Component\Messenger\Bridge\Amqp\Transport\AmqpTransport;
 use Symfony\Component\Messenger\Bridge\Amqp\Transport\Connection;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
 
-/**
- * @requires extension amqp
- */
+#[RequiresPhpExtension('amqp')]
 class AmqpTransportTest extends TestCase
 {
     public function testItIsATransport()
@@ -40,22 +40,34 @@ class AmqpTransportTest extends TestCase
 
         $decodedMessage = new DummyMessage('Decoded.');
 
-        $amqpEnvelope = $this->createMock(\AMQPEnvelope::class);
+        $amqpEnvelope = $this->createStub(\AMQPEnvelope::class);
         $amqpEnvelope->method('getBody')->willReturn('body');
         $amqpEnvelope->method('getHeaders')->willReturn(['my' => 'header']);
 
-        $serializer->method('decode')->with(['body' => 'body', 'headers' => ['my' => 'header']])->willReturn(new Envelope($decodedMessage));
+        $serializer->expects($this->once())->method('decode')->with(['body' => 'body', 'headers' => ['my' => 'header']])->willReturn(new Envelope($decodedMessage));
         $connection->method('getQueueNames')->willReturn(['queueName']);
-        $connection->method('get')->with('queueName')->willReturn($amqpEnvelope);
+        $connection->expects($this->once())->method('get')->with('queueName')->willReturn($amqpEnvelope);
 
         $envelopes = iterator_to_array($transport->get());
         $this->assertSame($decodedMessage, $envelopes[0]->getMessage());
     }
 
-    private function getTransport(SerializerInterface $serializer = null, Connection $connection = null): AmqpTransport
+    public function testKeepalive()
     {
-        $serializer ??= $this->createMock(SerializerInterface::class);
-        $connection ??= $this->createMock(Connection::class);
+        $transport = $this->getTransport(
+            null,
+            $connection = $this->createMock(Connection::class),
+        );
+
+        $connection->expects($this->once())->method('keepalive');
+
+        $transport->keepalive(new Envelope(new DummyMessage('foo'), [new AmqpReceivedStamp($this->createStub(\AMQPEnvelope::class), 'queueName')]));
+    }
+
+    private function getTransport(?SerializerInterface $serializer = null, ?Connection $connection = null): AmqpTransport
+    {
+        $serializer ??= $this->createStub(SerializerInterface::class);
+        $connection ??= $this->createStub(Connection::class);
 
         return new AmqpTransport($connection, $serializer);
     }

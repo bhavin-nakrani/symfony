@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Clock\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 
@@ -76,9 +77,7 @@ class MockClockTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideValidModifyStrings
-     */
+    #[DataProvider('provideValidModifyStrings')]
     public function testModifyWithSpecificDateTime(string $modifiedNow, string $expectedNow)
     {
         $clock = new MockClock((new \DateTimeImmutable('2112-09-17 23:53:00.999Z'))->setTimezone(new \DateTimeZone('UTC')));
@@ -92,26 +91,17 @@ class MockClockTest extends TestCase
 
     public static function provideInvalidModifyStrings(): iterable
     {
-        yield 'Named holiday is not recognized' => [
-            'Halloween',
-            'Invalid modifier: "Halloween". Could not modify MockClock.',
-        ];
-
-        yield 'empty string' => [
-            '',
-            'Invalid modifier: "". Could not modify MockClock.',
-        ];
+        yield 'Named holiday is not recognized' => ['Halloween'];
+        yield 'empty string' => [''];
     }
 
-    /**
-     * @dataProvider provideInvalidModifyStrings
-     */
-    public function testModifyThrowsOnInvalidString(string $modifiedNow, string $expectedMessage)
+    #[DataProvider('provideInvalidModifyStrings')]
+    public function testModifyThrowsOnInvalidString(string $modifiedNow)
     {
         $clock = new MockClock((new \DateTimeImmutable('2112-09-17 23:53:00.999Z'))->setTimezone(new \DateTimeZone('UTC')));
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage($expectedMessage);
+        $this->expectException(\DateMalformedStringException::class);
+        $this->expectExceptionMessage("Failed to parse time string ($modifiedNow)");
 
         $clock->modify($modifiedNow);
     }
@@ -123,5 +113,15 @@ class MockClockTest extends TestCase
 
         $this->assertNotSame($clock, $utcClock);
         $this->assertSame('UTC', $utcClock->now()->getTimezone()->getName());
+    }
+
+    public function testSleepWithNegativeValueDoesNothing()
+    {
+        $initialTime = new \DateTimeImmutable('2000-01-01 12:00:00 UTC');
+
+        $clock = new MockClock($initialTime);
+        $clock->sleep(-10.5);
+
+        $this->assertEquals($initialTime, $clock->now());
     }
 }

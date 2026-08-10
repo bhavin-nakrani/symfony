@@ -542,9 +542,13 @@ return [
             'SHP',
             'Bowndka St Helen',
         ],
+        'SLE' => [
+            'SLE',
+            'Leonka Sira Leon',
+        ],
         'SLL' => [
             'SLL',
-            'Leonka Sira Leon',
+            'Leonka Sira Leon (1964—2022)',
         ],
         'SOS' => [
             'S',
@@ -654,6 +658,10 @@ return [
             'EC$',
             'Doolarka Iist Kaaribyan',
         ],
+        'XCG' => [
+            'Cg.',
+            'Caribbean guilder',
+        ],
         'XOF' => [
             'F CFA',
             'Faranka CFA Galbeedka Afrika',
@@ -673,6 +681,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Kawajada Sambiya',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Dahabka Zimbabwe',
         ],
     ],
 ];

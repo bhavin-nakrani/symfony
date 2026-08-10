@@ -11,37 +11,38 @@
 
 namespace Symfony\Bundle\FrameworkBundle\Console;
 
+use Composer\InstalledVersions;
+use Psr\Container\ContainerInterface;
 use Symfony\Component\Console\Application as BaseApplication;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Command\ListCommand;
+use Symfony\Component\Console\Command\TraceableCommand;
+use Symfony\Component\Console\Debug\CliRequest;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\DependencyInjection\ContainerAwareInterface;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Contracts\Service\ContainerProviderInterface;
 
 /**
  * @author Fabien Potencier <fabien@symfony.com>
  */
-class Application extends BaseApplication
+class Application extends BaseApplication implements ContainerProviderInterface
 {
-    private KernelInterface $kernel;
     private bool $commandsRegistered = false;
-    private array $registrationErrors = [];
 
-    public function __construct(KernelInterface $kernel)
-    {
-        $this->kernel = $kernel;
-
-        parent::__construct('Symfony', Kernel::VERSION);
+    public function __construct(
+        private KernelInterface $kernel,
+    ) {
+        parent::__construct('Symfony', class_exists(InstalledVersions::class) ? InstalledVersions::getPrettyVersion('symfony/http-kernel') ?? InstalledVersions::getPrettyVersion('symfony/symfony') : Kernel::MAJOR_VERSION.'.'.Kernel::MINOR_VERSION);
 
         $inputDefinition = $this->getDefinition();
         $inputDefinition->addOption(new InputOption('--env', '-e', InputOption::VALUE_REQUIRED, 'The Environment name.', $kernel->getEnvironment()));
         $inputDefinition->addOption(new InputOption('--no-debug', null, InputOption::VALUE_NONE, 'Switch off debug mode.'));
+        $inputDefinition->addOption(new InputOption('--profile', null, InputOption::VALUE_NONE, 'Enables profiling (requires debug).'));
     }
 
     /**
@@ -50,6 +51,13 @@ class Application extends BaseApplication
     public function getKernel(): KernelInterface
     {
         return $this->kernel;
+    }
+
+    public function getContainer(): ContainerInterface
+    {
+        $this->kernel->boot();
+
+        return $this->kernel->getContainer();
     }
 
     public function reset(): void
@@ -68,31 +76,53 @@ class Application extends BaseApplication
     {
         $this->registerCommands();
 
-        if ($this->registrationErrors) {
-            $this->renderRegistrationErrors($input, $output);
-        }
+        $container = $this->kernel->getContainer();
+        $this->setDispatcher($container->get('event_dispatcher'));
 
-        $this->setDispatcher($this->kernel->getContainer()->get('event_dispatcher'));
+        if ($container->has('console.argument_resolver')) {
+            $this->setArgumentResolver($container->get('console.argument_resolver'));
+        }
 
         return parent::doRun($input, $output);
     }
 
     protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
     {
-        if (!$command instanceof ListCommand) {
-            if ($this->registrationErrors) {
-                $this->renderRegistrationErrors($input, $output);
-                $this->registrationErrors = [];
-            }
+        $requestStack = null;
 
-            return parent::doRunCommand($command, $input, $output);
+        if ($input->hasParameterOption('--profile')) {
+            $container = $this->kernel->getContainer();
+
+            if (!$this->kernel->isDebug()) {
+                if ($output instanceof ConsoleOutputInterface) {
+                    $output = $output->getErrorOutput();
+                }
+
+                (new SymfonyStyle($input, $output))->warning('Debug mode should be enabled when the "--profile" option is used.');
+            } elseif (!$container->has('debug.stopwatch')) {
+                if ($output instanceof ConsoleOutputInterface) {
+                    $output = $output->getErrorOutput();
+                }
+
+                (new SymfonyStyle($input, $output))->warning('The "--profile" option needs the Stopwatch component. Try running "composer require symfony/stopwatch".');
+            } elseif (!$container->has('.virtual_request_stack')) {
+                if ($output instanceof ConsoleOutputInterface) {
+                    $output = $output->getErrorOutput();
+                }
+
+                (new SymfonyStyle($input, $output))->warning('The "--profile" option needs the profiler integration. Try enabling the "framework.profiler" option.');
+            } else {
+                $command = new TraceableCommand($command, $container->get('debug.stopwatch'));
+
+                $requestStack = $container->get('.virtual_request_stack');
+                $requestStack->push(new CliRequest($command));
+            }
         }
 
-        $returnCode = parent::doRunCommand($command, $input, $output);
-
-        if ($this->registrationErrors) {
-            $this->renderRegistrationErrors($input, $output);
-            $this->registrationErrors = [];
+        try {
+            $returnCode = parent::doRunCommand($command, $input, $output);
+        } finally {
+            $requestStack?->pop();
         }
 
         return $returnCode;
@@ -109,17 +139,10 @@ class Application extends BaseApplication
     {
         $this->registerCommands();
 
-        $command = parent::get($name);
-
-        if ($command instanceof ContainerAwareInterface) {
-            trigger_deprecation('symfony/dependency-injection', '6.4', 'Relying on "%s" to get the container in "%s" is deprecated, register the command as a service and use dependency injection instead.', ContainerAwareInterface::class, get_debug_type($command));
-            $command->setContainer($this->kernel->getContainer());
-        }
-
-        return $command;
+        return parent::get($name);
     }
 
-    public function all(string $namespace = null): array
+    public function all(?string $namespace = null): array
     {
         $this->registerCommands();
 
@@ -128,20 +151,17 @@ class Application extends BaseApplication
 
     public function getLongVersion(): string
     {
-        return parent::getLongVersion().sprintf(' (env: <comment>%s</>, debug: <comment>%s</>) <bg=#0057B7;fg=#FFDD00>#StandWith</><bg=#FFDD00;fg=#0057B7>Ukraine</> <href=https://sf.to/ukraine>https://sf.to/ukraine</>', $this->kernel->getEnvironment(), $this->kernel->isDebug() ? 'true' : 'false');
+        return parent::getLongVersion().\sprintf(' (env: <comment>%s</>, debug: <comment>%s</>)', $this->kernel->getEnvironment(), $this->kernel->isDebug() ? 'true' : 'false');
     }
 
-    public function add(Command $command): ?Command
+    public function addCommand(callable|Command $command): ?Command
     {
         $this->registerCommands();
 
-        return parent::add($command);
+        return parent::addCommand($command);
     }
 
-    /**
-     * @return void
-     */
-    protected function registerCommands()
+    protected function registerCommands(): void
     {
         if ($this->commandsRegistered) {
             return;
@@ -154,11 +174,16 @@ class Application extends BaseApplication
         $container = $this->kernel->getContainer();
 
         foreach ($this->kernel->getBundles() as $bundle) {
-            if ($bundle instanceof Bundle) {
+            if ($bundle instanceof Bundle
+                && method_exists($bundle, 'registerCommands')
+                && Bundle::class !== new \ReflectionMethod($bundle, 'registerCommands')->getDeclaringClass()->getName()
+            ) {
+                trigger_deprecation('symfony/framework-bundle', '8.1', 'Overriding the "%s::registerCommands()" method in "%s" is deprecated, use the "#[AsCommand]" attribute or the "console.command" service tag instead.', Bundle::class, get_debug_type($bundle));
+
                 try {
                     $bundle->registerCommands($this);
                 } catch (\Throwable $e) {
-                    $this->registrationErrors[] = $e;
+                    throw new \RuntimeException(\sprintf('"%s::registerCommands()" failed: register your commands as services tagged "console.command" (or with the #[AsCommand] attribute) instead of overriding this method.', $bundle::class), 0, $e);
                 }
             }
         }
@@ -172,25 +197,12 @@ class Application extends BaseApplication
             foreach ($container->getParameter('console.command.ids') as $id) {
                 if (!isset($lazyCommandIds[$id])) {
                     try {
-                        $this->add($container->get($id));
+                        $this->addCommand($container->get($id));
                     } catch (\Throwable $e) {
-                        $this->registrationErrors[] = $e;
+                        throw new \RuntimeException(\sprintf('Eagerly loading command "%s" failed: declare its name at compile time with the #[AsCommand] attribute (or the "command" attribute of the "console.command" tag) so it can be loaded lazily.', $id), 0, $e);
                     }
                 }
             }
-        }
-    }
-
-    private function renderRegistrationErrors(InputInterface $input, OutputInterface $output): void
-    {
-        if ($output instanceof ConsoleOutputInterface) {
-            $output = $output->getErrorOutput();
-        }
-
-        (new SymfonyStyle($input, $output))->warning('Some commands could not be registered:');
-
-        foreach ($this->registrationErrors as $error) {
-            $this->doRenderThrowable($error, $output);
         }
     }
 }

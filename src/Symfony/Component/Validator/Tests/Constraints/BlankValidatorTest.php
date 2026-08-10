@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Validator\Tests\Constraints;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Validator\Constraints\Blank;
 use Symfony\Component\Validator\Constraints\BlankValidator;
 use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
@@ -24,28 +25,26 @@ class BlankValidatorTest extends ConstraintValidatorTestCase
 
     public function testNullIsValid()
     {
-        $this->validator->validate(null, new Blank());
+        $this->validate(null, new Blank());
 
         $this->assertNoViolation();
     }
 
     public function testBlankIsValid()
     {
-        $this->validator->validate('', new Blank());
+        $this->validate('', new Blank());
 
         $this->assertNoViolation();
     }
 
-    /**
-     * @dataProvider getInvalidValues
-     */
+    #[DataProvider('getInvalidValues')]
     public function testInvalidValues($value, $valueAsString)
     {
-        $constraint = new Blank([
-            'message' => 'myMessage',
-        ]);
+        $constraint = new Blank(
+            message: 'myMessage',
+        );
 
-        $this->validator->validate($value, $constraint);
+        $this->validate($value, $constraint);
 
         $this->buildViolation('myMessage')
             ->setParameter('{{ value }}', $valueAsString)

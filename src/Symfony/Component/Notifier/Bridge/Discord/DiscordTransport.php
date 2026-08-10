@@ -11,7 +11,6 @@
 
 namespace Symfony\Component\Notifier\Bridge\Discord;
 
-use Symfony\Component\Notifier\Exception\LengthException;
 use Symfony\Component\Notifier\Exception\TransportException;
 use Symfony\Component\Notifier\Exception\UnsupportedMessageTypeException;
 use Symfony\Component\Notifier\Message\ChatMessage;
@@ -29,23 +28,18 @@ final class DiscordTransport extends AbstractTransport
 {
     protected const HOST = 'discord.com';
 
-    private const SUBJECT_LIMIT = 2000;
-
-    private string $token;
-    private string $webhookId;
-
-    public function __construct(#[\SensitiveParameter] string $token, string $webhookId, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null)
-    {
-        $this->token = $token;
-        $this->webhookId = $webhookId;
-        $this->client = $client;
-
+    public function __construct(
+        #[\SensitiveParameter] private string $token,
+        private string $webhookId,
+        ?HttpClientInterface $client = null,
+        ?EventDispatcherInterface $dispatcher = null,
+    ) {
         parent::__construct($client, $dispatcher);
     }
 
     public function __toString(): string
     {
-        return sprintf('discord://%s?webhook_id=%s', $this->getEndpoint(), $this->webhookId);
+        return \sprintf('discord://%s?webhook_id=%s', $this->getEndpoint(), $this->webhookId);
     }
 
     public function supports(MessageInterface $message): bool
@@ -65,11 +59,7 @@ final class DiscordTransport extends AbstractTransport
         $options = $message->getOptions()?->toArray() ?? [];
         $options['content'] = $message->getSubject();
 
-        if (mb_strlen($options['content'], 'UTF-8') > self::SUBJECT_LIMIT) {
-            throw new LengthException(sprintf('The subject length of a Discord message must not exceed %d characters.', self::SUBJECT_LIMIT));
-        }
-
-        $endpoint = sprintf('https://%s/api/webhooks/%s/%s', $this->getEndpoint(), $this->webhookId, $this->token);
+        $endpoint = \sprintf('https://%s/api/webhooks/%s/%s', $this->getEndpoint(), $this->webhookId, $this->token);
         $response = $this->client->request('POST', $endpoint, [
             'json' => array_filter($options),
         ]);
@@ -87,7 +77,7 @@ final class DiscordTransport extends AbstractTransport
                 $originalContent = $message->getSubject();
                 $errorMessage = $result['message'];
                 $errorCode = $result['code'];
-                throw new TransportException(sprintf('Unable to post the Discord message: "%s" (%d: "%s").', $originalContent, $errorCode, $errorMessage), $response);
+                throw new TransportException(\sprintf('Unable to post the Discord message: "%s" (%d: "%s").', $originalContent, $errorCode, $errorMessage), $response);
             }
 
             if (400 === $statusCode) {
@@ -100,10 +90,10 @@ final class DiscordTransport extends AbstractTransport
                 }
 
                 $errorMessage = trim($errorMessage);
-                throw new TransportException(sprintf('Unable to post the Discord message: "%s" (%s).', $originalContent, $errorMessage), $response);
+                throw new TransportException(\sprintf('Unable to post the Discord message: "%s" (%s).', $originalContent, $errorMessage), $response);
             }
 
-            throw new TransportException(sprintf('Unable to post the Discord message: "%s" (Status Code: %d).', $message->getSubject(), $statusCode), $response);
+            throw new TransportException(\sprintf('Unable to post the Discord message: "%s" (Status Code: %d).', $message->getSubject(), $statusCode), $response);
         }
 
         return new SentMessage($message, (string) $this);

@@ -11,7 +11,7 @@
 
 namespace Symfony\Component\Serializer\Tests\Fixtures\Attributes;
 
-use Symfony\Component\Serializer\Annotation\Ignore;
+use Symfony\Component\Serializer\Attribute\Ignore;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
@@ -27,5 +27,11 @@ class IgnoreDummy
     public function getIgnored2()
     {
         return $this->ignored2;
+    }
+
+    #[Ignore]
+    public function canBeIgnored(): bool
+    {
+        return true;
     }
 }

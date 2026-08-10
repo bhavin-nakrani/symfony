@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Mailer\Tests\Transport;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\Transport\FailoverTransport;
@@ -18,9 +19,7 @@ use Symfony\Component\Mailer\Transport\RoundRobinTransport;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\RawMessage;
 
-/**
- * @group time-sensitive
- */
+#[Group('time-sensitive')]
 class FailoverTransportTest extends TestCase
 {
     public function testSendNoTransports()
@@ -57,9 +56,9 @@ class FailoverTransportTest extends TestCase
     public function testSendAllDead()
     {
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->expects($this->once())->method('send')->will($this->throwException(new TransportException()));
+        $t1->expects($this->once())->method('send')->willThrowException(new TransportException());
         $t2 = $this->createMock(TransportInterface::class);
-        $t2->expects($this->once())->method('send')->will($this->throwException(new TransportException()));
+        $t2->expects($this->once())->method('send')->willThrowException(new TransportException());
         $t = new FailoverTransport([$t1, $t2]);
         $this->expectException(TransportException::class);
         $this->expectExceptionMessage('All transports failed.');
@@ -70,7 +69,7 @@ class FailoverTransportTest extends TestCase
     public function testSendOneDead()
     {
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->expects($this->once())->method('send')->will($this->throwException(new TransportException()));
+        $t1->expects($this->once())->method('send')->willThrowException(new TransportException());
         $t2 = $this->createMock(TransportInterface::class);
         $t2->expects($this->exactly(3))->method('send');
         $t = new FailoverTransport([$t1, $t2]);
@@ -84,17 +83,33 @@ class FailoverTransportTest extends TestCase
 
     public function testSendOneDeadAndRecoveryWithinRetryPeriod()
     {
-        $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('send')->willReturnOnConsecutiveCalls($this->throwException(new TransportException()));
+        $t1 = $this->createStub(TransportInterface::class);
+
+        $t1
+            ->method('send')
+            ->willReturnCallback(static function () {
+                static $call = 0;
+
+                if (1 === ++$call) {
+                    throw new TransportException();
+                }
+
+                return null;
+            });
+
         $t2 = $this->createMock(TransportInterface::class);
         $t2->expects($this->exactly(4))
             ->method('send')
-            ->willReturnOnConsecutiveCalls(
-                null,
-                null,
-                null,
-                $this->throwException(new TransportException())
-            );
+            ->willReturnCallback(static function () {
+                static $call = 0;
+
+                if (4 === ++$call) {
+                    throw new TransportException();
+                }
+
+                return null;
+            });
+
         $t = new FailoverTransport([$t1, $t2], 6);
         $t->send(new RawMessage('')); // t1>fail - t2>sent
         $this->assertTransports($t, 0, [$t1]);
@@ -115,16 +130,20 @@ class FailoverTransportTest extends TestCase
     public function testSendAllDeadWithinRetryPeriod()
     {
         $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('send')->will($this->throwException(new TransportException()));
+        $t1->method('send')->willThrowException(new TransportException());
         $t1->expects($this->once())->method('send');
         $t2 = $this->createMock(TransportInterface::class);
         $t2->expects($this->exactly(3))
             ->method('send')
-            ->willReturnOnConsecutiveCalls(
-                null,
-                null,
-                $this->throwException(new TransportException())
-            );
+            ->willReturnCallback(static function () {
+                static $call = 0;
+
+                if (3 === ++$call) {
+                    throw new TransportException();
+                }
+
+                return null;
+            });
         $t = new FailoverTransport([$t1, $t2], 40);
         $t->send(new RawMessage(''));
         sleep(4);
@@ -137,15 +156,29 @@ class FailoverTransportTest extends TestCase
 
     public function testSendOneDeadButRecover()
     {
-        $t1 = $this->createMock(TransportInterface::class);
-        $t1->method('send')->willReturnOnConsecutiveCalls($this->throwException(new TransportException()));
+        $t1 = $this->createStub(TransportInterface::class);
+        $t1->method('send')->willReturnCallback(static function () {
+            static $call = 0;
+
+            if (1 === ++$call) {
+                throw new TransportException();
+            }
+
+            return null;
+        });
+
         $t2 = $this->createMock(TransportInterface::class);
         $t2->expects($this->exactly(3))
-            ->method('send')->willReturnOnConsecutiveCalls(
-                null,
-                null,
-                $this->throwException(new TransportException())
-            );
+            ->method('send')
+            ->willReturnCallback(static function () {
+                static $call = 0;
+
+                if (3 === ++$call) {
+                    throw new TransportException();
+                }
+
+                return null;
+            });
         $t = new FailoverTransport([$t1, $t2], 1);
         $t->send(new RawMessage(''));
         sleep(1);

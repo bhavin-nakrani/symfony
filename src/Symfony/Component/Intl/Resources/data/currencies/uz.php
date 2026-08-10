@@ -514,9 +514,13 @@ return [
             'SHP',
             'Muqaddas Yelena oroli funti',
         ],
+        'SLE' => [
+            'SLE',
+            'Syerra-Leone leonesi',
+        ],
         'SLL' => [
             'SLL',
-            'Syerra-Leone leonesi',
+            'Syerra-Leone leonesi (1964—2022)',
         ],
         'SOS' => [
             'SOS',
@@ -630,6 +634,10 @@ return [
             'EC$',
             'Sharqiy Karib dollari',
         ],
+        'XCG' => [
+            'Cg.',
+            'Karib guldeni',
+        ],
         'XOF' => [
             'F CFA',
             'G‘arbiy Afrika CFA franki',
@@ -649,6 +657,10 @@ return [
         'ZMW' => [
             'ZMW',
             'Zambiya kvachasi',
+        ],
+        'ZWG' => [
+            'ZWG',
+            'Zimbabve oltini',
         ],
     ],
 ];

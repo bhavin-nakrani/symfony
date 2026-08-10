@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Cache\Tests\Adapter;
 
+use PHPUnit\Framework\Attributes\Group;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\AdapterInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -25,12 +26,11 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * @author Kévin Dunglas <dunglas@gmail.com>
- *
- * @group time-sensitive
  */
+#[Group('time-sensitive')]
 class ChainAdapterTest extends AdapterTestCase
 {
-    public function createCachePool(int $defaultLifetime = 0, string $testMethod = null): CacheItemPoolInterface
+    public function createCachePool(int $defaultLifetime = 0, ?string $testMethod = null): CacheItemPoolInterface
     {
         if ('testGetMetadata' === $testMethod) {
             return new ChainAdapter([new FilesystemAdapter('a', $defaultLifetime), new FilesystemAdapter('b', $defaultLifetime)], $defaultLifetime);
@@ -66,7 +66,7 @@ class ChainAdapterTest extends AdapterTestCase
 
         $cache = new ChainAdapter([
             $this->getPruneableMock(),
-            $this->getNonPruneableMock(),
+            $this->createStub(AdapterInterface::class),
             $this->getPruneableMock(),
         ]);
         $this->assertTrue($cache->prune());
@@ -197,6 +197,72 @@ class ChainAdapterTest extends AdapterTestCase
         $this->assertFalse($item->isHit());
     }
 
+    public function testItemExpiryIsPreservedWhenPropagatedToPreviousAdapters()
+    {
+        if (isset($this->skippedTests[__FUNCTION__])) {
+            $this->markTestSkipped($this->skippedTests[__FUNCTION__]);
+        }
+
+        $adapter1 = new ArrayAdapter(100);
+        $adapter2 = new ArrayAdapter(100);
+
+        $cache = new ChainAdapter([$adapter1, $adapter2], 100);
+
+        // Save with an explicit 2-second TTL
+        $cache->save($cache->getItem('key')->expiresAfter(2)->set('value'));
+
+        // Simulate adapter1 miss
+        $adapter1->clear();
+        $this->assertFalse($adapter1->hasItem('key'));
+        $this->assertTrue($adapter2->hasItem('key'));
+
+        // This should propagate the item from adapter2 to adapter1,
+        // preserving the original 2-second TTL (not the 100-second defaultLifetime)
+        $cache->getItem('key');
+        $this->assertTrue($adapter1->hasItem('key'));
+
+        sleep(3);
+
+        $this->assertFalse($adapter2->getItem('key')->isHit(), 'Item should have expired in adapter2');
+        $this->assertFalse($adapter1->getItem('key')->isHit(), 'Item should have expired in adapter1 with original TTL, not defaultLifetime');
+    }
+
+    public function testItemExpiryIsPreservedWhenPropagatedToPreviousAdaptersUsingGetMethod()
+    {
+        if (isset($this->skippedTests[__FUNCTION__])) {
+            $this->markTestSkipped($this->skippedTests[__FUNCTION__]);
+        }
+
+        $adapter1 = new ArrayAdapter(100);
+        $adapter2 = new ArrayAdapter(100);
+
+        $cache = new ChainAdapter([$adapter1, $adapter2], 100);
+
+        // Save with an explicit 2-second TTL via get() callback
+        $cache->get('key', static function (ItemInterface $item) {
+            $item->expiresAfter(2);
+
+            return 'value';
+        });
+
+        // Simulate adapter1 miss
+        $adapter1->clear();
+        $this->assertFalse($adapter1->hasItem('key'));
+        $this->assertTrue($adapter2->hasItem('key'));
+
+        // This should propagate the item from adapter2 to adapter1,
+        // preserving the original 2-second TTL (not the 100-second defaultLifetime)
+        $cache->get('key', function () {
+            $this->fail('Callback should not be called when item exists in adapter2');
+        });
+        $this->assertTrue($adapter1->hasItem('key'));
+
+        sleep(3);
+
+        $this->assertFalse($adapter2->getItem('key')->isHit(), 'Item should have expired in adapter2');
+        $this->assertFalse($adapter1->getItem('key')->isHit(), 'Item should have expired in adapter1 with original TTL, not defaultLifetime');
+    }
+
     public function testExpirationOnAllAdapters()
     {
         if (isset($this->skippedTests[__FUNCTION__])) {
@@ -231,7 +297,7 @@ class ChainAdapterTest extends AdapterTestCase
             ->willReturn(true);
 
         $cache = new ChainAdapter([$adapter1, $adapter2], 6);
-        $cache->get('test_key', function (ItemInterface $item) {
+        $cache->get('test_key', static function (ItemInterface $item) {
             $item->expiresAfter(15);
 
             return 'chain';
@@ -262,8 +328,27 @@ class ChainAdapterTest extends AdapterTestCase
         return $pruneable;
     }
 
-    private function getNonPruneableMock(): AdapterInterface
+    public function testSetCallbackWrapperPropagation()
     {
-        return $this->createMock(AdapterInterface::class);
+        $adapter1 = new ArrayAdapter();
+        $adapter2 = new FilesystemAdapter();
+
+        $chain = new ChainAdapter([$adapter1, $adapter2]);
+
+        $callbackWrapperCalled = false;
+        $customWrapper = static function (callable $callback, CacheItem $item, bool &$save) use (&$callbackWrapperCalled) {
+            $callbackWrapperCalled = true;
+
+            return $callback($item, $save);
+        };
+
+        $chain->setCallbackWrapper($customWrapper);
+
+        $chain->delete('test-callback-wrapper');
+
+        $result = $chain->get('test-callback-wrapper', static fn () => 'computed-value');
+
+        $this->assertTrue($callbackWrapperCalled);
+        $this->assertSame('computed-value', $result);
     }
 }

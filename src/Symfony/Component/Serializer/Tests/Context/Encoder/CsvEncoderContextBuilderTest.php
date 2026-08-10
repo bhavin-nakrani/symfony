@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Serializer\Tests\Context\Encoder;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Serializer\Context\Encoder\CsvEncoderContextBuilder;
 use Symfony\Component\Serializer\Encoder\CsvEncoder;
@@ -29,16 +30,14 @@ class CsvEncoderContextBuilderTest extends TestCase
     }
 
     /**
-     * @dataProvider withersDataProvider
-     *
      * @param array<string, mixed> $values
      */
+    #[DataProvider('withersDataProvider')]
     public function testWithers(array $values)
     {
         $context = $this->contextBuilder
             ->withDelimiter($values[CsvEncoder::DELIMITER_KEY])
             ->withEnclosure($values[CsvEncoder::ENCLOSURE_KEY])
-            ->withEscapeChar($values[CsvEncoder::ESCAPE_CHAR_KEY])
             ->withKeySeparator($values[CsvEncoder::KEY_SEPARATOR_KEY])
             ->withHeaders($values[CsvEncoder::HEADERS_KEY])
             ->withEscapedFormulas($values[CsvEncoder::ESCAPE_FORMULAS_KEY])
@@ -59,7 +58,6 @@ class CsvEncoderContextBuilderTest extends TestCase
         yield 'With values' => [[
             CsvEncoder::DELIMITER_KEY => ';',
             CsvEncoder::ENCLOSURE_KEY => '"',
-            CsvEncoder::ESCAPE_CHAR_KEY => '\\',
             CsvEncoder::KEY_SEPARATOR_KEY => '_',
             CsvEncoder::HEADERS_KEY => ['h1', 'h2'],
             CsvEncoder::ESCAPE_FORMULAS_KEY => true,
@@ -72,7 +70,6 @@ class CsvEncoderContextBuilderTest extends TestCase
         yield 'With null values' => [[
             CsvEncoder::DELIMITER_KEY => null,
             CsvEncoder::ENCLOSURE_KEY => null,
-            CsvEncoder::ESCAPE_CHAR_KEY => null,
             CsvEncoder::KEY_SEPARATOR_KEY => null,
             CsvEncoder::HEADERS_KEY => null,
             CsvEncoder::ESCAPE_FORMULAS_KEY => null,
@@ -88,7 +85,6 @@ class CsvEncoderContextBuilderTest extends TestCase
         $context = $this->contextBuilder
             ->withDelimiter(null)
             ->withEnclosure(null)
-            ->withEscapeChar(null)
             ->withKeySeparator(null)
             ->withHeaders(null)
             ->withEscapedFormulas(null)
@@ -101,7 +97,6 @@ class CsvEncoderContextBuilderTest extends TestCase
         $this->assertSame([
             CsvEncoder::DELIMITER_KEY => null,
             CsvEncoder::ENCLOSURE_KEY => null,
-            CsvEncoder::ESCAPE_CHAR_KEY => null,
             CsvEncoder::KEY_SEPARATOR_KEY => null,
             CsvEncoder::HEADERS_KEY => null,
             CsvEncoder::ESCAPE_FORMULAS_KEY => null,
@@ -122,11 +117,5 @@ class CsvEncoderContextBuilderTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->contextBuilder->withEnclosure('ọ');
-    }
-
-    public function testCannotSetMultipleBytesAsEscapeChar()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->contextBuilder->withEscapeChar('ọ');
     }
 }
